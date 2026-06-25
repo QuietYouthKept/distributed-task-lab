@@ -1,4 +1,4 @@
-.PHONY: up down build api worker migrate submit-rag-task submit-multi list-tasks watch-tasks demo-claim demo-retry demo-timeout test logs logs-worker clean dev
+.PHONY: up down build api worker migrate submit-rag-task submit-multi list-tasks watch-tasks demo-claim demo-retry demo-timeout demo-dlq test logs logs-worker clean dev
 
 # Default target
 .DEFAULT_GOAL := help
@@ -90,6 +90,23 @@ demo-timeout: up ## Demo: submit a task that times out (Phase 3 timeout)
 		echo "--- Check $$i ---"; \
 		curl -s http://localhost:8080/tasks | jq '.[] | {id, status, attempt, last_error}'; \
 	done
+
+demo-dlq: up ## Demo: submit a task that goes through retry → DLQ (Phase 4)
+	@echo "=== Waiting for services to be ready... ==="
+	@sleep 5
+	@echo "=== Submitting task destined for DLQ (mock_always_fail, max_attempts=2) ==="
+	@curl -s -X POST http://localhost:8080/tasks \
+		-H "Content-Type: application/json" \
+		-d @examples/payloads/dlq.json | jq .
+	@echo "=== Watching retry → DLQ flow (checking every 4s for 28s)... ==="
+	@for i in 1 2 3 4 5 6 7; do \
+		sleep 4; \
+		echo "--- Check $$i ---"; \
+		curl -s http://localhost:8080/tasks | jq '.[] | {id, status, attempt, last_error, dlq_reason}'; \
+	done
+	@echo ""
+	@echo "=== DLQ tasks via status filter ==="
+	@curl -s "http://localhost:8080/tasks?status=dlq" | jq '.[] | {id, status, dlq_reason}'
 
 # ── Utility targets ─────────────────────────────────────────
 

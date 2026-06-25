@@ -353,9 +353,12 @@ func TestMarkFailureMaxAttemptsExhausted(t *testing.T) {
 		t.Fatalf("GetTask: %v", err)
 	}
 
-	// Attempt >= max_attempts → final fail.
-	if got.Status != domain.TaskStatusFailed {
-		t.Errorf("Status = %q, want failed", got.Status)
+	// Attempt >= max_attempts → DLQ.
+	if got.Status != domain.TaskStatusDLQ {
+		t.Errorf("Status = %q, want dlq", got.Status)
+	}
+	if got.DLQReason == nil || *got.DLQReason != "max attempts exceeded: fatal error" {
+		t.Errorf("DLQReason = %v, want 'max attempts exceeded: fatal error'", got.DLQReason)
 	}
 	if got.LastError == nil || *got.LastError != "fatal error" {
 		t.Errorf("LastError = %v, want 'fatal error'", got.LastError)
@@ -455,5 +458,78 @@ func TestReclaimExpiredLease(t *testing.T) {
 	}
 	if claimed[0].LeasedBy == nil || *claimed[0].LeasedBy != "worker-2" {
 		t.Errorf("reclaimed LeasedBy = %v, want worker-2", claimed[0].LeasedBy)
+	}
+}
+
+func TestDLQNotClaimable(t *testing.T) {
+	q := setupTestDB(t)
+	ctx := context.Background()
+
+	task := &domain.Task{
+		ID: "test-dlq-claim-001", Type: domain.TaskTypeRAGIngestion,
+		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
+		MaxAttempts: 1, TimeoutSeconds: 60, RetryDelaySeconds: 1,
+	}
+	q.Enqueue(ctx, task)
+	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
+
+	// Fail → max attempts reached → DLQ.
+	q.MarkFailure(ctx, "test-dlq-claim-001", "worker-1",
+		domain.TaskFailure{Message: "fatal", ErrorType: "permanent"})
+
+	// DLQ task should not be claimable.
+	claimed, err := q.ClaimTasks(ctx, "worker-2", 5, 30*time.Second)
+	if err != nil {
+		t.Fatalf("ClaimTasks: %v", err)
+	}
+	if len(claimed) != 0 {
+		t.Errorf("expected 0 claims (DLQ task), got %d", len(claimed))
+	}
+}
+
+func TestListDLQ(t *testing.T) {
+	q := setupTestDB(t)
+	ctx := context.Background()
+
+	// Create a task that goes to DLQ.
+	task := &domain.Task{
+		ID: "test-list-dlq-001", Type: domain.TaskTypeRAGIngestion,
+		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
+		MaxAttempts: 1, TimeoutSeconds: 60, RetryDelaySeconds: 1,
+	}
+	q.Enqueue(ctx, task)
+	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
+	q.MarkFailure(ctx, "test-list-dlq-001", "worker-1",
+		domain.TaskFailure{Message: "dlq test error", ErrorType: "execution_error"})
+
+	// List DLQ tasks.
+	dlqTasks, err := q.ListDLQ(ctx, domain.TaskFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("ListDLQ: %v", err)
+	}
+	found := false
+	for _, t := range dlqTasks {
+		if t.ID == "test-list-dlq-001" {
+			found = true
+			if t.Status != domain.TaskStatusDLQ {
+				t.Errorf("Status = %q, want dlq", t.Status)
+			}
+			if t.DLQReason == nil {
+				t.Error("DLQReason should not be nil")
+			}
+		}
+	}
+	if !found {
+		t.Error("DLQ task not found in ListDLQ results")
+	}
+
+	// Also verify via ListTasks with status=dlq filter.
+	dlqStatus := domain.TaskStatusDLQ
+	allTasks, err := q.ListTasks(ctx, domain.TaskFilter{Status: &dlqStatus, Limit: 10})
+	if err != nil {
+		t.Fatalf("ListTasks status=dlq: %v", err)
+	}
+	if len(allTasks) < 1 {
+		t.Error("expected at least 1 DLQ task via ListTasks status filter")
 	}
 }

@@ -189,3 +189,46 @@ make test
 - Heartbeat / stale worker detection
 
 ### Next: Phase 4 — DLQ + Query
+
+---
+
+## Phase 4: Dead Letter Queue ✅
+
+### Date: 2025-06-25
+
+### What was done
+
+- [x] MarkFailure: when `attempt >= max_attempts`, status → `dlq` with `dlq_reason = "max attempts exceeded: <error>"`
+- [x] ListDLQ un-stubbed: uses `ListTasks` with status=dlq filter
+- [x] ClaimTasks confirmed to exclude DLQ tasks (WHERE status=pending OR status=running)
+- [x] API: `GET /tasks?status=dlq` and `GET /dlq` both return DLQ tasks
+- [x] Example payload: dlq.json (mock_always_fail=true, max_attempts=2, retry_delay=2s)
+- [x] Makefile: demo-dlq target showing pending→running→pending→running→dlq flow
+- [x] Tests: DLQ not claimable, ListDLQ returns DLQ tasks, status filter works
+- [x] README: Phase status table updated (DLQ → ✅ Phase 4)
+- [x] progress.md: Phase 4 completion recorded
+
+### Verification
+
+```bash
+make demo-dlq
+# → Task submitted with mock_always_fail=true, max_attempts=2
+# → Attempt 1: fails → retry to pending
+# → Attempt 2: fails → DLQ
+# → curl /tasks?status=dlq shows the task with dlq_reason
+
+# Direct API test:
+curl "http://localhost:8080/tasks?status=dlq"
+# or
+curl http://localhost:8080/dlq
+```
+
+### Not in Phase 4 (deferred)
+
+- Manual requeue (`POST /tasks/{id}/requeue`)
+- Cancel API
+- DLQ Web UI
+- Alerting system
+- Complex error classification
+
+### Next: Phase 5 — Makefile + Docker Demo + README Polish

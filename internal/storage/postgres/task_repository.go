@@ -274,21 +274,23 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 	now := time.Now().UTC()
 
 	if task.Attempt >= task.MaxAttempts {
-		// Max attempts exhausted — final fail (Phase 4: DLQ).
+		// Max attempts exhausted — move to DLQ.
+		dlqReason := "max attempts exceeded: " + failure.Message
 		res, err := q.db.ExecContext(ctx, `
 			UPDATE tasks
-			SET status = 'failed',
-			    last_error = $1,
-			    finished_at = $2,
-			    updated_at = $2,
+			SET status = 'dlq',
+			    dlq_reason = $1,
+			    last_error = $2,
+			    finished_at = $3,
+			    updated_at = $3,
 			    leased_by = NULL,
 			    lease_expires_at = NULL
-			WHERE id = $3
+			WHERE id = $4
 			  AND status = 'running'
-			  AND leased_by = $4
-		`, failure.Message, now, taskID, workerID)
+			  AND leased_by = $5
+		`, dlqReason, failure.Message, now, taskID, workerID)
 		if err != nil {
-			return fmt.Errorf("mark failure: final fail update: %w", err)
+			return fmt.Errorf("mark failure: dlq update: %w", err)
 		}
 		n, _ := res.RowsAffected()
 		if n == 0 {
@@ -322,10 +324,11 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 	return nil
 }
 
-// ListDLQ retrieves tasks in DLQ state.
-// DLQ is a Phase 4 feature; this returns ErrNotImplemented for now.
+// ListDLQ retrieves tasks currently in the dead letter queue.
 func (q *PostgresQueue) ListDLQ(ctx context.Context, filter domain.TaskFilter) ([]domain.Task, error) {
-	return nil, domain.ErrNotImplemented
+	dlqStatus := domain.TaskStatusDLQ
+	filter.Status = &dlqStatus
+	return q.ListTasks(ctx, filter)
 }
 
 // --- Internal helpers ---
