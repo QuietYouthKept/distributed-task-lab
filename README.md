@@ -96,9 +96,13 @@ Worker 1   Worker 2   ───   Independent goroutine pools
 | `POST` | `/tasks` | Submit a new task |
 | `GET` | `/tasks` | List tasks (?status=, ?type= filters) |
 | `GET` | `/tasks/{id}` | Get a single task |
+| `GET` | `/tasks/{id}/events` | Get task audit event log |
+| `POST` | `/tasks/{id}/requeue` | Reset a DLQ task to pending |
+| `POST` | `/tasks/{id}/cancel` | Cancel a pending or running task |
 | `GET` | `/tasks?status=dlq` | List DLQ tasks |
-| `GET` | `/dlq` | Same as above (convenience) |
-| `GET` | `/stats` | Task counts by status |
+| `GET` | `/dlq` | Same as above |
+| `GET` | `/stats` | Task counts by status (JSON) |
+| `GET` | `/metrics` | Prometheus-format metrics |
 | `GET` | `/health` | Health check |
 
 ## Quick Start
@@ -257,15 +261,15 @@ These are explicitly out of scope for v1:
 - [x] **M3:** Fixed-interval retry + task timeout
 - [x] **M4:** Dead Letter Queue + query
 - [x] **M5:** Docker demo + README polish
+- [x] **Phase 6:** Task events audit log, manual requeue, cancel, heartbeat, Prometheus metrics, Redis backend skeleton
 
 ### Future Ideas
 
+- Full Redis backend implementation (Lua scripts for atomic claim)
 - Exponential backoff with jitter
-- Worker heartbeat and stale worker detection
-- Redis backend (same `Queue` interface)
-- `task_events` audit table
-- Manual DLQ requeue
-- Prometheus metrics
+- `task_events` streaming / WebSocket
+- Worker dashboard / Web UI
+- Kubernetes deployment manifests
 
 ## Development
 

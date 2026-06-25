@@ -34,4 +34,21 @@ type Queue interface {
 
 	// ListDLQ retrieves tasks currently in the dead letter queue.
 	ListDLQ(ctx context.Context, filter domain.TaskFilter) ([]domain.Task, error)
+
+	// Requeue resets a DLQ task back to pending (manual retry).
+	// Only allowed for tasks in 'dlq' status.
+	Requeue(ctx context.Context, taskID string, reason string) error
+
+	// Cancel marks a task as cancelled. Pending tasks are cancelled immediately;
+	// running tasks require cooperative cancellation (best-effort).
+	Cancel(ctx context.Context, taskID string, reason string) error
+
+	// GetTaskEvents retrieves the audit log for a task.
+	GetTaskEvents(ctx context.Context, taskID string) ([]domain.TaskEvent, error)
+
+	// Heartbeat registers or updates a worker's liveness.
+	Heartbeat(ctx context.Context, workerID string) error
+
+	// RenewLease extends the lease on a task currently owned by the worker.
+	RenewLease(ctx context.Context, taskID string, workerID string, leaseTimeout time.Duration) error
 }

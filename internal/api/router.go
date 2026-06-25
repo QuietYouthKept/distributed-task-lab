@@ -10,10 +10,10 @@ import (
 
 // NewRouter creates and configures the HTTP router.
 // Uses Go 1.22+ enhanced ServeMux patterns.
-func NewRouter(taskHandler *handlers.TaskHandler, logger *slog.Logger) http.Handler {
+func NewRouter(taskHandler *handlers.TaskHandler, metricsHandler *handlers.MetricsHandler, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 
-	// Task endpoints — Go 1.22+ method+path patterns
+	// Task endpoints
 	mux.HandleFunc("POST /tasks", taskHandler.CreateTask)
 	mux.HandleFunc("GET /tasks", taskHandler.ListTasks)
 	mux.HandleFunc("GET /tasks/{id}", taskHandler.GetTask)
@@ -21,19 +21,23 @@ func NewRouter(taskHandler *handlers.TaskHandler, logger *slog.Logger) http.Hand
 	// DLQ convenience endpoint
 	mux.HandleFunc("GET /dlq", taskHandler.ListDLQ)
 
-	// Metrics endpoint
+	// Metrics endpoints
 	mux.HandleFunc("GET /stats", taskHandler.GetStats)
+	mux.HandleFunc("GET /metrics", metricsHandler.ServeMetrics)
+
+	// Phase 6: Requeue, Cancel, Events
+	mux.HandleFunc("POST /tasks/{id}/requeue", taskHandler.Requeue)
+	mux.HandleFunc("POST /tasks/{id}/cancel", taskHandler.Cancel)
+	mux.HandleFunc("GET /tasks/{id}/events", taskHandler.GetTaskEvents)
 
 	// Health check
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	// Wrap with logging middleware
 	return loggingMiddleware(mux, logger)
 }
 
-// loggingMiddleware logs each request.
 func loggingMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger.Info("request", "method", r.Method, "path", r.URL.Path)

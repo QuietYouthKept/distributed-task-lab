@@ -232,47 +232,66 @@ POST /tasks/{id}/requeue
 This would allow operators to manually retry DLQ tasks after fixing the
 underlying issue (e.g., correcting a bad payload).
 
-## Heartbeat (Phase 2 Design)
+## Heartbeat (Phase 6)
 
-MVP does not implement heartbeat, but the design is reserved:
+Workers send periodic heartbeats to a `workers` table:
 
-### Why Heartbeat Matters
-
-Without heartbeat, the system relies on `lease_timeout > task_timeout` to
-avoid premature re-claiming. This is simple but wasteful for long tasks:
-a 10-minute task needs a 12-minute lease, and if the worker crashes at
-minute 2, the task is stuck for 10 more minutes.
-
-### Proposed Design
-
-```
-workers table:
-  worker_id, hostname, last_seen_at, current_task_count
-
-worker_heartbeats table:
-  worker_id, task_id, leased_at, renewed_at
-
-Lease renewal:
-  UPDATE tasks SET lease_expires_at = now() + lease_timeout
-  WHERE id = $task_id AND leased_by = $worker_id AND status = 'running';
+```sql
+INSERT INTO workers (worker_id, hostname, last_seen_at, status)
+VALUES ($1, $2, now(), 'active')
+ON CONFLICT (worker_id) DO UPDATE SET last_seen_at = now();
 ```
 
-If renewal fails (0 rows affected), the worker has lost the lease and must
-stop processing the task.
+The heartbeat runs every `lease_timeout / 3` in a dedicated goroutine.
 
-## Why Redis Backend Is a Future Extension
+### Lease Renewal
 
-| Aspect | PostgreSQL (MVP) | Redis (Future) |
-|--------|-----------------|----------------|
-| **Transactions** | Full ACID, row-level locks — ideal for correctness demos | Lua scripts for atomicity |
-| **Queries** | Rich SQL filtering — great for API | Key-based access only |
-| **Operations** | Single service in docker-compose | Additional infrastructure |
-| **Throughput** | Good enough for demo/medium workloads | Excellent for high-throughput |
-| **Purpose** | Showcase correctness, state machine, auditability | Showcase performance, queue primitives |
+For long-running tasks, workers can extend their lease:
 
-The `Queue` interface is designed so a Redis implementation can drop in
-without changing any other layer. Phase 2 can implement this to demonstrate
-the interface abstraction.
+```sql
+UPDATE tasks SET lease_expires_at = now() + $lease_timeout
+WHERE id = $task_id AND status = 'running' AND leased_by = $worker_id;
+```
+
+If renewal fails (0 rows), the worker lost the lease and must stop the task.
+
+### Stale Worker Detection
+
+```sql
+SELECT worker_id FROM workers
+WHERE last_seen_at < now() - $threshold AND status = 'active';
+```
+
+Stale workers can be marked inactive, and their leased tasks (with expired
+leases) are automatically reclaimed by other workers.
+
+## Redis Backend (Phase 6 Skeleton)
+
+A Redis implementation of the `Queue` interface is provided as a design
+skeleton at `internal/storage/redis/redis_queue.go`. It returns
+`ErrNotImplemented` for all methods but documents the intended key structure
+and Lua scripts.
+
+### Key Structure
+
+```
+queue:ready          — List of task IDs ready for claiming
+queue:delayed        — ZSet of task IDs with next_run_at as score
+tasks:{task_id}      — Hash storing full task JSON
+queue:dlq            — List of DLQ task IDs
+```
+
+### Atomic Claim via Lua
+
+```lua
+local ready = redis.call('LRANGE', 'queue:ready', 0, limit-1)
+local delayed = redis.call('ZRANGEBYSCORE', 'queue:delayed', '-inf', now, 'LIMIT', 0, limit)
+-- For each ID: update task status, set leased_by, lease_expires_at
+-- Return claimed tasks
+```
+
+Lua scripts execute atomically in Redis, providing the same safety guarantee
+as PostgreSQL's `FOR UPDATE SKIP LOCKED` but with different tradeoffs.
 
 ## Database Design
 

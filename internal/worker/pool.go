@@ -67,6 +67,10 @@ func (p *Pool) Start() {
 		"lease_timeout", p.leaseTimeout,
 	)
 
+	// Launch heartbeat goroutine.
+	p.wg.Add(1)
+	go p.heartbeatLoop()
+
 	// Launch the claim loop.
 	p.wg.Add(1)
 	go p.claimLoop()
@@ -112,6 +116,30 @@ func (p *Pool) claimLoop() {
 			return
 		case <-ticker.C:
 			p.claimAndDispatch()
+		}
+	}
+}
+
+// heartbeatLoop periodically sends heartbeats to register worker liveness.
+func (p *Pool) heartbeatLoop() {
+	defer p.wg.Done()
+
+	// Send initial heartbeat immediately.
+	if err := p.q.Heartbeat(p.ctx, p.workerID); err != nil {
+		p.logger.Warn("heartbeat failed", "error", err)
+	}
+
+	ticker := time.NewTicker(p.leaseTimeout / 3) // heartbeat every 1/3 of lease
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case <-ticker.C:
+			if err := p.q.Heartbeat(p.ctx, p.workerID); err != nil {
+				p.logger.Warn("heartbeat failed", "error", err)
+			}
 		}
 	}
 }

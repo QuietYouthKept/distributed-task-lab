@@ -137,6 +137,76 @@ func (h *TaskHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stats)
 }
 
+// Requeue handles POST /tasks/{id}/requeue — resets a DLQ task to pending.
+func (h *TaskHandler) Requeue(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing task id"})
+		return
+	}
+
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	json.NewDecoder(r.Body).Decode(&body)
+	if body.Reason == "" {
+		body.Reason = "manual requeue"
+	}
+
+	if err := h.svc.Requeue(r.Context(), id, body.Reason); err != nil {
+		h.logger.Error("requeue failed", "task_id", id, "error", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	h.logger.Info("task requeued", "task_id", id)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "requeued", "task_id": id})
+}
+
+// Cancel handles POST /tasks/{id}/cancel — cancels a pending or running task.
+func (h *TaskHandler) Cancel(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing task id"})
+		return
+	}
+
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	json.NewDecoder(r.Body).Decode(&body)
+	if body.Reason == "" {
+		body.Reason = "manual cancel"
+	}
+
+	if err := h.svc.Cancel(r.Context(), id, body.Reason); err != nil {
+		h.logger.Error("cancel failed", "task_id", id, "error", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	h.logger.Info("task cancelled", "task_id", id)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled", "task_id": id})
+}
+
+// GetTaskEvents handles GET /tasks/{id}/events — returns the task audit log.
+func (h *TaskHandler) GetTaskEvents(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing task id"})
+		return
+	}
+
+	events, err := h.svc.GetTaskEvents(r.Context(), id)
+	if err != nil {
+		h.logger.Error("get events failed", "task_id", id, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, events)
+}
+
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

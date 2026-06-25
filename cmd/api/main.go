@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/yourusername/distributed-task-lab/internal/api/handlers"
 	"github.com/yourusername/distributed-task-lab/internal/application"
 	"github.com/yourusername/distributed-task-lab/internal/config"
+	"github.com/yourusername/distributed-task-lab/internal/domain"
 	"github.com/yourusername/distributed-task-lab/internal/observability"
 	"github.com/yourusername/distributed-task-lab/internal/storage/postgres"
 )
@@ -43,7 +45,14 @@ func main() {
 
 	// Initialize HTTP handlers and router.
 	taskHandler := handlers.NewTaskHandler(svc, logger)
-	router := api.NewRouter(taskHandler, logger)
+
+	// Metrics handler uses the service for task counting.
+	metricsLister := func(status *domain.TaskStatus) ([]domain.Task, error) {
+		return svc.ListTasks(context.Background(), domain.TaskFilter{Status: status, Limit: 10000})
+	}
+	metricsHandler := handlers.NewMetricsHandler(metricsLister)
+
+	router := api.NewRouter(taskHandler, metricsHandler, logger)
 
 	// Start HTTP server.
 	addr := fmt.Sprintf(":%d", cfg.APIPort)

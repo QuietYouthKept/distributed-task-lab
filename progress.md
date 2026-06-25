@@ -284,8 +284,37 @@ All 5 milestones delivered. The project demonstrates:
 ### Next Steps (beyond MVP)
 
 - Exponential backoff with jitter
-- Worker heartbeat
-- Redis backend
-- `task_events` audit table
-- Manual DLQ requeue
-- Prometheus metrics
+- Worker dashboard / Web UI
+- Kubernetes deployment manifests
+
+---
+
+## Phase 6: Optional Enhancements ✅
+
+### Date: 2025-06-25
+
+### What was done
+
+- [x] **Task Events**: `task_events` table (migration 002), domain types (TaskEvent, TaskEventType), event recording in all queue operations (submitted/claimed/succeeded/retried/moved_to_dlq/cancelled/requeued), `GET /tasks/{id}/events`
+- [x] **Manual Requeue**: `POST /tasks/{id}/requeue` — resets dlq→pending, attempt=0, clears errors. `Requeue` added to Queue interface + PostgreSQL impl
+- [x] **Cancel Task**: `POST /tasks/{id}/cancel` — marks pending/running as failed with reason. `Cancel` added to Queue interface + PostgreSQL impl
+- [x] **Heartbeat**: `workers` table (migration 003), `Heartbeat`/`RenewLease`/`DetectStaleWorkers` in Queue interface + PostgreSQL impl. Worker pool sends heartbeats every lease_timeout/3
+- [x] **Prometheus Metrics**: `GET /metrics` — Prometheus text format with `tasklab_tasks_total{status=...}` gauge
+- [x] **Redis Backend**: Skeleton implementation at `internal/storage/redis/redis_queue.go` — documents key structure, Lua scripts, PostgreSQL vs Redis comparison. Returns `ErrNotImplemented` for all methods (design artifact)
+- [x] **Docs**: README API table updated, DESIGN.md heartbeat/Redis sections updated, Roadmap reflects Phase 6
+
+### Verification
+
+```bash
+# Task events
+curl http://localhost:8080/tasks/{id}/events
+
+# Manual requeue
+curl -X POST http://localhost:8080/tasks/{id}/requeue -H "Content-Type: application/json" -d '{"reason":"retry after fix"}'
+
+# Cancel
+curl -X POST http://localhost:8080/tasks/{id}/cancel -H "Content-Type: application/json" -d '{"reason":"no longer needed"}'
+
+# Prometheus metrics
+curl http://localhost:8080/metrics
+```

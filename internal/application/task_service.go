@@ -110,3 +110,28 @@ func (s *TaskService) ListDLQ(ctx context.Context, filter domain.TaskFilter) ([]
 	}
 	return tasks, nil
 }
+
+// Requeue resets a DLQ task back to pending.
+func (s *TaskService) Requeue(ctx context.Context, taskID string, reason string) error {
+	if err := s.q.Requeue(ctx, taskID, reason); err != nil {
+		return fmt.Errorf("task service: requeue: %w", err)
+	}
+	return nil
+}
+
+// Cancel cancels a pending or running task.
+func (s *TaskService) Cancel(ctx context.Context, taskID string, reason string) error {
+	if err := s.q.Cancel(ctx, taskID, reason); err != nil {
+		return fmt.Errorf("task service: cancel: %w", err)
+	}
+	return nil
+}
+
+// GetTaskEvents retrieves the audit event log for a task.
+func (s *TaskService) GetTaskEvents(ctx context.Context, taskID string) ([]domain.TaskEvent, error) {
+	events, err := s.q.GetTaskEvents(ctx, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("task service: events: %w", err)
+	}
+	return events, nil
+}

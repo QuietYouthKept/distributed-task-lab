@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/yourusername/distributed-task-lab/internal/domain"
@@ -59,10 +60,9 @@ func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) error {
 	if err != nil {
 		return fmt.Errorf("enqueue: insert: %w", err)
 	}
+	q.recordEvent(ctx, task.ID, domain.EventSubmitted, "", "task submitted", map[string]any{"type": string(task.Type)})
 	return nil
 }
-
-// GetTask retrieves a task by ID.
 func (q *PostgresQueue) GetTask(ctx context.Context, taskID string) (*domain.Task, error) {
 	row := q.db.QueryRowContext(ctx, `
 		SELECT
@@ -220,6 +220,10 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		return nil, fmt.Errorf("claim: commit: %w", err)
 	}
 
+	for _, t := range claimed {
+		q.recordEvent(ctx, t.ID, domain.EventClaimed, workerID, "task claimed", map[string]any{"attempt": t.Attempt})
+	}
+
 	return claimed, nil
 }
 
@@ -252,10 +256,9 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 	if n == 0 {
 		return fmt.Errorf("mark success: task %s: %w", taskID, domain.ErrTaskNotClaimed)
 	}
+	q.recordEvent(ctx, taskID, domain.EventSucceeded, workerID, "task completed", map[string]any{"summary": result.Summary})
 	return nil
 }
-
-// MarkFailure handles task failure with retry logic (Phase 3).
 // Ownership check: only updates if leased_by matches workerID and status is running.
 //
 // Retry behavior:
@@ -296,6 +299,7 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 		if n == 0 {
 			return fmt.Errorf("mark failure: task %s: %w", taskID, domain.ErrTaskNotClaimed)
 		}
+		q.recordEvent(ctx, taskID, domain.EventMovedToDLQ, workerID, dlqReason, map[string]any{"error": failure.Message})
 		return nil
 	}
 
@@ -321,6 +325,7 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 	if n == 0 {
 		return fmt.Errorf("mark failure: task %s: %w", taskID, domain.ErrTaskNotClaimed)
 	}
+	q.recordEvent(ctx, taskID, domain.EventRetried, workerID, failure.Message, map[string]any{"next_retry_at": retryAt.Format(time.RFC3339)})
 	return nil
 }
 
@@ -329,6 +334,155 @@ func (q *PostgresQueue) ListDLQ(ctx context.Context, filter domain.TaskFilter) (
 	dlqStatus := domain.TaskStatusDLQ
 	filter.Status = &dlqStatus
 	return q.ListTasks(ctx, filter)
+}
+
+// recordEvent inserts a task lifecycle event (fire-and-forget, best-effort).
+func (q *PostgresQueue) recordEvent(ctx context.Context, taskID string, eventType domain.TaskEventType, workerID string, message string, metadata map[string]any) {
+	metaJSON, _ := json.Marshal(metadata)
+	_, _ = q.db.ExecContext(ctx, `
+		INSERT INTO task_events (task_id, event_type, worker_id, message, metadata)
+		VALUES ($1, $2, NULLIF($3, ''), $4, $5)
+	`, taskID, string(eventType), workerID, message, metaJSON)
+}
+
+// Requeue resets a DLQ task back to pending. Only allowed for dlq tasks.
+func (q *PostgresQueue) Requeue(ctx context.Context, taskID string, reason string) error {
+	now := time.Now().UTC()
+	res, err := q.db.ExecContext(ctx, `
+		UPDATE tasks
+		SET status = 'pending',
+		    attempt = 0,
+		    next_run_at = $1,
+		    updated_at = $1,
+		    last_error = NULL,
+		    dlq_reason = NULL,
+		    leased_by = NULL,
+		    lease_expires_at = NULL,
+		    started_at = NULL,
+		    finished_at = NULL
+		WHERE id = $2 AND status = 'dlq'
+	`, now, taskID)
+	if err != nil {
+		return fmt.Errorf("requeue: update: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("requeue: task %s not in dlq status", taskID)
+	}
+	q.recordEvent(ctx, taskID, domain.EventRequeued, "", reason, nil)
+	return nil
+}
+
+// Cancel marks a task as cancelled. Only pending or running tasks can be cancelled.
+func (q *PostgresQueue) Cancel(ctx context.Context, taskID string, reason string) error {
+	now := time.Now().UTC()
+	res, err := q.db.ExecContext(ctx, `
+		UPDATE tasks
+		SET status = 'failed',
+		    last_error = $1,
+		    finished_at = $2,
+		    updated_at = $2,
+		    leased_by = NULL,
+		    lease_expires_at = NULL
+		WHERE id = $3
+		  AND status IN ('pending', 'running')
+	`, "cancelled: "+reason, now, taskID)
+	if err != nil {
+		return fmt.Errorf("cancel: update: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("cancel: task %s not in cancellable status", taskID)
+	}
+	q.recordEvent(ctx, taskID, domain.EventCancelled, "", reason, nil)
+	return nil
+}
+
+// GetTaskEvents retrieves the audit event log for a task.
+func (q *PostgresQueue) GetTaskEvents(ctx context.Context, taskID string) ([]domain.TaskEvent, error) {
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT id, task_id, event_type, COALESCE(worker_id, ''), message, COALESCE(metadata::TEXT, '{}'), created_at
+		FROM task_events
+		WHERE task_id = $1
+		ORDER BY created_at ASC
+	`, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("get task events: query: %w", err)
+	}
+	defer rows.Close()
+
+	var events []domain.TaskEvent
+	for rows.Next() {
+		var e domain.TaskEvent
+		var workerID, metaStr, createdAt string
+		if err := rows.Scan(&e.ID, &e.TaskID, &e.EventType, &workerID, &e.Message, &metaStr, &createdAt); err != nil {
+			return nil, fmt.Errorf("get task events: scan: %w", err)
+		}
+		if workerID != "" {
+			e.WorkerID = &workerID
+		}
+		e.CreatedAt = createdAt
+		json.Unmarshal([]byte(metaStr), &e.Metadata)
+		events = append(events, e)
+	}
+	if events == nil {
+		events = []domain.TaskEvent{}
+	}
+	return events, rows.Err()
+}
+
+// Heartbeat registers or updates a worker's last_seen_at timestamp.
+func (q *PostgresQueue) Heartbeat(ctx context.Context, workerID string) error {
+	now := time.Now().UTC()
+	host, _ := os.Hostname()
+	_, err := q.db.ExecContext(ctx, `
+		INSERT INTO workers (worker_id, hostname, last_seen_at, status)
+		VALUES ($1, $2, $3, 'active')
+		ON CONFLICT (worker_id) DO UPDATE
+		SET last_seen_at = $3, hostname = $2
+	`, workerID, host, now)
+	return err
+}
+
+// RenewLease extends the lease on a task if the worker still owns it.
+// Returns an error if the lease is no longer valid (another worker claimed it).
+func (q *PostgresQueue) RenewLease(ctx context.Context, taskID string, workerID string, leaseTimeout time.Duration) error {
+	leaseExpires := time.Now().UTC().Add(leaseTimeout)
+	res, err := q.db.ExecContext(ctx, `
+		UPDATE tasks
+		SET lease_expires_at = $1, updated_at = $2
+		WHERE id = $3 AND status = 'running' AND leased_by = $4
+	`, leaseExpires, time.Now().UTC(), taskID, workerID)
+	if err != nil {
+		return fmt.Errorf("renew lease: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrLeaseExpired
+	}
+	return nil
+}
+
+// DetectStaleWorkers returns worker IDs that haven't sent a heartbeat within the threshold.
+func (q *PostgresQueue) DetectStaleWorkers(ctx context.Context, threshold time.Duration) ([]string, error) {
+	cutoff := time.Now().UTC().Add(-threshold)
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT worker_id FROM workers WHERE last_seen_at < $1 AND status = 'active'
+	`, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("detect stale workers: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // --- Internal helpers ---
