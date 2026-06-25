@@ -183,7 +183,7 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 			ErrorType:  "execution_error",
 			Message:    execErr.Error(),
 			Retryable:  true,
-			OccurredAt: time.Now().UTC(),
+			OccurredAt: time.Now().UTC().Format(time.RFC3339),
 		}
 		if err := p.q.MarkFailure(ctx, job.ID, p.workerID, failure); err != nil {
 			p.logger.Error("mark failure failed", "task_id", job.ID, "error", err)

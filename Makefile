@@ -1,4 +1,4 @@
-.PHONY: up down build api worker migrate test demo demo-success demo-retry demo-dlq demo-timeout logs clean
+.PHONY: up down build api worker migrate submit-rag-task submit-multi list-tasks watch-tasks demo-claim test logs clean dev
 
 # Default target
 .DEFAULT_GOAL := help
@@ -8,7 +8,7 @@ help: ## Show this help
 
 # ── Docker targets ──────────────────────────────────────────
 
-up: ## Start all services (PostgreSQL, API, Workers)
+up: ## Start PostgreSQL + API + Workers (scale with: docker compose up --scale worker=3)
 	docker compose -f deployments/docker-compose.yml up -d --build
 
 down: ## Stop all services
@@ -20,69 +20,56 @@ build: ## Build Go binaries locally
 
 # ── Development targets ─────────────────────────────────────
 
-api: ## Run API server locally (requires PostgreSQL)
+api: ## Run API server locally (requires PostgreSQL running)
 	go run ./cmd/api
 
-worker: ## Run worker locally (requires PostgreSQL)
+worker: ## Run worker locally (requires PostgreSQL running)
 	go run ./cmd/worker
 
-migrate: ## Run database migrations only
-	@echo "Migrations run automatically on startup."
+migrate: ## Run database migrations (handled automatically on startup)
+	@echo "Migrations run automatically when API or Worker starts."
 
 # ── Demo targets ────────────────────────────────────────────
 
-demo: demo-success ## Run full demo (success + retry + dlq)
+submit-rag-task: ## Submit a single RAG ingestion task
+	@curl -s -X POST http://localhost:8080/tasks \
+		-H "Content-Type: application/json" \
+		-d @examples/payloads/rag_ingestion.json | jq .
 
-demo-success: up ## Submit a RAG ingestion task and watch it succeed
+submit-multi: ## Submit 5 RAG ingestion tasks to show multi-worker claim
+	@for i in 1 2 3 4 5; do \
+		echo "=== Task $$i ==="; \
+		curl -s -X POST http://localhost:8080/tasks \
+			-H "Content-Type: application/json" \
+			-d "{\"type\":\"rag_ingestion\",\"payload\":{\"version\":\"1\",\"kind\":\"rag_ingestion\",\"data\":{\"document_id\":\"doc-multi-$$i\",\"dataset_id\":\"ds-demo\",\"index_name\":\"demo-index\"}},\"max_attempts\":1,\"timeout_seconds\":30,\"retry_delay_seconds\":3}" | jq '{id, status}'; \
+	done
+
+list-tasks: ## List all tasks via curl
+	@curl -s http://localhost:8080/tasks | jq '.[] | {id, status, type, leased_by}'
+
+watch-tasks: ## Watch tasks in real-time (requires 'watch' command)
+	@watch -n 1 'curl -s http://localhost:8080/tasks | jq ".[] | {id, status, type, leased_by}"'
+
+demo-claim: up ## Full demo: submit 5 tasks + watch multi-worker claim
 	@echo "=== Waiting for services to be ready... ==="
+	@sleep 5
+	@echo "=== Submitting 5 tasks ==="
+	@for i in 1 2 3 4 5; do \
+		curl -s -X POST http://localhost:8080/tasks \
+			-H "Content-Type: application/json" \
+			-d "{\"type\":\"rag_ingestion\",\"payload\":{\"version\":\"1\",\"kind\":\"rag_ingestion\",\"data\":{\"document_id\":\"doc-$$i\",\"dataset_id\":\"ds-demo\",\"index_name\":\"demo-index\"}},\"max_attempts\":1,\"timeout_seconds\":30,\"retry_delay_seconds\":3}" | jq '{id, status}'; \
+	done
 	@sleep 3
-	@echo "=== Submitting RAG ingestion task ==="
-	@curl -s -X POST http://localhost:8080/tasks \
-		-H "Content-Type: application/json" \
-		-d @examples/payloads/rag_ingestion.json | jq .
-	@sleep 2
-	@echo "=== Checking task status ==="
-	@curl -s http://localhost:8080/tasks | jq '.[0]'
-
-demo-retry: up ## Submit a failing task and watch it retry
-	@echo "=== Submitting task that fails then succeeds ==="
-	@curl -s -X POST http://localhost:8080/tasks \
-		-H "Content-Type: application/json" \
-		-d @examples/payloads/retry.json | jq .
-	@sleep 12
-	@echo "=== Task after retry ==="
-	@curl -s http://localhost:8080/tasks | jq '.[0]'
-
-demo-dlq: up ## Submit a task that goes to DLQ
-	@echo "=== Submitting task destined for DLQ ==="
-	@curl -s -X POST http://localhost:8080/tasks \
-		-H "Content-Type: application/json" \
-		-d @examples/payloads/dlq.json | jq .
-	@sleep 20
-	@echo "=== DLQ tasks ==="
-	@curl -s "http://localhost:8080/tasks?status=dlq" | jq .
-
-demo-timeout: up ## Submit a task that times out
-	@echo "=== Submitting task with short timeout ==="
-	@curl -s -X POST http://localhost:8080/tasks \
-		-H "Content-Type: application/json" \
-		-d @examples/payloads/timeout.json | jq .
-	@sleep 10
-	@echo "=== Checking task (should be retrying) ==="
-	@curl -s http://localhost:8080/tasks | jq '.[0]'
-
-submit-rag-task: ## Submit a simple RAG ingestion task
-	@curl -s -X POST http://localhost:8080/tasks \
-		-H "Content-Type: application/json" \
-		-d @examples/payloads/rag_ingestion.json | jq .
-
-watch-tasks: ## Watch task list (run in another terminal)
-	@watch -n 1 'curl -s http://localhost:8080/tasks | jq .'
+	@echo "=== Current tasks ==="
+	@curl -s http://localhost:8080/tasks | jq '.[] | {id, status, type, leased_by}'
 
 # ── Utility targets ─────────────────────────────────────────
 
-logs: ## View Docker Compose logs
+logs: ## View all Docker Compose logs
 	docker compose -f deployments/docker-compose.yml logs -f
+
+logs-worker: ## View worker logs only
+	docker compose -f deployments/docker-compose.yml logs -f worker
 
 test: ## Run tests
 	go test ./...
@@ -92,4 +79,4 @@ clean: ## Remove build artifacts
 
 # ── Quick start ─────────────────────────────────────────────
 
-dev: up ## Alias for 'up' — start everything
+dev: up ## Start everything (alias for 'up')

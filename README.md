@@ -39,12 +39,12 @@ Worker 1   Worker 2   ───   Independent goroutine pools
 
 ### Key Mechanisms
 
-| Mechanism | Description |
-|-----------|-------------|
-| **Lease** | Workers claim tasks in a DB transaction with `FOR UPDATE SKIP LOCKED`. Each claim sets `leased_by` and `lease_expires_at`. If a worker crashes, the lease expires and another worker picks up the task. |
-| **Retry** | Failed tasks increment `attempt` and are re-scheduled with `next_run_at = now + retry_delay`. Fixed-interval retry in MVP. |
-| **Timeout** | Each task has a `timeout_seconds`. If execution exceeds it, the task is marked as failed and retried. |
-| **DLQ** | When `attempt >= max_attempts`, the task moves to DLQ (`status = 'dlq'`) with the failure reason recorded. |
+| Mechanism | Description | Status |
+|-----------|-------------|--------|
+| **Lease** | Workers claim tasks in a DB transaction with `FOR UPDATE SKIP LOCKED`. Each claim sets `leased_by` and `lease_expires_at`. If a worker crashes, the lease expires and another worker picks up the task. | ✅ Phase 2 |
+| **Retry** | Failed tasks increment `attempt` and are re-scheduled with `next_run_at = now + retry_delay`. Fixed-interval retry. | 🔜 Phase 3 |
+| **Timeout** | Each task has a `timeout_seconds`. If execution exceeds it, the task is marked as failed. | 🔜 Phase 3 |
+| **DLQ** | When `attempt >= max_attempts`, the task moves to DLQ (`status = 'dlq'`) with the failure reason recorded. | 🔜 Phase 4 |
 
 ## Quick Start
 
@@ -67,14 +67,35 @@ docker compose -f deployments/docker-compose.yml up -d
 ### Run the Demo
 
 ```bash
-# Full workflow: success → retry → DLQ
-bash scripts/demo.sh
+# Multi-worker claim demo (Phase 2):
+make demo-claim     # Submit 5 tasks, watch them get claimed by different workers
 
-# Or individual scenarios:
-make demo-success     # Task completes successfully
-make demo-retry       # Task fails, retries
-make demo-dlq         # Task exhausts retries → DLQ
-make demo-timeout     # Task times out
+# Individual operations:
+make submit-rag-task   # Submit a single RAG ingestion task
+make submit-multi      # Submit 5 tasks at once
+make watch-tasks       # Watch task state changes in real-time
+make logs-worker       # See which worker claimed each task
+
+# Phase 1 demo (API only, no workers):
+make up               # Start PostgreSQL + API + 2 Workers
+make submit-rag-task  # Creates task with status=pending
+make list-tasks       # See pending tasks get claimed → running → success
+```
+
+### Multi-Worker Demo
+
+```bash
+# Start with 3 workers to demonstrate distributed claiming:
+docker compose -f deployments/docker-compose.yml up -d --scale worker=3
+
+# Submit multiple tasks:
+make submit-multi
+
+# Watch which worker claims each task:
+make watch-tasks
+
+# Or check logs to see worker claim activity:
+make logs-worker
 ```
 
 ### Quick API Test

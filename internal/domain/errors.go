@@ -12,4 +12,5 @@ var (
 	ErrMaxAttemptsReached = errors.New("max attempts reached")
 	ErrLeaseExpired       = errors.New("lease has expired")
 	ErrAlreadyClaimed     = errors.New("task already claimed by another worker")
+	ErrNotImplemented     = errors.New("not implemented in Phase 1")
 )

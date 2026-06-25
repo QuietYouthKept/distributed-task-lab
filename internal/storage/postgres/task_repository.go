@@ -139,7 +139,7 @@ func (q *PostgresQueue) ListTasks(ctx context.Context, filter domain.TaskFilter)
 //
 // It claims tasks that are:
 //   - status = 'pending' AND next_run_at <= now, OR
-//   - status = 'running' AND lease_expires_at < now (expired lease)
+//   - status = 'running' AND lease_expires_at < now (expired lease — worker crash recovery)
 func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit int, leaseTimeout time.Duration) ([]domain.Task, error) {
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -150,10 +150,6 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 	now := time.Now().UTC()
 	leaseExpires := now.Add(leaseTimeout)
 
-	// Select and lock candidate tasks.
-	// Two categories:
-	// 1. Pending tasks ready to run
-	// 2. Running tasks whose lease has expired (orphaned)
 	rows, err := tx.QueryContext(ctx, `
 		SELECT
 			id, type, status, payload, result,
@@ -178,15 +174,12 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 	defer rows.Close()
 
 	var claimed []domain.Task
-	var taskIDs []string
-
 	for rows.Next() {
 		task, err := scanTaskFromRows(rows)
 		if err != nil {
 			return nil, fmt.Errorf("claim: scan: %w", err)
 		}
 		claimed = append(claimed, *task)
-		taskIDs = append(taskIDs, task.ID)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("claim: rows: %w", err)
@@ -196,7 +189,7 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		return nil, nil
 	}
 
-	// Update claimed tasks: set status=running, leased_by, lease_expires_at.
+	// Update claimed tasks atomically.
 	nowTime := time.Now().UTC()
 	for i := range claimed {
 		_, err := tx.ExecContext(ctx, `
@@ -213,7 +206,6 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 			return nil, fmt.Errorf("claim: update task %s: %w", claimed[i].ID, err)
 		}
 
-		// Update in-memory copy
 		claimed[i].Status = domain.TaskStatusRunning
 		claimed[i].LeasedBy = &workerID
 		claimed[i].LeaseExpiresAt = &leaseExpires
@@ -263,62 +255,25 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 	return nil
 }
 
-// MarkFailure handles task failure: records error, increments attempt,
-// and either schedules retry or moves to DLQ.
+// MarkFailure marks a task as failed. In Phase 2, there is no retry or DLQ —
+// the task is simply set to 'failed' with the error recorded.
 // Ownership check: only updates if leased_by matches workerID and status is running.
 func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID string, failure domain.TaskFailure) error {
-	// First, fetch current task state to determine retry behavior.
-	task, err := q.GetTask(ctx, taskID)
-	if err != nil {
-		return fmt.Errorf("mark failure: get task: %w", err)
-	}
-	if task == nil {
-		return domain.ErrTaskNotFound
-	}
-
 	now := time.Now().UTC()
-
-	if task.Attempt >= task.MaxAttempts {
-		// Move to DLQ
-		res, err := q.db.ExecContext(ctx, `
-			UPDATE tasks
-			SET status = 'dlq',
-			    dlq_reason = $1,
-			    last_error = $2,
-			    finished_at = $3,
-			    updated_at = $3,
-			    leased_by = NULL,
-			    lease_expires_at = NULL
-			WHERE id = $4
-			  AND status = 'running'
-			  AND leased_by = $5
-		`, "max attempts exceeded: "+failure.Message, failure.Message, now, taskID, workerID)
-		if err != nil {
-			return fmt.Errorf("mark failure: dlq update: %w", err)
-		}
-		n, _ := res.RowsAffected()
-		if n == 0 {
-			return fmt.Errorf("mark failure: task %s: %w", taskID, domain.ErrTaskNotClaimed)
-		}
-		return nil
-	}
-
-	// Schedule retry: back to pending with delayed next_run_at.
-	retryAt := now.Add(time.Duration(task.RetryDelaySeconds) * time.Second)
 	res, err := q.db.ExecContext(ctx, `
 		UPDATE tasks
-		SET status = 'pending',
+		SET status = 'failed',
 		    last_error = $1,
-		    next_run_at = $2,
-		    updated_at = $3,
+		    finished_at = $2,
+		    updated_at = $2,
 		    leased_by = NULL,
 		    lease_expires_at = NULL
-		WHERE id = $4
+		WHERE id = $3
 		  AND status = 'running'
-		  AND leased_by = $5
-	`, failure.Message, retryAt, now, taskID, workerID)
+		  AND leased_by = $4
+	`, failure.Message, now, taskID, workerID)
 	if err != nil {
-		return fmt.Errorf("mark failure: retry update: %w", err)
+		return fmt.Errorf("mark failure: update: %w", err)
 	}
 
 	n, _ := res.RowsAffected()
@@ -329,10 +284,9 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 }
 
 // ListDLQ retrieves tasks in DLQ state.
+// DLQ is a Phase 4 feature; this returns ErrNotImplemented for now.
 func (q *PostgresQueue) ListDLQ(ctx context.Context, filter domain.TaskFilter) ([]domain.Task, error) {
-	dlqStatus := domain.TaskStatusDLQ
-	filter.Status = &dlqStatus
-	return q.ListTasks(ctx, filter)
+	return nil, domain.ErrNotImplemented
 }
 
 // --- Internal helpers ---
