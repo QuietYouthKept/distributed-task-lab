@@ -1,0 +1,19 @@
+{
+  "type": "rag_ingestion",
+  "payload": {
+    "version": "1",
+    "kind": "rag_ingestion",
+    "data": {
+      "document_id": "doc-dlq-demo",
+      "dataset_id": "ds-demo",
+      "source_uri": "s3://mock-bucket/docs/broken-doc.pdf",
+      "index_name": "demo-index",
+      "simulate": "failure",
+      "should_fail": true,
+      "duration_ms": 200
+    }
+  },
+  "max_attempts": 1,
+  "timeout_seconds": 30,
+  "retry_delay_seconds": 3
+}

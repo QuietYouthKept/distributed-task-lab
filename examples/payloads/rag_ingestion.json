@@ -1,0 +1,20 @@
+{
+  "type": "rag_ingestion",
+  "payload": {
+    "version": "1",
+    "kind": "rag_ingestion",
+    "data": {
+      "document_id": "doc-001",
+      "dataset_id": "ds-demo",
+      "source_uri": "s3://mock-bucket/docs/research-paper.pdf",
+      "chunking_profile": "default",
+      "embedding_profile": "text-embedding-mock",
+      "index_name": "demo-index",
+      "simulate": "success",
+      "duration_ms": 500
+    }
+  },
+  "max_attempts": 3,
+  "timeout_seconds": 60,
+  "retry_delay_seconds": 5
+}

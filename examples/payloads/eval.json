@@ -1,0 +1,16 @@
+{
+  "type": "eval",
+  "payload": {
+    "version": "1",
+    "kind": "eval",
+    "data": {
+      "eval_set_id": "eval-001",
+      "model_profile": "gpt-4-mock",
+      "scorer_profile": "accuracy",
+      "sample_limit": 100
+    }
+  },
+  "max_attempts": 2,
+  "timeout_seconds": 120,
+  "retry_delay_seconds": 10
+}

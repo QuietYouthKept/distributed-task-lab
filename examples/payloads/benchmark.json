@@ -1,0 +1,16 @@
+{
+  "type": "benchmark",
+  "payload": {
+    "version": "1",
+    "kind": "benchmark",
+    "data": {
+      "benchmark_name": "rag-throughput",
+      "target_profile": "default",
+      "concurrency": 10,
+      "duration_seconds": 30
+    }
+  },
+  "max_attempts": 1,
+  "timeout_seconds": 300,
+  "retry_delay_seconds": 30
+}

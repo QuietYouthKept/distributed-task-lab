@@ -1,0 +1,18 @@
+{
+  "type": "rag_ingestion",
+  "payload": {
+    "version": "1",
+    "kind": "rag_ingestion",
+    "data": {
+      "document_id": "doc-timeout-demo",
+      "dataset_id": "ds-demo",
+      "source_uri": "s3://mock-bucket/docs/slow-doc.pdf",
+      "index_name": "demo-index",
+      "simulate": "timeout",
+      "duration_ms": 100
+    }
+  },
+  "max_attempts": 2,
+  "timeout_seconds": 5,
+  "retry_delay_seconds": 3
+}
