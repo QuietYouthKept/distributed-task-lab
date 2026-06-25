@@ -113,6 +113,30 @@ func (h *TaskHandler) ListDLQ(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tasks)
 }
 
+// GetStats returns basic task counts by status.
+func (h *TaskHandler) GetStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	stats := make(map[string]int)
+
+	for _, st := range []domain.TaskStatus{
+		domain.TaskStatusPending,
+		domain.TaskStatusRunning,
+		domain.TaskStatusSuccess,
+		domain.TaskStatusFailed,
+		domain.TaskStatusDLQ,
+	} {
+		tasks, err := h.svc.ListTasks(ctx, domain.TaskFilter{Status: &st, Limit: 10000})
+		if err != nil {
+			h.logger.Error("stats query failed", "status", st, "error", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		stats[string(st)] = len(tasks)
+	}
+
+	writeJSON(w, http.StatusOK, stats)
+}
+
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

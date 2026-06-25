@@ -1,4 +1,4 @@
-.PHONY: up down build api worker migrate submit-rag-task submit-multi list-tasks watch-tasks demo-claim demo-retry demo-timeout demo-dlq test logs logs-worker clean dev
+.PHONY: up down build api worker migrate submit-rag-task submit-multi list-tasks watch-tasks demo demo-claim demo-retry demo-timeout demo-dlq test fmt logs logs-worker clean dev
 
 # Default target
 .DEFAULT_GOAL := help
@@ -36,7 +36,7 @@ submit-rag-task: ## Submit a single RAG ingestion task
 		-H "Content-Type: application/json" \
 		-d @examples/payloads/rag_ingestion.json | jq .
 
-submit-multi: ## Submit 5 RAG ingestion tasks to show multi-worker claim
+submit-multi: ## Submit 5 tasks to show multi-worker claim
 	@for i in 1 2 3 4 5; do \
 		echo "=== Task $$i ==="; \
 		curl -s -X POST http://localhost:8080/tasks \
@@ -44,13 +44,56 @@ submit-multi: ## Submit 5 RAG ingestion tasks to show multi-worker claim
 			-d "{\"type\":\"rag_ingestion\",\"payload\":{\"version\":\"1\",\"kind\":\"rag_ingestion\",\"data\":{\"document_id\":\"doc-multi-$$i\",\"dataset_id\":\"ds-demo\",\"index_name\":\"demo-index\"}},\"max_attempts\":1,\"timeout_seconds\":30,\"retry_delay_seconds\":3}" | jq '{id, status}'; \
 	done
 
-list-tasks: ## List all tasks via curl
+list-tasks: ## List all tasks
 	@curl -s http://localhost:8080/tasks | jq '.[] | {id, status, type, leased_by, attempt, last_error}'
 
 watch-tasks: ## Watch tasks in real-time (requires 'watch' command)
 	@watch -n 1 'curl -s http://localhost:8080/tasks | jq ".[] | {id, status, type, leased_by, attempt}"'
 
-demo-claim: up ## Full demo: submit 5 tasks + watch multi-worker claim (Phase 2)
+demo: up ## FULL DEMO: success → retry → DLQ — the complete story
+	@echo ""
+	@echo "=============================================================="
+	@echo "  distributed-task-lab — Complete MVP Demo"
+	@echo "  Showcases: claim, lease, retry, timeout, DLQ"
+	@echo "=============================================================="
+	@echo ""
+	@sleep 5
+	@echo "=== [1/7] Submitting a normal RAG ingestion task (will succeed) ==="
+	@curl -s -X POST http://localhost:8080/tasks -H "Content-Type: application/json" \
+		-d @examples/payloads/rag_ingestion.json | jq '{id, status}'
+	@sleep 3
+	@echo "=== [2/7] Task after worker claimed it ==="
+	@curl -s http://localhost:8080/tasks | jq '.[] | {id, status, type, leased_by}'
+	@sleep 2
+	@echo "=== [3/7] Task completed (pending → running → success) ==="
+	@curl -s http://localhost:8080/tasks | jq '.[] | {id, status, type, result}'
+	@echo ""
+	@echo "=== [4/7] Submitting a flaky task (fails once, then succeeds — retry demo) ==="
+	@curl -s -X POST http://localhost:8080/tasks -H "Content-Type: application/json" \
+		-d @examples/payloads/retry.json | jq '{id, status}'
+	@echo "  Waiting for retry cycle..."
+	@sleep 6
+	@echo "=== [5/7] Task after retry (attempt increased, then succeeded) ==="
+	@curl -s http://localhost:8080/tasks | jq '.[] | {id, status, attempt, last_error}'
+	@echo ""
+	@echo "=== [6/7] Submitting a doomed task (always fails → DLQ) ==="
+	@curl -s -X POST http://localhost:8080/tasks -H "Content-Type: application/json" \
+		-d @examples/payloads/dlq.json | jq '{id, status}'
+	@echo "  Waiting for retry → DLQ..."
+	@sleep 12
+	@echo "=== [7/7] DLQ tasks ==="
+	@curl -s "http://localhost:8080/tasks?status=dlq" | jq '.[] | {id, status, dlq_reason}'
+	@echo ""
+	@echo "=== Metrics ==="
+	@curl -s http://localhost:8080/stats | jq .
+	@echo ""
+	@echo "=============================================================="
+	@echo "  Demo complete!"
+	@echo "  make logs     — view all service logs"
+	@echo "  make down     — stop everything"
+	@echo "=============================================================="
+
+demo-claim: up ## Phase 2: submit 5 tasks + watch multi-worker claim
 	@echo "=== Waiting for services to be ready... ==="
 	@sleep 5
 	@echo "=== Submitting 5 tasks ==="
@@ -63,7 +106,7 @@ demo-claim: up ## Full demo: submit 5 tasks + watch multi-worker claim (Phase 2)
 	@echo "=== Current tasks ==="
 	@curl -s http://localhost:8080/tasks | jq '.[] | {id, status, type, leased_by}'
 
-demo-retry: up ## Demo: submit a task that fails once then succeeds (Phase 3 retry)
+demo-retry: up ## Phase 3: task fails once then succeeds
 	@echo "=== Waiting for services to be ready... ==="
 	@sleep 5
 	@echo "=== Submitting task with mock_failures_before_success=1 ==="
@@ -77,7 +120,7 @@ demo-retry: up ## Demo: submit a task that fails once then succeeds (Phase 3 ret
 		curl -s http://localhost:8080/tasks | jq '.[] | {id, status, attempt, last_error}'; \
 	done
 
-demo-timeout: up ## Demo: submit a task that times out (Phase 3 timeout)
+demo-timeout: up ## Phase 3: task times out
 	@echo "=== Waiting for services to be ready... ==="
 	@sleep 5
 	@echo "=== Submitting task with short timeout ==="
@@ -91,7 +134,7 @@ demo-timeout: up ## Demo: submit a task that times out (Phase 3 timeout)
 		curl -s http://localhost:8080/tasks | jq '.[] | {id, status, attempt, last_error}'; \
 	done
 
-demo-dlq: up ## Demo: submit a task that goes through retry → DLQ (Phase 4)
+demo-dlq: up ## Phase 4: task goes through retry → DLQ
 	@echo "=== Waiting for services to be ready... ==="
 	@sleep 5
 	@echo "=== Submitting task destined for DLQ (mock_always_fail, max_attempts=2) ==="
@@ -116,8 +159,11 @@ logs: ## View all Docker Compose logs
 logs-worker: ## View worker logs only
 	docker compose -f deployments/docker-compose.yml logs -f worker
 
-test: ## Run tests
+test: ## Run all tests
 	go test ./...
+
+fmt: ## Format Go source code
+	go fmt ./...
 
 clean: ## Remove build artifacts
 	rm -rf bin/

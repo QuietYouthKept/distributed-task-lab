@@ -1,5 +1,42 @@
 # Design Notes — distributed-task-lab
 
+## System Architecture
+
+The system separates concerns cleanly:
+
+```
+API Server  ←─  Receives task submissions, returns status.
+                Never executes heavy work. Stateless (can scale horizontally).
+
+PostgreSQL  ←─  Single source of truth for task state.
+                Handles coordination via transactions, not a message broker.
+
+Worker Pool ←─  Stateless, independently scalable.
+                Claims tasks atomically, executes them, reports results.
+```
+
+### Why the API Server Doesn't Execute Tasks
+
+If the API server executed tasks synchronously:
+- Request latency would spike (RAG ingestion can take minutes)
+- Timeouts would kill in-progress work
+- Scaling would couple API throughput to task throughput
+
+By separating submission from execution, the API stays fast and workers
+scale independently.
+
+## Task State Machine
+
+```
+pending → running → success
+                 → failed (non-retryable or max_attempts hit)
+                 → pending (retry: next_run_at delayed)
+                 → dlq    (attempt >= max_attempts)
+```
+
+All transitions happen via the Queue interface methods (`ClaimTasks`,
+`MarkSuccess`, `MarkFailure`), each with ownership verification.
+
 ## At-Least-Once Semantics
 
 This system explicitly chooses **at-least-once** over exactly-once. Here's why:
@@ -167,28 +204,75 @@ to DLQ without consuming retry attempts.
 The DLQ is not a separate table — it's a status (`dlq`) on the `tasks` table.
 This keeps the schema simple and allows unified querying.
 
-### Querying DLQ
-
-```bash
-# Via status filter
-GET /tasks?status=dlq
-
-# Via convenience endpoint
-GET /dlq
-```
-
 ### When Tasks Enter DLQ
 
-1. `attempt >= max_attempts` after repeated failures
-2. Non-retryable error (Phase 2)
-3. Manual move (Phase 2 `POST /tasks/{id}/requeue` reverse operation)
+When `MarkFailure` is called and `attempt >= max_attempts`:
 
-### Phase 2: Requeue from DLQ
+```sql
+UPDATE tasks SET status = 'dlq',
+    dlq_reason = 'max attempts exceeded: ' || $last_error,
+    last_error = $last_error,
+    finished_at = now(),
+    leased_by = NULL, lease_expires_at = NULL
+WHERE id = $task_id AND status = 'running' AND leased_by = $worker_id;
+```
+
+### DLQ Tasks Are Not Claimable
+
+`ClaimTasks` only selects `status = 'pending'` or `status = 'running'` with
+expired lease — `dlq` is naturally excluded.
+
+### Future: Requeue from DLQ
 
 ```bash
 POST /tasks/{id}/requeue
-# Resets attempt=0, status=pending, next_run_at=now
+# Resets: attempt=0, status=pending, next_run_at=now, dlq_reason=NULL
 ```
+
+This would allow operators to manually retry DLQ tasks after fixing the
+underlying issue (e.g., correcting a bad payload).
+
+## Heartbeat (Phase 2 Design)
+
+MVP does not implement heartbeat, but the design is reserved:
+
+### Why Heartbeat Matters
+
+Without heartbeat, the system relies on `lease_timeout > task_timeout` to
+avoid premature re-claiming. This is simple but wasteful for long tasks:
+a 10-minute task needs a 12-minute lease, and if the worker crashes at
+minute 2, the task is stuck for 10 more minutes.
+
+### Proposed Design
+
+```
+workers table:
+  worker_id, hostname, last_seen_at, current_task_count
+
+worker_heartbeats table:
+  worker_id, task_id, leased_at, renewed_at
+
+Lease renewal:
+  UPDATE tasks SET lease_expires_at = now() + lease_timeout
+  WHERE id = $task_id AND leased_by = $worker_id AND status = 'running';
+```
+
+If renewal fails (0 rows affected), the worker has lost the lease and must
+stop processing the task.
+
+## Why Redis Backend Is a Future Extension
+
+| Aspect | PostgreSQL (MVP) | Redis (Future) |
+|--------|-----------------|----------------|
+| **Transactions** | Full ACID, row-level locks — ideal for correctness demos | Lua scripts for atomicity |
+| **Queries** | Rich SQL filtering — great for API | Key-based access only |
+| **Operations** | Single service in docker-compose | Additional infrastructure |
+| **Throughput** | Good enough for demo/medium workloads | Excellent for high-throughput |
+| **Purpose** | Showcase correctness, state machine, auditability | Showcase performance, queue primitives |
+
+The `Queue` interface is designed so a Redis implementation can drop in
+without changing any other layer. Phase 2 can implement this to demonstrate
+the interface abstraction.
 
 ## Database Design
 

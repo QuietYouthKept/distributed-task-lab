@@ -232,3 +232,60 @@ curl http://localhost:8080/dlq
 - Complex error classification
 
 ### Next: Phase 5 — Makefile + Docker Demo + README Polish
+
+---
+
+## Phase 5: Docker Demo + README Polish ✅
+
+### Date: 2025-06-25
+
+### What was done
+
+- [x] `make demo` — comprehensive 7-step demo: start → success → retry → DLQ → stats
+- [x] `make fmt` — run `go fmt ./...`
+- [x] `GET /stats` endpoint — returns task counts by status (pending/running/success/failed/dlq)
+- [x] README fully rewritten:
+  - Project overview → Why → Quick Demo → Architecture → Key Mechanisms
+  - Task Lifecycle diagram → API Reference table → Worker & Lease Design
+  - Retry/Timeout/DLQ explained → At-Least-Once → Non-Goals → Roadmap
+- [x] DESIGN.md enhanced:
+  - System Architecture section (API/PostgreSQL/Worker separation)
+  - Task State Machine section
+  - Heartbeat Phase 2 design (reserved)
+  - Why Redis is a future extension (comparison table)
+  - Updated DLQ section with implementation details
+- [x] Makefile: all recommended targets present (up/down/api/worker/demo/demo-claim/demo-retry/demo-timeout/demo-dlq/logs/test/fmt)
+
+### Verification
+
+```bash
+make demo
+# → 7-step demo: success → retry → DLQ → stats
+
+make test && make fmt
+# → All tests pass, code formatted
+
+curl http://localhost:8080/stats
+# → {"pending":0,"running":0,"success":N,"failed":0,"dlq":0}
+```
+
+### MVP Complete 🎉
+
+All 5 milestones delivered. The project demonstrates:
+
+- Go backend infrastructure
+- PostgreSQL transaction correctness (`FOR UPDATE SKIP LOCKED`)
+- Distributed worker lease with ownership checks
+- At-least-once task execution with idempotency guidance
+- Fixed-interval retry + task timeout
+- Dead Letter Queue
+- AI-style background job scenario (RAG ingestion mock)
+
+### Next Steps (beyond MVP)
+
+- Exponential backoff with jitter
+- Worker heartbeat
+- Redis backend
+- `task_events` audit table
+- Manual DLQ requeue
+- Prometheus metrics

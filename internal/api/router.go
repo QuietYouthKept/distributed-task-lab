@@ -21,6 +21,9 @@ func NewRouter(taskHandler *handlers.TaskHandler, logger *slog.Logger) http.Hand
 	// DLQ convenience endpoint
 	mux.HandleFunc("GET /dlq", taskHandler.ListDLQ)
 
+	// Metrics endpoint
+	mux.HandleFunc("GET /stats", taskHandler.GetStats)
+
 	// Health check
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

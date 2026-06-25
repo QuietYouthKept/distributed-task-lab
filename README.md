@@ -19,17 +19,30 @@ shows how to build a background task system where:
 The system uses **at-least-once** semantics: tasks may be executed more than
 once if a worker crashes. Task handlers must be designed to be idempotent.
 
+## Quick Demo
+
+```bash
+# Prerequisites: Docker, curl, jq
+
+# One command — the full story (success → retry → DLQ):
+make demo
+
+# Or step by step:
+make demo-claim    # Multi-worker claiming
+make demo-retry    # Automatic retry on failure
+make demo-dlq      # Dead Letter Queue after max retries
+```
+
 ## Architecture
 
 ```
 Client / Demo Script
         │
         ▼
-   API Server          ───   POST /tasks
-        │                    GET  /tasks/{id}
-        │                    GET  /tasks
+   API Server          ───   POST /tasks, GET /tasks/{id}, GET /tasks, GET /stats
+        │
         ▼
-   PostgreSQL           ───   Task state center
+   PostgreSQL           ───   Task state center (tasks table)
         ▲
         │
   ┌─────┴─────┐
@@ -41,93 +54,12 @@ Worker 1   Worker 2   ───   Independent goroutine pools
 
 | Mechanism | Description | Status |
 |-----------|-------------|--------|
-| **Lease** | Workers claim tasks in a DB transaction with `FOR UPDATE SKIP LOCKED`. Each claim sets `leased_by` and `lease_expires_at`. If a worker crashes, the lease expires and another worker picks up the task. | ✅ Phase 2 |
-| **Retry** | Failed tasks increment `attempt` and are re-scheduled with `next_run_at = now + retry_delay`. Fixed-interval retry. | ✅ Phase 3 |
-| **Timeout** | Each task has a `timeout_seconds`. If execution exceeds it, the task is marked as failed and retried. | ✅ Phase 3 |
-| **DLQ** | When `attempt >= max_attempts`, the task moves to DLQ (`status = 'dlq'`) with the failure reason recorded. | ✅ Phase 4 |
+| **Lease** | Workers claim tasks in a DB transaction with `FOR UPDATE SKIP LOCKED`. Each claim sets `leased_by` and `lease_expires_at`. If a worker crashes, the lease expires and another worker picks up the task. | ✅ |
+| **Retry** | Failed tasks increment `attempt` and are re-scheduled with `next_run_at = now + retry_delay`. Fixed-interval retry. | ✅ |
+| **Timeout** | Each task has a `timeout_seconds`. If execution exceeds it, the task is marked as failed and retried. | ✅ |
+| **DLQ** | When `attempt >= max_attempts`, the task moves to DLQ (`status = 'dlq'`) with the failure reason recorded. | ✅ |
 
-## Quick Start
-
-### Prerequisites
-
-- [Docker](https://docs.docker.com/get-docker/) & Docker Compose
-- [Go](https://go.dev/dl/) 1.22+ (for local development)
-- `curl` and `jq` (for the demo script)
-
-### One-Command Start
-
-```bash
-# Start everything: PostgreSQL + API + 2 Workers
-make up
-
-# Or manually:
-docker compose -f deployments/docker-compose.yml up -d
-```
-
-### Run the Demo
-
-```bash
-# Multi-worker claim demo (Phase 2):
-make demo-claim     # Submit 5 tasks, watch them get claimed by different workers
-
-# Individual operations:
-make submit-rag-task   # Submit a single RAG ingestion task
-make submit-multi      # Submit 5 tasks at once
-make watch-tasks       # Watch task state changes in real-time
-make logs-worker       # See which worker claimed each task
-
-# Phase 1 demo (API only, no workers):
-make up               # Start PostgreSQL + API + 2 Workers
-make submit-rag-task  # Creates task with status=pending
-make list-tasks       # See pending tasks get claimed → running → success
-```
-
-### Multi-Worker Demo
-
-```bash
-# Start with 3 workers to demonstrate distributed claiming:
-docker compose -f deployments/docker-compose.yml up -d --scale worker=3
-
-# Submit multiple tasks:
-make submit-multi
-
-# Watch which worker claims each task:
-make watch-tasks
-
-# Or check logs to see worker claim activity:
-make logs-worker
-```
-
-### Quick API Test
-
-```bash
-# Submit a RAG ingestion task
-curl -X POST http://localhost:8080/tasks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "rag_ingestion",
-    "payload": {
-      "version": "1",
-      "kind": "rag_ingestion",
-      "data": {
-        "document_id": "doc-001",
-        "dataset_id": "ds-demo",
-        "index_name": "demo-index"
-      }
-    }
-  }'
-
-# Check status (use the returned ID)
-curl http://localhost:8080/tasks/<task-id>
-
-# List all tasks
-curl http://localhost:8080/tasks
-
-# List DLQ tasks
-curl "http://localhost:8080/tasks?status=dlq"
-```
-
-## Task States
+## Task Lifecycle
 
 ```
               submit
@@ -157,16 +89,134 @@ curl "http://localhost:8080/tasks?status=dlq"
                   dlq
 ```
 
-## Task Types
+## API Reference
 
-| Type | Description | MVP Status |
-|------|-------------|------------|
-| `rag_ingestion` | Mock RAG document ingestion (chunking, embedding) | ✅ Implemented |
-| `eval` | Mock model evaluation | ✅ Stub |
-| `benchmark` | Mock benchmark run | ✅ Stub |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/tasks` | Submit a new task |
+| `GET` | `/tasks` | List tasks (?status=, ?type= filters) |
+| `GET` | `/tasks/{id}` | Get a single task |
+| `GET` | `/tasks?status=dlq` | List DLQ tasks |
+| `GET` | `/dlq` | Same as above (convenience) |
+| `GET` | `/stats` | Task counts by status |
+| `GET` | `/health` | Health check |
 
-All handlers currently use mock implementations. The architecture supports
-replacing them with real handlers later.
+## Quick Start
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) & Docker Compose
+- [Go](https://go.dev/dl/) 1.22+ (for local development)
+- `curl` and `jq`
+
+### Start Everything
+
+```bash
+make up
+
+# Or with 3 workers:
+docker compose -f deployments/docker-compose.yml up -d --scale worker=3
+```
+
+### Submit and Watch Tasks
+
+```bash
+make submit-rag-task     # Submit a single task
+make submit-multi        # Submit 5 tasks at once
+make list-tasks          # List all tasks
+make watch-tasks         # Real-time task state watch
+```
+
+### Quick API Test
+
+```bash
+# Submit
+curl -X POST http://localhost:8080/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"type":"rag_ingestion","payload":{"version":"1","kind":"rag_ingestion","data":{"document_id":"doc-001","index_name":"demo-index"}}}'
+
+# Check
+curl http://localhost:8080/tasks/<task-id>
+
+# Stats
+curl http://localhost:8080/stats
+```
+
+## Worker and Lease Design
+
+### How Workers Claim Tasks
+
+Workers use a PostgreSQL transaction with row-level locking:
+
+```sql
+BEGIN;
+SELECT * FROM tasks
+WHERE (status = 'pending' AND next_run_at <= now())
+   OR (status = 'running' AND lease_expires_at < now())
+ORDER BY priority DESC, created_at ASC
+LIMIT $batch_size
+FOR UPDATE SKIP LOCKED;
+
+UPDATE tasks SET status = 'running', leased_by = $worker_id,
+       lease_expires_at = now() + $lease_timeout, attempt = attempt + 1
+WHERE id = $task_id;
+COMMIT;
+```
+
+**`FOR UPDATE SKIP LOCKED`** guarantees no two workers claim the same task.
+The second `WHERE` clause handles **worker crash recovery**: if Worker A dies,
+its lease expires and Worker B can reclaim the task.
+
+### Ownership Check
+
+When a worker finishes (success or failure), it must prove ownership:
+
+```sql
+UPDATE tasks SET status = 'success', ... 
+WHERE id = $task_id AND status = 'running' AND leased_by = $worker_id;
+```
+
+If 0 rows affected → the worker lost the lease (another worker reclaimed it).
+This prevents split-brain: a zombie worker can't corrupt task state.
+
+## Retry, Timeout, and DLQ
+
+### Retry (Fixed-Interval)
+
+- On failure: `status → pending`, `next_run_at = now + retry_delay_seconds`, lease cleared
+- `attempt` is incremented on each claim (in `ClaimTasks`), not on each failure
+- When `attempt < max_attempts`: task is retried
+- When `attempt >= max_attempts`: task enters DLQ
+
+### Task Timeout vs Lease Timeout
+
+| Concept | Meaning | Example |
+|---------|---------|---------|
+| `timeout_seconds` | Max time a handler may run | 60s |
+| `lease_timeout` | How long a worker owns a task | 90s |
+
+**Rule:** `lease_timeout >= timeout_seconds + buffer` — without heartbeat,
+the buffer prevents premature re-claiming.
+
+### DLQ (Dead Letter Queue)
+
+- Tasks that exhaust all retry attempts enter `status = 'dlq'`
+- `dlq_reason` records "max attempts exceeded: <last error>"
+- DLQ tasks are **never claimed** by workers (excluded by the WHERE clause)
+- Query via `GET /tasks?status=dlq` or `GET /dlq`
+- Manual requeue is a planned Phase 2 feature
+
+## At-Least-Once Semantics
+
+This system guarantees **at-least-once** delivery: every task will be attempted
+at least once, but may execute more than once if:
+
+- A worker crashes after starting but before marking success/failure
+- A lease expires and another worker claims the same task
+- Network issues cause retry timeouts
+
+**Task handlers must be idempotent.** For RAG ingestion, check
+`document_id + version` before writing to the index.
 
 ## Project Structure
 
@@ -174,78 +224,58 @@ replacing them with real handlers later.
 cmd/api/              API server entry point
 cmd/worker/           Worker entry point
 internal/
-  domain/             Core domain types (Task, TaskStatus, TaskType)
-  application/        Business logic (TaskService)
+  domain/             Core types: Task, TaskStatus (status.go), TaskType, Payload (payload.go)
+  application/        Business logic: TaskService
   queue/              Queue interface (abstracts PostgreSQL / future Redis)
-  storage/postgres/   PostgreSQL implementation + migrations
-  worker/             Worker pool, runner, task handlers
-  api/                HTTP router and handlers
+  storage/postgres/   PostgreSQL implementation + migrations/
+  worker/             Worker pool, mock handlers/
+  api/                HTTP router, handlers/
   config/             Environment-based configuration
-  observability/      Structured logging, metrics placeholders
+  observability/      Structured JSON logging
 pkg/client/           Go HTTP client for the task API
 deployments/          Docker Compose, Dockerfiles
-examples/payloads/    Example JSON payloads for each task type
-scripts/              Demo script
+examples/payloads/    JSON payloads for each scenario
 ```
-
-## At-Least-Once Semantics
-
-This system guarantees **at-least-once** delivery: every task will be attempted
-at least once, but may be executed more than once if:
-
-- A worker crashes after starting execution but before marking success/failure.
-- A lease expires and another worker claims the same task.
-- Network issues cause retry timeouts.
-
-**Task handlers must be idempotent.** For example, a RAG ingestion handler
-should check `document_id + version` and skip re-ingestion if the document
-is already indexed.
 
 ## Non-Goals (MVP)
 
-These are explicitly out of scope for v1 but noted for clarity:
+These are explicitly out of scope for v1:
 
 - Real RAG ingestion / AI model API calls
-- Web UI / Dashboard
-- Kubernetes deployment
+- Web UI / Dashboard / Kubernetes
 - Exactly-once semantics
 - Prometheus `/metrics` endpoint
-- Manual requeue from DLQ (`POST /tasks/{id}/requeue`)
-- Cancel API
+- Manual requeue / cancel API
 - Worker heartbeat / stale worker detection
 - Redis backend
 - `task_events` audit table
 
 ## Roadmap
 
-- [x] **M1:** PostgreSQL-backed Task API (`POST /tasks`, `GET /tasks/{id}`, `GET /tasks`)
-- [x] **M2:** Worker claim + lease with transaction-correct locking
+- [x] **M1:** PostgreSQL-backed Task API
+- [x] **M2:** Worker claim + lease with `FOR UPDATE SKIP LOCKED`
 - [x] **M3:** Fixed-interval retry + task timeout
-- [x] **M4:** Dead Letter Queue (DLQ) + query
-- [x] **M5:** Docker Compose + Makefile + demo script
+- [x] **M4:** Dead Letter Queue + query
+- [x] **M5:** Docker demo + README polish
 
-### Phase 2 Ideas
+### Future Ideas
 
-- Exponential backoff with jitter for retries
+- Exponential backoff with jitter
 - Worker heartbeat and stale worker detection
 - Redis backend (same `Queue` interface)
-- `task_events` table for audit trail
-- Manual DLQ requeue API
+- `task_events` audit table
+- Manual DLQ requeue
 - Prometheus metrics
-- Graceful shutdown improvements (drain in-flight tasks)
 
 ## Development
 
 ```bash
-# Run locally (needs PostgreSQL running)
-make api      # Start API server on :8080
-make worker   # Start a worker
-
-# Build
-make build
-
-# Test
-make test
+make build    # Build binaries
+make api      # Run API server locally
+make worker   # Run worker locally
+make test     # Run all tests
+make fmt      # Format code
+make logs     # View Docker logs
 ```
 
 ## License
