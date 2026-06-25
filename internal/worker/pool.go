@@ -28,8 +28,9 @@ type Pool struct {
 }
 
 // Handler defines the interface for task-type-specific execution logic.
+// attempt is the current attempt number (1-based, as tracked by the queue).
 type Handler interface {
-	Handle(ctx context.Context, taskType string, payload map[string]any) (result *TaskExecResult, err error)
+	Handle(ctx context.Context, taskType string, payload map[string]any, attempt int) (result *TaskExecResult, err error)
 }
 
 // TaskExecResult is the outcome of executing a task.
@@ -87,9 +88,11 @@ func (p *Pool) Stop() {
 
 // taskJob represents a claimed task ready for execution.
 type taskJob struct {
-	ID      string
-	Type    string
-	Payload map[string]any
+	ID             string
+	Type           string
+	Payload        map[string]any
+	TimeoutSeconds int
+	Attempt        int
 }
 
 // claimLoop periodically claims tasks from the queue.
@@ -128,9 +131,11 @@ func (p *Pool) claimAndDispatch() {
 
 	for _, task := range tasks {
 		job := taskJob{
-			ID:      task.ID,
-			Type:    string(task.Type),
-			Payload: task.Payload.Data,
+			ID:             task.ID,
+			Type:           string(task.Type),
+			Payload:        task.Payload.Data,
+			TimeoutSeconds: task.TimeoutSeconds,
+			Attempt:        task.Attempt,
 		}
 
 		select {
@@ -164,23 +169,34 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 		"task_type", job.Type,
 		"worker_id", p.workerID,
 		"goroutine", workerNum,
+		"timeout_seconds", job.TimeoutSeconds,
 	)
 
-	// Create a context with timeout.
-	ctx, cancel := context.WithTimeout(p.ctx, p.leaseTimeout-time.Second)
+	// Determine task timeout: use task.TimeoutSeconds if set, else fall back to lease-based bound.
+	taskTimeout := time.Duration(job.TimeoutSeconds) * time.Second
+	if taskTimeout <= 0 || taskTimeout > p.leaseTimeout {
+		taskTimeout = p.leaseTimeout - time.Second
+	}
+
+	ctx, cancel := context.WithTimeout(p.ctx, taskTimeout)
 	defer cancel()
 
 	// Execute the handler.
-	result, execErr := p.handler.Handle(ctx, job.Type, job.Payload)
+	result, execErr := p.handler.Handle(ctx, job.Type, job.Payload, job.Attempt)
 
 	if execErr != nil {
+		errType := "execution_error"
+		if ctx.Err() == context.DeadlineExceeded {
+			errType = "timeout"
+		}
 		p.logger.Warn("task execution failed",
 			"task_id", job.ID,
 			"error", execErr,
+			"error_type", errType,
 			"worker_id", p.workerID,
 		)
 		failure := domain.TaskFailure{
-			ErrorType:  "execution_error",
+			ErrorType:  errType,
 			Message:    execErr.Error(),
 			Retryable:  true,
 			OccurredAt: time.Now().UTC().Format(time.RFC3339),

@@ -289,33 +289,142 @@ func TestMarkSuccessWrongWorker(t *testing.T) {
 	}
 }
 
-func TestMarkFailureWithOwnership(t *testing.T) {
+func TestMarkFailureRetry(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
 	task := &domain.Task{
-		ID: "test-mark-fail-001", Type: domain.TaskTypeRAGIngestion,
+		ID: "test-retry-001", Type: domain.TaskTypeRAGIngestion,
 		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
 		MaxAttempts: 3, TimeoutSeconds: 60, RetryDelaySeconds: 5,
 	}
 	q.Enqueue(ctx, task)
 	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
 
-	failure := domain.TaskFailure{Message: "something went wrong", ErrorType: "execution_error"}
-	err := q.MarkFailure(ctx, "test-mark-fail-001", "worker-1", failure)
+	failure := domain.TaskFailure{Message: "temporary error", ErrorType: "execution_error"}
+	err := q.MarkFailure(ctx, "test-retry-001", "worker-1", failure)
 	if err != nil {
 		t.Fatalf("MarkFailure: %v", err)
 	}
 
-	got, err := q.GetTask(ctx, "test-mark-fail-001")
+	got, err := q.GetTask(ctx, "test-retry-001")
 	if err != nil {
 		t.Fatalf("GetTask: %v", err)
 	}
+
+	// Should be back to pending.
+	if got.Status != domain.TaskStatusPending {
+		t.Errorf("Status = %q, want pending", got.Status)
+	}
+	// next_run_at should be in the future.
+	if !got.NextRunAt.After(time.Now().UTC()) {
+		t.Errorf("NextRunAt should be in the future, got %v", got.NextRunAt)
+	}
+	// Lease should be cleared.
+	if got.LeasedBy != nil {
+		t.Errorf("LeasedBy should be nil after retry, got %v", *got.LeasedBy)
+	}
+	// Error recorded.
+	if got.LastError == nil || *got.LastError != "temporary error" {
+		t.Errorf("LastError = %v, want 'temporary error'", got.LastError)
+	}
+}
+
+func TestMarkFailureMaxAttemptsExhausted(t *testing.T) {
+	q := setupTestDB(t)
+	ctx := context.Background()
+
+	task := &domain.Task{
+		ID: "test-max-attempts-001", Type: domain.TaskTypeRAGIngestion,
+		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
+		MaxAttempts: 1, TimeoutSeconds: 60, RetryDelaySeconds: 1,
+	}
+	q.Enqueue(ctx, task)
+	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
+
+	failure := domain.TaskFailure{Message: "fatal error", ErrorType: "permanent"}
+	err := q.MarkFailure(ctx, "test-max-attempts-001", "worker-1", failure)
+	if err != nil {
+		t.Fatalf("MarkFailure: %v", err)
+	}
+
+	got, err := q.GetTask(ctx, "test-max-attempts-001")
+	if err != nil {
+		t.Fatalf("GetTask: %v", err)
+	}
+
+	// Attempt >= max_attempts → final fail.
 	if got.Status != domain.TaskStatusFailed {
 		t.Errorf("Status = %q, want failed", got.Status)
 	}
-	if got.LastError == nil || *got.LastError != "something went wrong" {
-		t.Errorf("LastError = %v, want 'something went wrong'", got.LastError)
+	if got.LastError == nil || *got.LastError != "fatal error" {
+		t.Errorf("LastError = %v, want 'fatal error'", got.LastError)
+	}
+	// Lease should be cleared.
+	if got.LeasedBy != nil {
+		t.Errorf("LeasedBy should be nil, got %v", *got.LeasedBy)
+	}
+}
+
+func TestRetryTaskReclaimable(t *testing.T) {
+	q := setupTestDB(t)
+	ctx := context.Background()
+
+	task := &domain.Task{
+		ID: "test-retry-reclaim-001", Type: domain.TaskTypeRAGIngestion,
+		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
+		MaxAttempts: 3, TimeoutSeconds: 60, RetryDelaySeconds: 1,
+	}
+	q.Enqueue(ctx, task)
+	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
+
+	// Fail → retry to pending with next_run_at = now + 1s.
+	q.MarkFailure(ctx, "test-retry-reclaim-001", "worker-1",
+		domain.TaskFailure{Message: "err", ErrorType: "execution_error"})
+
+	// Task is pending but next_run_at is 1s in future — should not be claimable yet.
+	claimed, err := q.ClaimTasks(ctx, "worker-2", 5, 30*time.Second)
+	if err != nil {
+		t.Fatalf("ClaimTasks: %v", err)
+	}
+	if len(claimed) != 0 {
+		t.Errorf("expected 0 claims (next_run_at in future), got %d", len(claimed))
+	}
+
+	// Wait for retry_delay to pass.
+	time.Sleep(1100 * time.Millisecond)
+
+	// Now task should be claimable.
+	claimed, err = q.ClaimTasks(ctx, "worker-2", 5, 30*time.Second)
+	if err != nil {
+		t.Fatalf("ClaimTasks after delay: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("expected 1 claimed task after delay, got %d", len(claimed))
+	}
+	// Attempt should have been incremented again (now at 2).
+	if claimed[0].Attempt != 2 {
+		t.Errorf("Attempt = %d, want 2", claimed[0].Attempt)
+	}
+}
+
+func TestMarkFailureWrongWorker(t *testing.T) {
+	q := setupTestDB(t)
+	ctx := context.Background()
+
+	task := &domain.Task{
+		ID: "test-fail-wrong-worker-001", Type: domain.TaskTypeRAGIngestion,
+		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
+		MaxAttempts: 3, TimeoutSeconds: 60, RetryDelaySeconds: 5,
+	}
+	q.Enqueue(ctx, task)
+	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
+
+	// Worker 2 tries to mark failure — should fail (ownership check).
+	failure := domain.TaskFailure{Message: "wrong worker", ErrorType: "execution_error"}
+	err := q.MarkFailure(ctx, "test-fail-wrong-worker-001", "worker-2", failure)
+	if err == nil {
+		t.Error("expected error when wrong worker marks failure")
 	}
 }
 

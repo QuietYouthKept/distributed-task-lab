@@ -11,8 +11,15 @@ import (
 )
 
 // MockHandler implements worker.Handler with mock task behaviors.
-// It supports simulating success, failure, retry, and timeout
-// based on payload parameters.
+// Supports simulating success, failure, retry, and timeout via payload parameters.
+//
+// Payload simulation keys:
+//   mock_duration_ms           — simulated processing time in milliseconds (default 500)
+//   mock_failures_before_success — fail this many times before succeeding (uses attempt)
+//   mock_always_fail            — always fail regardless of attempt
+//   simulate                    — shortcut: "success", "failure", "timeout", "retry_then_success"
+//
+// The simulate shortcuts take precedence over the fine-grained controls.
 type MockHandler struct {
 	rng *rand.Rand
 }
@@ -25,12 +32,15 @@ func NewMockHandler() *MockHandler {
 }
 
 // Handle executes the mock task based on its type and payload.
-func (h *MockHandler) Handle(ctx context.Context, taskType string, payload map[string]any) (*worker.TaskExecResult, error) {
-	// Check for simulation directives in the payload.
-	simulate := getString(payload, "simulate", "success")
-	durationMs := getInt(payload, "duration_ms", 500)
-	shouldFail := getBool(payload, "should_fail", false)
-	failOnAttempt := getInt(payload, "fail_on_attempt", -1)
+func (h *MockHandler) Handle(ctx context.Context, taskType string, payload map[string]any, attempt int) (*worker.TaskExecResult, error) {
+	// Read simulation parameters.
+	simulate := getString(payload, "simulate", "")
+	durationMs := getInt(payload, "mock_duration_ms", 500)
+	if d := getInt(payload, "duration_ms", 0); d > 0 && durationMs == 500 {
+		durationMs = d // backward compat
+	}
+	failuresBeforeSuccess := getInt(payload, "mock_failures_before_success", -1)
+	alwaysFail := getBool(payload, "mock_always_fail", false)
 
 	// Apply simulated processing duration.
 	select {
@@ -39,43 +49,38 @@ func (h *MockHandler) Handle(ctx context.Context, taskType string, payload map[s
 	case <-time.After(time.Duration(durationMs) * time.Millisecond):
 	}
 
-	// Check simulation mode.
+	// Simulation shortcuts (take precedence).
 	switch simulate {
 	case "timeout":
-		// Sleep longer than the context deadline to force timeout.
-		select {
-		case <-ctx.Done():
-			return nil, fmt.Errorf("simulated timeout: %w", ctx.Err())
-		case <-time.After(5 * time.Minute):
-		}
-		return nil, errors.New("simulated timeout")
+		// Sleep until context deadline expires.
+		<-ctx.Done()
+		return nil, fmt.Errorf("simulated timeout: %w", ctx.Err())
 
 	case "failure":
 		return nil, fmt.Errorf("simulated failure for task type %s", taskType)
 
 	case "retry_then_success":
-		// Get current attempt from context or payload (in real use, attempt is tracked by worker).
-		// For MVP, we use a simplified model: fail_on_attempt controls which attempt fails.
-		if failOnAttempt > 0 {
-			// We can't know the exact attempt here — the queue handles retry.
-			// For demo purposes, we check a simple counter in the payload.
-			tryCount := getInt(payload, "_try_count", 1)
-			if tryCount <= failOnAttempt {
-				payload["_try_count"] = tryCount + 1
-				return nil, fmt.Errorf("simulated retry: attempt %d failed", tryCount)
-			}
+		// Fail on attempt 1, succeed on attempt 2+.
+		if attempt <= 1 {
+			return nil, fmt.Errorf("simulated retry: attempt %d failed", attempt)
 		}
+		// fall through to success
 	}
 
-	if shouldFail {
-		return nil, fmt.Errorf("task marked as should_fail=true")
+	// Fine-grained controls.
+	if alwaysFail {
+		return nil, fmt.Errorf("mock_always_fail=true on attempt %d", attempt)
+	}
+
+	if failuresBeforeSuccess >= 0 && attempt <= failuresBeforeSuccess {
+		return nil, fmt.Errorf("mock failure: attempt %d <= failures_before_success %d", attempt, failuresBeforeSuccess)
 	}
 
 	// Success path.
 	var result *worker.TaskExecResult
 	switch taskType {
 	case "rag_ingestion":
-		result = h.mockRAGIngestion(payload)
+		result = h.mockRAGIngestion(payload, attempt)
 	case "eval":
 		result = h.mockEval(payload)
 	case "benchmark":
@@ -87,13 +92,13 @@ func (h *MockHandler) Handle(ctx context.Context, taskType string, payload map[s
 	return result, nil
 }
 
-func (h *MockHandler) mockRAGIngestion(payload map[string]any) *worker.TaskExecResult {
+func (h *MockHandler) mockRAGIngestion(payload map[string]any, attempt int) *worker.TaskExecResult {
 	docID := getString(payload, "document_id", "doc-unknown")
 	datasetID := getString(payload, "dataset_id", "ds-default")
 	chunksGenerated := h.rng.Intn(50) + 10
 
 	return &worker.TaskExecResult{
-		Summary: fmt.Sprintf("RAG ingestion completed for document %s in dataset %s", docID, datasetID),
+		Summary: fmt.Sprintf("RAG ingestion completed for document %s in dataset %s (attempt %d)", docID, datasetID, attempt),
 		Artifacts: map[string]string{
 			"document_id":     docID,
 			"dataset_id":      datasetID,

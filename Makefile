@@ -1,4 +1,4 @@
-.PHONY: up down build api worker migrate submit-rag-task submit-multi list-tasks watch-tasks demo-claim test logs clean dev
+.PHONY: up down build api worker migrate submit-rag-task submit-multi list-tasks watch-tasks demo-claim demo-retry demo-timeout test logs logs-worker clean dev
 
 # Default target
 .DEFAULT_GOAL := help
@@ -45,12 +45,12 @@ submit-multi: ## Submit 5 RAG ingestion tasks to show multi-worker claim
 	done
 
 list-tasks: ## List all tasks via curl
-	@curl -s http://localhost:8080/tasks | jq '.[] | {id, status, type, leased_by}'
+	@curl -s http://localhost:8080/tasks | jq '.[] | {id, status, type, leased_by, attempt, last_error}'
 
 watch-tasks: ## Watch tasks in real-time (requires 'watch' command)
-	@watch -n 1 'curl -s http://localhost:8080/tasks | jq ".[] | {id, status, type, leased_by}"'
+	@watch -n 1 'curl -s http://localhost:8080/tasks | jq ".[] | {id, status, type, leased_by, attempt}"'
 
-demo-claim: up ## Full demo: submit 5 tasks + watch multi-worker claim
+demo-claim: up ## Full demo: submit 5 tasks + watch multi-worker claim (Phase 2)
 	@echo "=== Waiting for services to be ready... ==="
 	@sleep 5
 	@echo "=== Submitting 5 tasks ==="
@@ -62,6 +62,34 @@ demo-claim: up ## Full demo: submit 5 tasks + watch multi-worker claim
 	@sleep 3
 	@echo "=== Current tasks ==="
 	@curl -s http://localhost:8080/tasks | jq '.[] | {id, status, type, leased_by}'
+
+demo-retry: up ## Demo: submit a task that fails once then succeeds (Phase 3 retry)
+	@echo "=== Waiting for services to be ready... ==="
+	@sleep 5
+	@echo "=== Submitting task with mock_failures_before_success=1 ==="
+	@curl -s -X POST http://localhost:8080/tasks \
+		-H "Content-Type: application/json" \
+		-d @examples/payloads/retry.json | jq .
+	@echo "=== Watching retry (checking every 4s for 20s)... ==="
+	@for i in 1 2 3 4 5; do \
+		sleep 4; \
+		echo "--- Check $$i ---"; \
+		curl -s http://localhost:8080/tasks | jq '.[] | {id, status, attempt, last_error}'; \
+	done
+
+demo-timeout: up ## Demo: submit a task that times out (Phase 3 timeout)
+	@echo "=== Waiting for services to be ready... ==="
+	@sleep 5
+	@echo "=== Submitting task with short timeout ==="
+	@curl -s -X POST http://localhost:8080/tasks \
+		-H "Content-Type: application/json" \
+		-d @examples/payloads/timeout.json | jq .
+	@echo "=== Watching timeout + retry (checking every 3s for 15s)... ==="
+	@for i in 1 2 3 4 5; do \
+		sleep 3; \
+		echo "--- Check $$i ---"; \
+		curl -s http://localhost:8080/tasks | jq '.[] | {id, status, attempt, last_error}'; \
+	done
 
 # ── Utility targets ─────────────────────────────────────────
 

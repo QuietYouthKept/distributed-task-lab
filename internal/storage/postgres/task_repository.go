@@ -255,25 +255,64 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 	return nil
 }
 
-// MarkFailure marks a task as failed. In Phase 2, there is no retry or DLQ —
-// the task is simply set to 'failed' with the error recorded.
+// MarkFailure handles task failure with retry logic (Phase 3).
 // Ownership check: only updates if leased_by matches workerID and status is running.
+//
+// Retry behavior:
+//   - If attempt < max_attempts: status → pending, next_run_at = now + retry_delay, lease cleared
+//   - If attempt >= max_attempts: status → failed (DLQ comes in Phase 4)
 func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID string, failure domain.TaskFailure) error {
+	// Fetch current task state for retry decision.
+	task, err := q.GetTask(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("mark failure: get task: %w", err)
+	}
+	if task == nil {
+		return domain.ErrTaskNotFound
+	}
+
 	now := time.Now().UTC()
+
+	if task.Attempt >= task.MaxAttempts {
+		// Max attempts exhausted — final fail (Phase 4: DLQ).
+		res, err := q.db.ExecContext(ctx, `
+			UPDATE tasks
+			SET status = 'failed',
+			    last_error = $1,
+			    finished_at = $2,
+			    updated_at = $2,
+			    leased_by = NULL,
+			    lease_expires_at = NULL
+			WHERE id = $3
+			  AND status = 'running'
+			  AND leased_by = $4
+		`, failure.Message, now, taskID, workerID)
+		if err != nil {
+			return fmt.Errorf("mark failure: final fail update: %w", err)
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			return fmt.Errorf("mark failure: task %s: %w", taskID, domain.ErrTaskNotClaimed)
+		}
+		return nil
+	}
+
+	// Schedule retry: back to pending with delayed next_run_at.
+	retryAt := now.Add(time.Duration(task.RetryDelaySeconds) * time.Second)
 	res, err := q.db.ExecContext(ctx, `
 		UPDATE tasks
-		SET status = 'failed',
+		SET status = 'pending',
 		    last_error = $1,
-		    finished_at = $2,
-		    updated_at = $2,
+		    next_run_at = $2,
+		    updated_at = $3,
 		    leased_by = NULL,
 		    lease_expires_at = NULL
-		WHERE id = $3
+		WHERE id = $4
 		  AND status = 'running'
-		  AND leased_by = $4
-	`, failure.Message, now, taskID, workerID)
+		  AND leased_by = $5
+	`, failure.Message, retryAt, now, taskID, workerID)
 	if err != nil {
-		return fmt.Errorf("mark failure: update: %w", err)
+		return fmt.Errorf("mark failure: retry update: %w", err)
 	}
 
 	n, _ := res.RowsAffected()

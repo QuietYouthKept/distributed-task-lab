@@ -132,3 +132,60 @@ make test
 - Prometheus metrics
 
 ### Next: Phase 3 — Retry + Timeout
+
+---
+
+## Phase 3: Retry + Task Timeout ✅
+
+### Date: 2025-06-25
+
+### What was done
+
+- [x] Retry logic in MarkFailure:
+  - If `attempt < max_attempts`: status → pending, `next_run_at = now + retry_delay_seconds`, lease cleared
+  - If `attempt >= max_attempts`: status → failed (final; Phase 4 will change to DLQ)
+  - Ownership check preserved for both paths
+- [x] Task timeout enforcement:
+  - Worker passes `TimeutSeconds` through job channel
+  - `executeTask` uses `time.Duration(task.TimeoutSeconds)` for context timeout
+  - Timeout detection via `context.DeadlineExceeded` → error type "timeout"
+  - Lease timeout still serves as upper bound for safety
+- [x] Mock handler updated:
+  - Accepts `attempt` parameter from worker
+  - New simulation params: `mock_failures_before_success`, `mock_always_fail`, `mock_duration_ms`
+  - Backward-compatible: `simulate` shortcuts still work
+- [x] Example payloads: retry.json (mock_failures_before_success=1), timeout.json (mock_duration_ms=10s, timeout=2s)
+- [x] Makefile: demo-retry, demo-timeout targets
+- [x] Tests: retry flow, max attempts exhausted, delayed reclaim, wrong worker ownership, attempt increment
+- [x] README: Phase status table updated
+
+### Verification
+
+```bash
+# Retry demo
+make demo-retry
+# → Task fails on attempt 1, goes back to pending, retried after delay, succeeds on attempt 2
+
+# Timeout demo
+make demo-timeout
+# → Task exceeds timeout_seconds, marked as failed with error_type=timeout, retried
+
+# Run tests
+make test
+```
+
+### Key design points
+
+1. **Fixed-interval retry**: `next_run_at = now + retry_delay_seconds` — simple, predictable
+2. **Attempt tracking**: `attempt` incremented on each claim (in ClaimTasks), not on each failure
+3. **Task timeout vs Lease timeout**: task timeout is per-execution; lease timeout is ownership duration
+4. **Timout safety**: `taskTimeout = min(timeout_seconds, lease_timeout - 1s)`
+
+### Not in Phase 3 (deferred)
+
+- Exponential backoff + jitter (Phase 2 future / README roadmap)
+- Retryable vs non-retryable error classification
+- DLQ processing (Phase 4)
+- Heartbeat / stale worker detection
+
+### Next: Phase 4 — DLQ + Query

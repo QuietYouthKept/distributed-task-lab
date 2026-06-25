@@ -8,11 +8,10 @@
       "dataset_id": "ds-demo",
       "source_uri": "s3://mock-bucket/docs/slow-doc.pdf",
       "index_name": "demo-index",
-      "simulate": "timeout",
-      "duration_ms": 100
+      "mock_duration_ms": 10000
     }
   },
   "max_attempts": 2,
-  "timeout_seconds": 5,
+  "timeout_seconds": 2,
   "retry_delay_seconds": 3
 }

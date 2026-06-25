@@ -108,30 +108,41 @@ correct under at-least-once.
 Without heartbeat (MVP), the buffer prevents premature re-claiming. If a task
 truly hangs, the lease eventually expires and another worker picks it up.
 
-### Timeout Enforcement
+### Timeout Enforcement (Phase 3)
 
-The worker creates a context with timeout:
+The worker uses the task's `timeout_seconds` field for execution timeout:
 
 ```go
-ctx, cancel := context.WithTimeout(ctx, leaseTimeout - buffer)
+taskTimeout := time.Duration(job.TimeoutSeconds) * time.Second
+if taskTimeout <= 0 || taskTimeout > p.leaseTimeout {
+    taskTimeout = p.leaseTimeout - time.Second
+}
+ctx, cancel := context.WithTimeout(ctx, taskTimeout)
 defer cancel()
-result, err := handler.Handle(ctx, taskType, payload)
 ```
 
 If the handler respects `ctx.Done()`, the task is cancelled cleanly.
 If it doesn't (CPU-bound loop without context checks), the goroutine leaks
 but the lease expires and another worker handles the retry.
 
-## Retry Strategy
+Timeout errors are detected via `context.DeadlineExceeded` and recorded
+with `error_type = "timeout"` for observability.
 
-MVP uses **fixed-interval retry**:
+## Retry Strategy (Phase 3)
 
-- `attempt` increments on each failure
-- `next_run_at = now + retry_delay_seconds`
-- Status returns to `pending`
-- When `attempt >= max_attempts` → DLQ
+Phase 3 implements **fixed-interval retry**:
 
-### Phase 2: Exponential Backoff
+- On failure: `attempt` (already incremented by ClaimTasks) is checked against `max_attempts`
+- If `attempt < max_attempts`: status → `pending`, `next_run_at = now + retry_delay_seconds`, lease cleared
+- If `attempt >= max_attempts`: status → `failed` (Phase 4 will change this to `dlq`)
+- `last_error` records the failure message
+
+### Why Fixed-Interval in MVP
+
+Fixed-interval retry is simple, predictable, and easy to verify in demos.
+It clearly shows the retry mechanism without the complexity of backoff math.
+
+### Future: Exponential Backoff + Jitter
 
 ```
 delay = base_delay * 2^(attempt-1) + random_jitter
@@ -139,9 +150,7 @@ delay = base_delay * 2^(attempt-1) + random_jitter
 
 This prevents thundering herd when many tasks fail simultaneously.
 
-### Retryable vs. Non-Retryable Errors
-
-MVP treats all errors as retryable. Phase 2 can add:
+### Future: Retryable vs. Non-Retryable Errors
 
 ```go
 type TaskFailure struct {
@@ -150,8 +159,8 @@ type TaskFailure struct {
 }
 ```
 
-Non-retryable errors (e.g., invalid payload) go directly to DLQ without
-consuming retry attempts.
+Non-retryable errors (e.g., invalid payload) would skip retry and go directly
+to DLQ without consuming retry attempts.
 
 ## Dead Letter Queue (DLQ)
 

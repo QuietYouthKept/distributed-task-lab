@@ -42,8 +42,8 @@ Worker 1   Worker 2   ───   Independent goroutine pools
 | Mechanism | Description | Status |
 |-----------|-------------|--------|
 | **Lease** | Workers claim tasks in a DB transaction with `FOR UPDATE SKIP LOCKED`. Each claim sets `leased_by` and `lease_expires_at`. If a worker crashes, the lease expires and another worker picks up the task. | ✅ Phase 2 |
-| **Retry** | Failed tasks increment `attempt` and are re-scheduled with `next_run_at = now + retry_delay`. Fixed-interval retry. | 🔜 Phase 3 |
-| **Timeout** | Each task has a `timeout_seconds`. If execution exceeds it, the task is marked as failed. | 🔜 Phase 3 |
+| **Retry** | Failed tasks increment `attempt` and are re-scheduled with `next_run_at = now + retry_delay`. Fixed-interval retry. | ✅ Phase 3 |
+| **Timeout** | Each task has a `timeout_seconds`. If execution exceeds it, the task is marked as failed and retried. | ✅ Phase 3 |
 | **DLQ** | When `attempt >= max_attempts`, the task moves to DLQ (`status = 'dlq'`) with the failure reason recorded. | 🔜 Phase 4 |
 
 ## Quick Start
