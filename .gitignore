@@ -30,3 +30,13 @@ pgdata/
 # Environment
 .env
 .env.local
+
+# Project artifacts / scratch
+*.zip
+.reasonix/
+新建 Text Document.txt
+
+# Test / coverage output
+coverage.out
+coverage.html
+

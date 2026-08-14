@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yourusername/distributed-task-lab/internal/domain"
-	"github.com/yourusername/distributed-task-lab/internal/queue"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/queue"
 )
 
 // Pool manages a fixed-size goroutine pool for task execution.
@@ -209,6 +209,12 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 	ctx, cancel := context.WithTimeout(p.ctx, taskTimeout)
 	defer cancel()
 
+	// writeCtx is decoupled from the execution deadline so a task that times
+	// out can still persist its failure/result. It has its own short timeout
+	// and is only cancelled when the pool itself shuts down.
+	writeCtx, writeCancel := context.WithTimeout(context.WithoutCancel(p.ctx), 5*time.Second)
+	defer writeCancel()
+
 	// Execute the handler.
 	result, execErr := p.handler.Handle(ctx, job.Type, job.Payload, job.Attempt)
 
@@ -229,7 +235,7 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 			Retryable:  true,
 			OccurredAt: time.Now().UTC().Format(time.RFC3339),
 		}
-		if err := p.q.MarkFailure(ctx, job.ID, p.workerID, failure); err != nil {
+		if err := p.q.MarkFailure(writeCtx, job.ID, p.workerID, failure); err != nil {
 			p.logger.Error("mark failure failed", "task_id", job.ID, "error", err)
 		}
 		return
@@ -244,7 +250,7 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 			Metrics:   result.Metrics,
 		}
 	}
-	if err := p.q.MarkSuccess(ctx, job.ID, p.workerID, domResult); err != nil {
+	if err := p.q.MarkSuccess(writeCtx, job.ID, p.workerID, domResult); err != nil {
 		p.logger.Error("mark success failed", "task_id", job.ID, "error", err)
 		return
 	}

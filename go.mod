@@ -1,4 +1,4 @@
-module github.com/yourusername/distributed-task-lab
+module github.com/fantasticyi/distributed-task-lab
 
 go 1.22
 

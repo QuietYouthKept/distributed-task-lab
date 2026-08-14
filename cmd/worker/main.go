@@ -1,16 +1,15 @@
 package main
 
 import (
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/yourusername/distributed-task-lab/internal/config"
-	"github.com/yourusername/distributed-task-lab/internal/observability"
-	"github.com/yourusername/distributed-task-lab/internal/storage/postgres"
-	"github.com/yourusername/distributed-task-lab/internal/worker"
-	"github.com/yourusername/distributed-task-lab/internal/worker/handlers"
+	"github.com/fantasticyi/distributed-task-lab/internal/config"
+	"github.com/fantasticyi/distributed-task-lab/internal/observability"
+	"github.com/fantasticyi/distributed-task-lab/internal/storage/postgres"
+	"github.com/fantasticyi/distributed-task-lab/internal/worker"
+	"github.com/fantasticyi/distributed-task-lab/internal/worker/handlers"
 )
 
 func main() {

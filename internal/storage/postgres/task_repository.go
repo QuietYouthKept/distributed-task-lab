@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/yourusername/distributed-task-lab/internal/domain"
-	"github.com/yourusername/distributed-task-lab/internal/queue"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/queue"
 )
 
 // Ensure PostgresQueue implements queue.Queue.
@@ -429,6 +429,27 @@ func (q *PostgresQueue) GetTaskEvents(ctx context.Context, taskID string) ([]dom
 		events = []domain.TaskEvent{}
 	}
 	return events, rows.Err()
+}
+
+// Stats returns task counts grouped by status using a single aggregate query,
+// avoiding O(n) full-table scans and payload deserialization.
+func (q *PostgresQueue) Stats(ctx context.Context) (map[domain.TaskStatus]int64, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT status, COUNT(*) FROM tasks GROUP BY status`)
+	if err != nil {
+		return nil, fmt.Errorf("stats: query: %w", err)
+	}
+	defer rows.Close()
+
+	stats := make(map[domain.TaskStatus]int64)
+	for rows.Next() {
+		var status string
+		var count int64
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, fmt.Errorf("stats: scan: %w", err)
+		}
+		stats[domain.TaskStatus(status)] = count
+	}
+	return stats, rows.Err()
 }
 
 // Heartbeat registers or updates a worker's last_seen_at timestamp.

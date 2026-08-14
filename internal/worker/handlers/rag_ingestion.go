@@ -2,12 +2,11 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"time"
 
-	"github.com/yourusername/distributed-task-lab/internal/worker"
+	"github.com/fantasticyi/distributed-task-lab/internal/worker"
 )
 
 // MockHandler implements worker.Handler with mock task behaviors.

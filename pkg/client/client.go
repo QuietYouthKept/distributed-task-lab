@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/yourusername/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 )
 
 // Client is a simple HTTP client for the task API.

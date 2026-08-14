@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/yourusername/distributed-task-lab/internal/domain"
-	"github.com/yourusername/distributed-task-lab/internal/queue"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/queue"
 )
 
 // TaskService orchestrates task lifecycle operations.
@@ -134,4 +134,16 @@ func (s *TaskService) GetTaskEvents(ctx context.Context, taskID string) ([]domai
 		return nil, fmt.Errorf("task service: events: %w", err)
 	}
 	return events, nil
+}
+
+// GetStats returns the number of tasks currently in each status.
+func (s *TaskService) GetStats(ctx context.Context) (map[domain.TaskStatus]int64, error) {
+	stats, err := s.q.Stats(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("task service: stats: %w", err)
+	}
+	if stats == nil {
+		stats = map[domain.TaskStatus]int64{}
+	}
+	return stats, nil
 }

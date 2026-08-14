@@ -31,9 +31,10 @@
 
 ## Phase 2 (Future)
 - Exponential backoff with jitter
-- Worker heartbeat / stale worker detection
-- Redis backend (same Queue interface)
-- task_events audit table
-- Manual DLQ requeue (POST /tasks/{id}/requeue)
-- Prometheus metrics
+- Per-queue concurrency and rate limiting
+- OpenTelemetry distributed tracing
+- Full Redis backend (Lua atomic claim)
 - Real RAG ingestion with vector DB integration
+
+> Shipped in Phase 6 (already done): heartbeat / stale-worker detection,
+> task_events audit table, manual requeue, cancel, Prometheus metrics.

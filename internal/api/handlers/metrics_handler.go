@@ -1,36 +1,33 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
-	"github.com/yourusername/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 )
+
+// StatsProvider returns the number of tasks currently in each status.
+// It is a single aggregate query rather than a per-status list scan.
+type StatsProvider func(ctx context.Context) (map[domain.TaskStatus]int64, error)
 
 // MetricsHandler serves Prometheus-format metrics.
 type MetricsHandler struct {
-	// taskLister is a function that returns all tasks for metrics calculation.
-	taskLister func(status *domain.TaskStatus) ([]domain.Task, error)
+	stats StatsProvider
 }
 
 // NewMetricsHandler creates a metrics handler.
-func NewMetricsHandler(taskLister func(status *domain.TaskStatus) ([]domain.Task, error)) *MetricsHandler {
-	return &MetricsHandler{taskLister: taskLister}
+func NewMetricsHandler(stats StatsProvider) *MetricsHandler {
+	return &MetricsHandler{stats: stats}
 }
 
 // ServeMetrics handles GET /metrics — Prometheus text format.
 func (h *MetricsHandler) ServeMetrics(w http.ResponseWriter, r *http.Request) {
-	counts := map[domain.TaskStatus]int{}
-	for _, st := range []domain.TaskStatus{
-		domain.TaskStatusPending, domain.TaskStatusRunning,
-		domain.TaskStatusSuccess, domain.TaskStatusFailed, domain.TaskStatusDLQ,
-	} {
-		tasks, err := h.taskLister(&st)
-		if err != nil {
-			http.Error(w, "metrics error", http.StatusInternalServerError)
-			return
-		}
-		counts[st] = len(tasks)
+	counts, err := h.stats(r.Context())
+	if err != nil {
+		http.Error(w, "metrics error", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
@@ -40,6 +37,6 @@ func (h *MetricsHandler) ServeMetrics(w http.ResponseWriter, r *http.Request) {
 		domain.TaskStatusPending, domain.TaskStatusRunning,
 		domain.TaskStatusSuccess, domain.TaskStatusFailed, domain.TaskStatusDLQ,
 	} {
-		fmt.Fprintf(w, "tasklab_tasks_total{status=\"%s\"} %d\n", st, counts[st])
+		fmt.Fprintf(w, "tasklab_tasks_total{status=%q} %d\n", string(st), counts[st])
 	}
 }

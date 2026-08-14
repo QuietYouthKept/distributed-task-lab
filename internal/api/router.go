@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/yourusername/distributed-task-lab/internal/api/handlers"
+	"github.com/fantasticyi/distributed-task-lab/internal/api/handlers"
 )
 
 // NewRouter creates and configures the HTTP router.

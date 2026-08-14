@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/yourusername/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 )
 
 // Queue defines the abstract interface for task queue operations.
@@ -51,4 +51,7 @@ type Queue interface {
 
 	// RenewLease extends the lease on a task currently owned by the worker.
 	RenewLease(ctx context.Context, taskID string, workerID string, leaseTimeout time.Duration) error
+
+	// Stats returns the number of tasks currently in each status.
+	Stats(ctx context.Context) (map[domain.TaskStatus]int64, error)
 }

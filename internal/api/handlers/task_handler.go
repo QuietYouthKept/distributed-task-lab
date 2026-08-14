@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/yourusername/distributed-task-lab/internal/application"
-	"github.com/yourusername/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/application"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 )
 
 // TaskHandler handles HTTP requests for tasks.
@@ -113,28 +113,22 @@ func (h *TaskHandler) ListDLQ(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tasks)
 }
 
-// GetStats returns basic task counts by status.
+// GetStats returns task counts by status using a single aggregate query.
 func (h *TaskHandler) GetStats(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	stats := make(map[string]int)
-
-	for _, st := range []domain.TaskStatus{
-		domain.TaskStatusPending,
-		domain.TaskStatusRunning,
-		domain.TaskStatusSuccess,
-		domain.TaskStatusFailed,
-		domain.TaskStatusDLQ,
-	} {
-		tasks, err := h.svc.ListTasks(ctx, domain.TaskFilter{Status: &st, Limit: 10000})
-		if err != nil {
-			h.logger.Error("stats query failed", "status", st, "error", err)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		stats[string(st)] = len(tasks)
+	counts, err := h.svc.GetStats(r.Context())
+	if err != nil {
+		h.logger.Error("stats query failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
 	}
 
-	writeJSON(w, http.StatusOK, stats)
+	// Emit every known status so the JSON shape stays stable for callers.
+	out := make(map[string]int64, len(domain.ValidTaskStatuses))
+	for st := range domain.ValidTaskStatuses {
+		out[string(st)] = counts[st]
+	}
+
+	writeJSON(w, http.StatusOK, out)
 }
 
 // Requeue handles POST /tasks/{id}/requeue — resets a DLQ task to pending.

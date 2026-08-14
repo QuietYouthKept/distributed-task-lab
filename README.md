@@ -208,7 +208,7 @@ the buffer prevents premature re-claiming.
 - `dlq_reason` records "max attempts exceeded: <last error>"
 - DLQ tasks are **never claimed** by workers (excluded by the WHERE clause)
 - Query via `GET /tasks?status=dlq` or `GET /dlq`
-- Manual requeue is a planned Phase 2 feature
+- Manual requeue via `POST /tasks/{id}/requeue`
 
 ## At-Least-Once Semantics
 
@@ -241,18 +241,18 @@ deployments/          Docker Compose, Dockerfiles
 examples/payloads/    JSON payloads for each scenario
 ```
 
-## Non-Goals (MVP)
+## Non-Goals
 
-These are explicitly out of scope for v1:
+These are explicitly out of scope for this project:
 
-- Real RAG ingestion / AI model API calls
+- Real RAG ingestion / AI model API calls (handlers are deterministic mocks)
 - Web UI / Dashboard / Kubernetes
-- Exactly-once semantics
-- Prometheus `/metrics` endpoint
-- Manual requeue / cancel API
-- Worker heartbeat / stale worker detection
-- Redis backend
-- `task_events` audit table
+- Exactly-once semantics (the system is at-least-once by design)
+- Full Redis backend (only a design skeleton exists)
+- Workflow/DAG orchestration (this is a task queue, not Temporal/Conductor)
+
+> Prometheus metrics, task events, manual requeue/cancel, and worker heartbeat
+> shipped in Phase 6 and are therefore no longer non-goals.
 
 ## Roadmap
 
@@ -265,8 +265,10 @@ These are explicitly out of scope for v1:
 
 ### Future Ideas
 
-- Full Redis backend implementation (Lua scripts for atomic claim)
 - Exponential backoff with jitter
+- Per-queue concurrency and rate limiting
+- OpenTelemetry distributed tracing
+- Full Redis backend implementation (Lua scripts for atomic claim)
 - `task_events` streaming / WebSocket
 - Worker dashboard / Web UI
 - Kubernetes deployment manifests

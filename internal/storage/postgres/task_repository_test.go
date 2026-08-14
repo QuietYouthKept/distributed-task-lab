@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yourusername/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 )
 
 // To run these integration tests, you need a PostgreSQL instance.
@@ -508,13 +508,13 @@ func TestListDLQ(t *testing.T) {
 		t.Fatalf("ListDLQ: %v", err)
 	}
 	found := false
-	for _, t := range dlqTasks {
-		if t.ID == "test-list-dlq-001" {
+	for _, task := range dlqTasks {
+		if task.ID == "test-list-dlq-001" {
 			found = true
-			if t.Status != domain.TaskStatusDLQ {
-				t.Errorf("Status = %q, want dlq", t.Status)
+			if task.Status != domain.TaskStatusDLQ {
+				t.Errorf("Status = %q, want dlq", task.Status)
 			}
-			if t.DLQReason == nil {
+			if task.DLQReason == nil {
 				t.Error("DLQReason should not be nil")
 			}
 		}
