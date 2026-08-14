@@ -15,10 +15,16 @@ type Task struct {
 	MaxAttempts       int
 	Attempt           int
 	TimeoutSeconds    int
-	RetryDelaySeconds int
+	RetryDelaySeconds int // base (initial) retry delay in seconds
+
+	// Retry backoff configuration.
+	RetryMaxDelaySeconds   int     // cap on backoff delay (0 = no cap)
+	RetryBackoffMultiplier float64 // exponential factor (default 2.0)
+	RetryJitter            bool    // apply full jitter
 
 	LeasedBy       *string
 	LeaseExpiresAt *time.Time
+	LeaseVersion   int // fencing token, incremented on each claim
 
 	NextRunAt  time.Time
 	CreatedAt  time.Time
@@ -30,6 +36,18 @@ type Task struct {
 	DLQReason *string
 
 	IdempotencyKey *string
+}
+
+// RetryDelayForAttempt computes the delay before the next retry for a task that
+// just failed on the given 1-based attempt.
+func (t Task) RetryDelayForAttempt(attempt int) time.Duration {
+	base := time.Duration(t.RetryDelaySeconds) * time.Second
+	max := time.Duration(t.RetryMaxDelaySeconds) * time.Second
+	d := ExponentialBackoff(base, max, t.RetryBackoffMultiplier, attempt)
+	if t.RetryJitter {
+		d = FullJitter(d)
+	}
+	return d
 }
 
 // TaskFilter is used to query tasks with optional filters.

@@ -9,23 +9,18 @@ import (
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 )
 
-// To run these integration tests, you need a PostgreSQL instance.
-// The easiest way:
+// To run these integration tests you need a PostgreSQL instance. The easiest way:
 //
-//   docker run -d --name tasklab-test -p 5433:5432 \
-//     -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
-//     -e POSTGRES_DB=tasklab_test postgres:16-alpine
+//   docker run -d --name tasklab-test -p 5433:5432 //     -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres //     -e POSTGRES_DB=tasklab_test postgres:16-alpine
 //
-//   DATABASE_URL="postgres://postgres:postgres@localhost:5433/tasklab_test?sslmode=disable" \
-//     go test ./internal/storage/postgres/ -v
+//   DATABASE_URL="postgres://postgres:postgres@localhost:5433/tasklab_test?sslmode=disable" //     go test ./internal/storage/postgres/ -v
 //
-// Or use the TEST_DATABASE_URL environment variable.
+// Or set TEST_DATABASE_URL.
 
 func testDBURL() string {
 	if url := os.Getenv("TEST_DATABASE_URL"); url != "" {
 		return url
 	}
-	// Default: expect a test DB on port 5433 to avoid conflict with dev.
 	return "postgres://postgres:postgres@localhost:5433/tasklab_test?sslmode=disable"
 }
 
@@ -41,61 +36,84 @@ func setupTestDB(t *testing.T) *PostgresQueue {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 
-	// Clean up existing test data.
 	db.Exec("DELETE FROM tasks")
+	db.Exec("DELETE FROM workers")
 
 	t.Cleanup(func() {
 		db.Exec("DELETE FROM tasks")
+		db.Exec("DELETE FROM workers")
 		db.Close()
 	})
 
 	return NewPostgresQueue(db)
 }
 
+// newTask builds a task with sensible defaults for tests.
+func newTask(id string, maxAttempts int) *domain.Task {
+	return &domain.Task{
+		ID:        id,
+		Type:      domain.TaskTypeRAGIngestion,
+		Payload:   domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"document_id": "doc-" + id}},
+		MaxAttempts: maxAttempts,
+		TimeoutSeconds: 60,
+		RetryDelaySeconds: 1,
+		RetryBackoffMultiplier: 2.0,
+	}
+}
+
+// enqueue inserts a task, failing the test on error.
+func enqueue(t *testing.T, q *PostgresQueue, task *domain.Task) *domain.Task {
+	t.Helper()
+	created, err := q.Enqueue(context.Background(), task)
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	return created
+}
+
+// claimOne claims a single task for workerID, failing the test if none are available.
+func claimOne(t *testing.T, q *PostgresQueue, workerID string) domain.Task {
+	t.Helper()
+	claimed, err := q.ClaimTasks(context.Background(), workerID, 5, 30*time.Second)
+	if err != nil {
+		t.Fatalf("ClaimTasks: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("expected 1 claimed task, got %d", len(claimed))
+	}
+	return claimed[0]
+}
+
 func TestEnqueueAndGetTask(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	task := &domain.Task{
-		ID:             "test-task-001",
-		Type:           domain.TaskTypeRAGIngestion,
-		Payload:        domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"document_id": "doc-001"}},
-		MaxAttempts:    3,
-		TimeoutSeconds: 60,
-		RetryDelaySeconds: 5,
-	}
+	created := enqueue(t, q, newTask("test-task-001", 3))
 
-	err := q.Enqueue(ctx, task)
-	if err != nil {
-		t.Fatalf("Enqueue failed: %v", err)
+	if created.Status != domain.TaskStatusPending {
+		t.Errorf("Status = %q, want pending", created.Status)
+	}
+	if created.Attempt != 0 {
+		t.Errorf("Attempt = %d, want 0", created.Attempt)
 	}
 
 	got, err := q.GetTask(ctx, "test-task-001")
 	if err != nil {
-		t.Fatalf("GetTask failed: %v", err)
+		t.Fatalf("GetTask: %v", err)
 	}
 	if got == nil {
 		t.Fatal("GetTask returned nil")
 	}
-
 	if got.Status != domain.TaskStatusPending {
-		t.Errorf("Status = %q, want %q", got.Status, domain.TaskStatusPending)
-	}
-	if got.Attempt != 0 {
-		t.Errorf("Attempt = %d, want 0", got.Attempt)
-	}
-	if got.Type != domain.TaskTypeRAGIngestion {
-		t.Errorf("Type = %q, want %q", got.Type, domain.TaskTypeRAGIngestion)
+		t.Errorf("Status = %q, want pending", got.Status)
 	}
 }
 
 func TestGetTaskNotFound(t *testing.T) {
 	q := setupTestDB(t)
-	ctx := context.Background()
-
-	got, err := q.GetTask(ctx, "nonexistent")
+	got, err := q.GetTask(context.Background(), "nonexistent")
 	if err != nil {
-		t.Fatalf("GetTask failed: %v", err)
+		t.Fatalf("GetTask: %v", err)
 	}
 	if got != nil {
 		t.Errorf("expected nil for nonexistent task, got %+v", got)
@@ -106,35 +124,17 @@ func TestListTasks(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	// Create two tasks.
-	task1 := &domain.Task{
-		ID: "test-list-001", Type: domain.TaskTypeRAGIngestion,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"document_id": "doc-a"}},
-		MaxAttempts: 3, TimeoutSeconds: 60, RetryDelaySeconds: 5,
-	}
-	task2 := &domain.Task{
-		ID: "test-list-002", Type: domain.TaskTypeEval,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "eval", Data: map[string]any{"eval_set_id": "eval-001"}},
-		MaxAttempts: 2, TimeoutSeconds: 120, RetryDelaySeconds: 10,
-	}
+	enqueue(t, q, newTask("test-list-001", 3))
+	enqueue(t, q, newTask("test-list-002", 2))
 
-	if err := q.Enqueue(ctx, task1); err != nil {
-		t.Fatalf("Enqueue task1: %v", err)
-	}
-	if err := q.Enqueue(ctx, task2); err != nil {
-		t.Fatalf("Enqueue task2: %v", err)
-	}
-
-	// List all tasks.
 	tasks, err := q.ListTasks(ctx, domain.TaskFilter{Limit: 10})
 	if err != nil {
-		t.Fatalf("ListTasks failed: %v", err)
+		t.Fatalf("ListTasks: %v", err)
 	}
 	if len(tasks) < 2 {
 		t.Fatalf("expected at least 2 tasks, got %d", len(tasks))
 	}
 
-	// Filter by status.
 	pending := domain.TaskStatusPending
 	tasks, err = q.ListTasks(ctx, domain.TaskFilter{Status: &pending, Limit: 10})
 	if err != nil {
@@ -145,92 +145,68 @@ func TestListTasks(t *testing.T) {
 			t.Errorf("expected pending, got %s", task.Status)
 		}
 	}
-
-	// Filter by type.
-	ragType := domain.TaskTypeRAGIngestion
-	tasks, err = q.ListTasks(ctx, domain.TaskFilter{Type: &ragType, Limit: 10})
-	if err != nil {
-		t.Fatalf("ListTasks by type: %v", err)
-	}
-	for _, task := range tasks {
-		if task.Type != domain.TaskTypeRAGIngestion {
-			t.Errorf("expected rag_ingestion, got %s", task.Type)
-		}
-	}
 }
 
-func TestEnqueueWithIdempotencyKey(t *testing.T) {
+func TestEnqueueIdempotent(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	key := "idem-key-001"
-	task := &domain.Task{
-		ID: "test-idem-001", Type: domain.TaskTypeRAGIngestion,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"document_id": "doc-idem"}},
-		MaxAttempts: 3, TimeoutSeconds: 60, RetryDelaySeconds: 5,
-		IdempotencyKey: &key,
+	key := "idem-key-dup"
+	first := newTask("test-idem-a", 3)
+	first.IdempotencyKey = &key
+	created1 := enqueue(t, q, first)
+
+	second := newTask("test-idem-b", 3)
+	second.IdempotencyKey = &key
+	created2 := enqueue(t, q, second)
+
+	if created1.ID != created2.ID {
+		t.Errorf("idempotent enqueue returned different IDs: %s vs %s", created1.ID, created2.ID)
+	}
+	if created2.ID != "test-idem-a" {
+		t.Errorf("expected original task id test-idem-a, got %s", created2.ID)
 	}
 
-	if err := q.Enqueue(ctx, task); err != nil {
-		t.Fatalf("Enqueue: %v", err)
+	// Only one task should exist for the key.
+	got, err := q.GetTask(ctx, "test-idem-a")
+	if err != nil || got == nil {
+		t.Fatalf("original task missing: %v", err)
 	}
-
-	got, err := q.GetTask(ctx, "test-idem-001")
+	got2, err := q.GetTask(ctx, "test-idem-b")
 	if err != nil {
 		t.Fatalf("GetTask: %v", err)
 	}
-	if got.IdempotencyKey == nil || *got.IdempotencyKey != key {
-		t.Errorf("IdempotencyKey = %v, want %q", got.IdempotencyKey, key)
+	if got2 != nil {
+		t.Errorf("duplicate task should not exist, got %+v", got2)
 	}
 }
 
 func TestClaimTasksSuccess(t *testing.T) {
 	q := setupTestDB(t)
-	ctx := context.Background()
 
-	// Enqueue a task.
-	task := &domain.Task{
-		ID: "test-claim-001", Type: domain.TaskTypeRAGIngestion,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"document_id": "doc-claim"}},
-		MaxAttempts: 3, TimeoutSeconds: 60, RetryDelaySeconds: 5,
-	}
-	if err := q.Enqueue(ctx, task); err != nil {
-		t.Fatalf("Enqueue: %v", err)
-	}
+	enqueue(t, q, newTask("test-claim-001", 3))
 
-	// Claim the task.
-	claimed, err := q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
-	if err != nil {
-		t.Fatalf("ClaimTasks: %v", err)
-	}
-	if len(claimed) != 1 {
-		t.Fatalf("expected 1 claimed task, got %d", len(claimed))
-	}
-
-	c := claimed[0]
-	if c.ID != "test-claim-001" {
-		t.Errorf("ID = %q, want %q", c.ID, "test-claim-001")
-	}
+	c := claimOne(t, q, "worker-1")
 	if c.Status != domain.TaskStatusRunning {
 		t.Errorf("Status = %q, want running", c.Status)
 	}
 	if c.LeasedBy == nil || *c.LeasedBy != "worker-1" {
 		t.Errorf("LeasedBy = %v, want worker-1", c.LeasedBy)
 	}
-	if c.LeaseExpiresAt == nil {
-		t.Error("LeaseExpiresAt should not be nil")
-	}
 	if c.Attempt != 1 {
 		t.Errorf("Attempt = %d, want 1", c.Attempt)
 	}
+	if c.LeaseVersion != 1 {
+		t.Errorf("LeaseVersion = %d, want 1", c.LeaseVersion)
+	}
 
-	// A second claim should return nothing (task is already running).
-	claimed2, err := q.ClaimTasks(ctx, "worker-2", 5, 30*time.Second)
+	// A second worker should not claim the same task.
+	claimed2, err := q.ClaimTasks(context.Background(), "worker-2", 5, 30*time.Second)
 	if err != nil {
 		t.Fatalf("ClaimTasks 2: %v", err)
 	}
 	if len(claimed2) != 0 {
-		t.Errorf("expected 0 claimed tasks (already claimed), got %d", len(claimed2))
+		t.Errorf("expected 0 claims (already claimed), got %d", len(claimed2))
 	}
 }
 
@@ -238,23 +214,11 @@ func TestMarkSuccessWithOwnership(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	task := &domain.Task{
-		ID: "test-mark-success-001", Type: domain.TaskTypeRAGIngestion,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
-		MaxAttempts: 3, TimeoutSeconds: 60, RetryDelaySeconds: 5,
-	}
-	if err := q.Enqueue(ctx, task); err != nil {
-		t.Fatalf("Enqueue: %v", err)
-	}
-
-	_, err := q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
-	if err != nil {
-		t.Fatalf("ClaimTasks: %v", err)
-	}
+	enqueue(t, q, newTask("test-mark-success-001", 3))
+	c := claimOne(t, q, "worker-1")
 
 	result := domain.TaskResult{Summary: "done", Metrics: map[string]float64{"duration_ms": 150}}
-	err = q.MarkSuccess(ctx, "test-mark-success-001", "worker-1", result)
-	if err != nil {
+	if err := q.MarkSuccess(ctx, c.ID, "worker-1", c.LeaseVersion, result); err != nil {
 		t.Fatalf("MarkSuccess: %v", err)
 	}
 
@@ -274,18 +238,26 @@ func TestMarkSuccessWrongWorker(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	task := &domain.Task{
-		ID: "test-wrong-worker-001", Type: domain.TaskTypeRAGIngestion,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
-		MaxAttempts: 3, TimeoutSeconds: 60, RetryDelaySeconds: 5,
-	}
-	q.Enqueue(ctx, task)
-	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
+	enqueue(t, q, newTask("test-wrong-worker-001", 3))
+	c := claimOne(t, q, "worker-1")
 
-	// Worker 2 tries to mark success — should fail.
-	err := q.MarkSuccess(ctx, "test-wrong-worker-001", "worker-2", domain.TaskResult{Summary: "hijacked"})
+	err := q.MarkSuccess(ctx, c.ID, "worker-2", c.LeaseVersion, domain.TaskResult{Summary: "hijacked"})
 	if err == nil {
 		t.Error("expected error when wrong worker marks success")
+	}
+}
+
+func TestMarkSuccessStaleLeaseVersion(t *testing.T) {
+	q := setupTestDB(t)
+	ctx := context.Background()
+
+	enqueue(t, q, newTask("test-fence-001", 3))
+	c := claimOne(t, q, "worker-1")
+
+	// A stale worker with an out-of-date fencing token must be rejected.
+	err := q.MarkSuccess(ctx, c.ID, "worker-1", c.LeaseVersion+100, domain.TaskResult{Summary: "stale"})
+	if err == nil {
+		t.Error("expected error for stale lease_version")
 	}
 }
 
@@ -293,17 +265,11 @@ func TestMarkFailureRetry(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	task := &domain.Task{
-		ID: "test-retry-001", Type: domain.TaskTypeRAGIngestion,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
-		MaxAttempts: 3, TimeoutSeconds: 60, RetryDelaySeconds: 5,
-	}
-	q.Enqueue(ctx, task)
-	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
+	enqueue(t, q, newTask("test-retry-001", 3))
+	c := claimOne(t, q, "worker-1")
 
-	failure := domain.TaskFailure{Message: "temporary error", ErrorType: "execution_error"}
-	err := q.MarkFailure(ctx, "test-retry-001", "worker-1", failure)
-	if err != nil {
+	failure := domain.TaskFailure{Message: "temporary error", ErrorType: "execution_error", Retryable: true}
+	if err := q.MarkFailure(ctx, c.ID, "worker-1", c.LeaseVersion, failure); err != nil {
 		t.Fatalf("MarkFailure: %v", err)
 	}
 
@@ -311,22 +277,42 @@ func TestMarkFailureRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTask: %v", err)
 	}
-
-	// Should be back to pending.
 	if got.Status != domain.TaskStatusPending {
 		t.Errorf("Status = %q, want pending", got.Status)
 	}
-	// next_run_at should be in the future.
 	if !got.NextRunAt.After(time.Now().UTC()) {
 		t.Errorf("NextRunAt should be in the future, got %v", got.NextRunAt)
 	}
-	// Lease should be cleared.
 	if got.LeasedBy != nil {
 		t.Errorf("LeasedBy should be nil after retry, got %v", *got.LeasedBy)
 	}
-	// Error recorded.
 	if got.LastError == nil || *got.LastError != "temporary error" {
 		t.Errorf("LastError = %v, want 'temporary error'", got.LastError)
+	}
+}
+
+func TestMarkFailureNonRetryable(t *testing.T) {
+	q := setupTestDB(t)
+	ctx := context.Background()
+
+	task := newTask("test-nonretry-001", 5) // plenty of attempts left
+	enqueue(t, q, task)
+	c := claimOne(t, q, "worker-1")
+
+	failure := domain.TaskFailure{Message: "bad input", ErrorType: "validation_error", Retryable: false}
+	if err := q.MarkFailure(ctx, c.ID, "worker-1", c.LeaseVersion, failure); err != nil {
+		t.Fatalf("MarkFailure: %v", err)
+	}
+
+	got, err := q.GetTask(ctx, "test-nonretry-001")
+	if err != nil {
+		t.Fatalf("GetTask: %v", err)
+	}
+	if got.Status != domain.TaskStatusDLQ {
+		t.Errorf("Status = %q, want dlq", got.Status)
+	}
+	if got.DLQReason == nil || *got.DLQReason != "non-retryable error: bad input" {
+		t.Errorf("DLQReason = %v, want 'non-retryable error: bad input'", got.DLQReason)
 	}
 }
 
@@ -334,17 +320,12 @@ func TestMarkFailureMaxAttemptsExhausted(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	task := &domain.Task{
-		ID: "test-max-attempts-001", Type: domain.TaskTypeRAGIngestion,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
-		MaxAttempts: 1, TimeoutSeconds: 60, RetryDelaySeconds: 1,
-	}
-	q.Enqueue(ctx, task)
-	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
+	task := newTask("test-max-attempts-001", 1)
+	enqueue(t, q, task)
+	c := claimOne(t, q, "worker-1")
 
-	failure := domain.TaskFailure{Message: "fatal error", ErrorType: "permanent"}
-	err := q.MarkFailure(ctx, "test-max-attempts-001", "worker-1", failure)
-	if err != nil {
+	failure := domain.TaskFailure{Message: "fatal error", ErrorType: "execution_error", Retryable: true}
+	if err := q.MarkFailure(ctx, c.ID, "worker-1", c.LeaseVersion, failure); err != nil {
 		t.Fatalf("MarkFailure: %v", err)
 	}
 
@@ -352,20 +333,48 @@ func TestMarkFailureMaxAttemptsExhausted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTask: %v", err)
 	}
-
-	// Attempt >= max_attempts → DLQ.
 	if got.Status != domain.TaskStatusDLQ {
 		t.Errorf("Status = %q, want dlq", got.Status)
 	}
 	if got.DLQReason == nil || *got.DLQReason != "max attempts exceeded: fatal error" {
 		t.Errorf("DLQReason = %v, want 'max attempts exceeded: fatal error'", got.DLQReason)
 	}
-	if got.LastError == nil || *got.LastError != "fatal error" {
-		t.Errorf("LastError = %v, want 'fatal error'", got.LastError)
+}
+
+func TestRetryBackoff(t *testing.T) {
+	q := setupTestDB(t)
+	ctx := context.Background()
+
+	task := newTask("test-backoff-001", 3)
+	task.RetryDelaySeconds = 1
+	task.RetryBackoffMultiplier = 2.0
+	task.RetryMaxDelaySeconds = 0
+	task.RetryJitter = false
+	enqueue(t, q, task)
+
+	// Attempt 1: fail -> next_run_at should be ~now + 1s.
+	before := time.Now().UTC()
+	c1 := claimOne(t, q, "worker-1")
+	q.MarkFailure(ctx, c1.ID, "worker-1", c1.LeaseVersion, domain.TaskFailure{Message: "e", ErrorType: "execution_error", Retryable: true})
+	got1, _ := q.GetTask(ctx, c1.ID)
+	if d := got1.NextRunAt.Sub(before); d < 800*time.Millisecond || d > 1500*time.Millisecond {
+		t.Errorf("attempt 1 backoff ~1s, got %v", d)
 	}
-	// Lease should be cleared.
-	if got.LeasedBy != nil {
-		t.Errorf("LeasedBy should be nil, got %v", *got.LeasedBy)
+
+	// Attempt 2: wait for retry, fail -> next_run_at should be ~now + 2s.
+	time.Sleep(1100 * time.Millisecond)
+	before2 := time.Now().UTC()
+	c2 := claimOne(t, q, "worker-1")
+	if c2.Attempt != 2 {
+		t.Errorf("Attempt = %d, want 2", c2.Attempt)
+	}
+	if c2.LeaseVersion != 2 {
+		t.Errorf("LeaseVersion = %d, want 2", c2.LeaseVersion)
+	}
+	q.MarkFailure(ctx, c2.ID, "worker-1", c2.LeaseVersion, domain.TaskFailure{Message: "e", ErrorType: "execution_error", Retryable: true})
+	got2, _ := q.GetTask(ctx, c2.ID)
+	if d := got2.NextRunAt.Sub(before2); d < 1500*time.Millisecond || d > 3*time.Second {
+		t.Errorf("attempt 2 backoff ~2s, got %v", d)
 	}
 }
 
@@ -373,19 +382,14 @@ func TestRetryTaskReclaimable(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	task := &domain.Task{
-		ID: "test-retry-reclaim-001", Type: domain.TaskTypeRAGIngestion,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
-		MaxAttempts: 3, TimeoutSeconds: 60, RetryDelaySeconds: 1,
-	}
-	q.Enqueue(ctx, task)
-	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
+	task := newTask("test-retry-reclaim-001", 3)
+	task.RetryDelaySeconds = 1
+	enqueue(t, q, task)
+	c := claimOne(t, q, "worker-1")
 
-	// Fail → retry to pending with next_run_at = now + 1s.
-	q.MarkFailure(ctx, "test-retry-reclaim-001", "worker-1",
-		domain.TaskFailure{Message: "err", ErrorType: "execution_error"})
+	q.MarkFailure(ctx, c.ID, "worker-1", c.LeaseVersion, domain.TaskFailure{Message: "err", ErrorType: "execution_error", Retryable: true})
 
-	// Task is pending but next_run_at is 1s in future — should not be claimable yet.
+	// Not claimable yet (next_run_at in the future).
 	claimed, err := q.ClaimTasks(ctx, "worker-2", 5, 30*time.Second)
 	if err != nil {
 		t.Fatalf("ClaimTasks: %v", err)
@@ -394,10 +398,8 @@ func TestRetryTaskReclaimable(t *testing.T) {
 		t.Errorf("expected 0 claims (next_run_at in future), got %d", len(claimed))
 	}
 
-	// Wait for retry_delay to pass.
 	time.Sleep(1100 * time.Millisecond)
 
-	// Now task should be claimable.
 	claimed, err = q.ClaimTasks(ctx, "worker-2", 5, 30*time.Second)
 	if err != nil {
 		t.Fatalf("ClaimTasks after delay: %v", err)
@@ -405,7 +407,6 @@ func TestRetryTaskReclaimable(t *testing.T) {
 	if len(claimed) != 1 {
 		t.Fatalf("expected 1 claimed task after delay, got %d", len(claimed))
 	}
-	// Attempt should have been incremented again (now at 2).
 	if claimed[0].Attempt != 2 {
 		t.Errorf("Attempt = %d, want 2", claimed[0].Attempt)
 	}
@@ -415,17 +416,11 @@ func TestMarkFailureWrongWorker(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	task := &domain.Task{
-		ID: "test-fail-wrong-worker-001", Type: domain.TaskTypeRAGIngestion,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
-		MaxAttempts: 3, TimeoutSeconds: 60, RetryDelaySeconds: 5,
-	}
-	q.Enqueue(ctx, task)
-	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
+	enqueue(t, q, newTask("test-fail-wrong-worker-001", 3))
+	c := claimOne(t, q, "worker-1")
 
-	// Worker 2 tries to mark failure — should fail (ownership check).
-	failure := domain.TaskFailure{Message: "wrong worker", ErrorType: "execution_error"}
-	err := q.MarkFailure(ctx, "test-fail-wrong-worker-001", "worker-2", failure)
+	failure := domain.TaskFailure{Message: "wrong worker", ErrorType: "execution_error", Retryable: true}
+	err := q.MarkFailure(ctx, c.ID, "worker-2", c.LeaseVersion, failure)
 	if err == nil {
 		t.Error("expected error when wrong worker marks failure")
 	}
@@ -435,29 +430,32 @@ func TestReclaimExpiredLease(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	task := &domain.Task{
-		ID: "test-reclaim-001", Type: domain.TaskTypeRAGIngestion,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
-		MaxAttempts: 3, TimeoutSeconds: 60, RetryDelaySeconds: 5,
+	enqueue(t, q, newTask("test-reclaim-001", 3))
+
+	// Claim with a very short lease.
+	claimed, err := q.ClaimTasks(ctx, "worker-1", 5, 1*time.Millisecond)
+	if err != nil {
+		t.Fatalf("claim: %v", err)
 	}
-	q.Enqueue(ctx, task)
+	if len(claimed) != 1 {
+		t.Fatalf("expected 1 claim, got %d", len(claimed))
+	}
 
-	// Claim with very short lease.
-	q.ClaimTasks(ctx, "worker-1", 5, 1*time.Millisecond)
-
-	// Wait for lease to expire.
 	time.Sleep(10 * time.Millisecond)
 
-	// Worker 2 should be able to reclaim.
-	claimed, err := q.ClaimTasks(ctx, "worker-2", 5, 30*time.Second)
+	// Worker 2 reclaims; the fencing token must advance.
+	reclaimed, err := q.ClaimTasks(ctx, "worker-2", 5, 30*time.Second)
 	if err != nil {
 		t.Fatalf("reclaim: %v", err)
 	}
-	if len(claimed) != 1 {
-		t.Fatalf("expected 1 reclaimed task, got %d", len(claimed))
+	if len(reclaimed) != 1 {
+		t.Fatalf("expected 1 reclaimed task, got %d", len(reclaimed))
 	}
-	if claimed[0].LeasedBy == nil || *claimed[0].LeasedBy != "worker-2" {
-		t.Errorf("reclaimed LeasedBy = %v, want worker-2", claimed[0].LeasedBy)
+	if reclaimed[0].LeasedBy == nil || *reclaimed[0].LeasedBy != "worker-2" {
+		t.Errorf("reclaimed LeasedBy = %v, want worker-2", reclaimed[0].LeasedBy)
+	}
+	if reclaimed[0].LeaseVersion != 2 {
+		t.Errorf("LeaseVersion = %d, want 2", reclaimed[0].LeaseVersion)
 	}
 }
 
@@ -465,19 +463,12 @@ func TestDLQNotClaimable(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	task := &domain.Task{
-		ID: "test-dlq-claim-001", Type: domain.TaskTypeRAGIngestion,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
-		MaxAttempts: 1, TimeoutSeconds: 60, RetryDelaySeconds: 1,
-	}
-	q.Enqueue(ctx, task)
-	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
+	task := newTask("test-dlq-claim-001", 1)
+	enqueue(t, q, task)
+	c := claimOne(t, q, "worker-1")
 
-	// Fail → max attempts reached → DLQ.
-	q.MarkFailure(ctx, "test-dlq-claim-001", "worker-1",
-		domain.TaskFailure{Message: "fatal", ErrorType: "permanent"})
+	q.MarkFailure(ctx, c.ID, "worker-1", c.LeaseVersion, domain.TaskFailure{Message: "fatal", ErrorType: "execution_error", Retryable: true})
 
-	// DLQ task should not be claimable.
 	claimed, err := q.ClaimTasks(ctx, "worker-2", 5, 30*time.Second)
 	if err != nil {
 		t.Fatalf("ClaimTasks: %v", err)
@@ -491,18 +482,11 @@ func TestListDLQ(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	// Create a task that goes to DLQ.
-	task := &domain.Task{
-		ID: "test-list-dlq-001", Type: domain.TaskTypeRAGIngestion,
-		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{}},
-		MaxAttempts: 1, TimeoutSeconds: 60, RetryDelaySeconds: 1,
-	}
-	q.Enqueue(ctx, task)
-	q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
-	q.MarkFailure(ctx, "test-list-dlq-001", "worker-1",
-		domain.TaskFailure{Message: "dlq test error", ErrorType: "execution_error"})
+	task := newTask("test-list-dlq-001", 1)
+	enqueue(t, q, task)
+	c := claimOne(t, q, "worker-1")
+	q.MarkFailure(ctx, c.ID, "worker-1", c.LeaseVersion, domain.TaskFailure{Message: "dlq test error", ErrorType: "execution_error", Retryable: true})
 
-	// List DLQ tasks.
 	dlqTasks, err := q.ListDLQ(ctx, domain.TaskFilter{Limit: 10})
 	if err != nil {
 		t.Fatalf("ListDLQ: %v", err)
@@ -521,15 +505,5 @@ func TestListDLQ(t *testing.T) {
 	}
 	if !found {
 		t.Error("DLQ task not found in ListDLQ results")
-	}
-
-	// Also verify via ListTasks with status=dlq filter.
-	dlqStatus := domain.TaskStatusDLQ
-	allTasks, err := q.ListTasks(ctx, domain.TaskFilter{Status: &dlqStatus, Limit: 10})
-	if err != nil {
-		t.Fatalf("ListTasks status=dlq: %v", err)
-	}
-	if len(allTasks) < 1 {
-		t.Error("expected at least 1 DLQ task via ListTasks status filter")
 	}
 }

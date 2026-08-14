@@ -25,11 +25,16 @@ func NewPostgresQueue(db *sql.DB) *PostgresQueue {
 	return &PostgresQueue{db: db}
 }
 
-// Enqueue inserts a new task in pending state.
-func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) error {
+// taskColumns is the canonical column list used by every SELECT.
+const taskColumns = "id, type, status, payload, result, priority, max_attempts, attempt, timeout_seconds, retry_delay_seconds, retry_max_delay_seconds, retry_backoff_multiplier, retry_jitter, leased_by, lease_expires_at, lease_version, next_run_at, created_at, updated_at, started_at, finished_at, last_error, dlq_reason, idempotency_key"
+
+// Enqueue inserts a new task in pending state. It is idempotent on the task's
+// idempotency_key: if a task with the same key already exists, that task is
+// returned instead of inserting a duplicate.
+func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain.Task, error) {
 	payloadJSON, err := json.Marshal(task.Payload)
 	if err != nil {
-		return fmt.Errorf("enqueue: marshal payload: %w", err)
+		return nil, fmt.Errorf("enqueue: marshal payload: %w", err)
 	}
 
 	now := time.Now().UTC()
@@ -37,57 +42,72 @@ func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) error {
 	task.CreatedAt = now
 	task.UpdatedAt = now
 	task.Attempt = 0
-
 	if task.NextRunAt.IsZero() {
 		task.NextRunAt = now
 	}
 
-	_, err = q.db.ExecContext(ctx, `
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("enqueue: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	var insertedID string
+	err = tx.QueryRowContext(ctx, `
 		INSERT INTO tasks (
 			id, type, status, payload, priority,
 			max_attempts, attempt, timeout_seconds, retry_delay_seconds,
+			retry_max_delay_seconds, retry_backoff_multiplier, retry_jitter,
 			next_run_at, created_at, updated_at, idempotency_key
 		) VALUES (
 			$1, $2, $3, $4, $5,
 			$6, $7, $8, $9,
-			$10, $11, $12, $13
+			$10, $11, $12,
+			$13, $14, $15, $16
 		)
+		ON CONFLICT (idempotency_key) DO NOTHING
+		RETURNING id
 	`,
 		task.ID, string(task.Type), string(task.Status), payloadJSON, task.Priority,
 		task.MaxAttempts, task.Attempt, task.TimeoutSeconds, task.RetryDelaySeconds,
+		task.RetryMaxDelaySeconds, task.RetryBackoffMultiplier, task.RetryJitter,
 		task.NextRunAt, task.CreatedAt, task.UpdatedAt, task.IdempotencyKey,
-	)
-	if err != nil {
-		return fmt.Errorf("enqueue: insert: %w", err)
-	}
-	q.recordEvent(ctx, task.ID, domain.EventSubmitted, "", "task submitted", map[string]any{"type": string(task.Type)})
-	return nil
-}
-func (q *PostgresQueue) GetTask(ctx context.Context, taskID string) (*domain.Task, error) {
-	row := q.db.QueryRowContext(ctx, `
-		SELECT
-			id, type, status, payload, result,
-			priority, max_attempts, attempt, timeout_seconds, retry_delay_seconds,
-			leased_by, lease_expires_at,
-			next_run_at, created_at, updated_at, started_at, finished_at,
-			last_error, dlq_reason, idempotency_key
-		FROM tasks WHERE id = $1
-	`, taskID)
+	).Scan(&insertedID)
 
+	if err == sql.ErrNoRows {
+		if task.IdempotencyKey == nil {
+			return nil, fmt.Errorf("enqueue: conflict without idempotency key")
+		}
+		return q.getTaskByIdempotencyKey(ctx, *task.IdempotencyKey)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("enqueue: insert: %w", err)
+	}
+
+	if err := q.insertEvent(ctx, tx, task.ID, domain.EventSubmitted, "", "task submitted", map[string]any{"type": string(task.Type)}); err != nil {
+		return nil, fmt.Errorf("enqueue: event: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("enqueue: commit: %w", err)
+	}
+	return task, nil
+}
+
+// GetTask retrieves a single task by its ID.
+func (q *PostgresQueue) GetTask(ctx context.Context, taskID string) (*domain.Task, error) {
+	row := q.db.QueryRowContext(ctx, "SELECT "+taskColumns+" FROM tasks WHERE id = $1", taskID)
+	return scanTask(row)
+}
+
+// getTaskByIdempotencyKey retrieves a task by its idempotency key.
+func (q *PostgresQueue) getTaskByIdempotencyKey(ctx context.Context, key string) (*domain.Task, error) {
+	row := q.db.QueryRowContext(ctx, "SELECT "+taskColumns+" FROM tasks WHERE idempotency_key = $1", key)
 	return scanTask(row)
 }
 
 // ListTasks retrieves tasks matching the filter.
 func (q *PostgresQueue) ListTasks(ctx context.Context, filter domain.TaskFilter) ([]domain.Task, error) {
-	query := `
-		SELECT
-			id, type, status, payload, result,
-			priority, max_attempts, attempt, timeout_seconds, retry_delay_seconds,
-			leased_by, lease_expires_at,
-			next_run_at, created_at, updated_at, started_at, finished_at,
-			last_error, dlq_reason, idempotency_key
-		FROM tasks WHERE 1=1
-	`
+	query := "SELECT " + taskColumns + " FROM tasks WHERE 1=1"
 	args := []interface{}{}
 	argIdx := 1
 
@@ -134,12 +154,9 @@ func (q *PostgresQueue) ListTasks(ctx context.Context, filter domain.TaskFilter)
 	return tasks, rows.Err()
 }
 
-// ClaimTasks atomically claims tasks for a worker using a transaction
-// with row-level locking (FOR UPDATE SKIP LOCKED).
-//
-// It claims tasks that are:
-//   - status = 'pending' AND next_run_at <= now, OR
-//   - status = 'running' AND lease_expires_at < now (expired lease — worker crash recovery)
+// ClaimTasks atomically claims tasks for a worker using a transaction with
+// row-level locking (FOR UPDATE SKIP LOCKED). Each claim increments the
+// lease_version fencing token so stale workers cannot write back results.
 func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit int, leaseTimeout time.Duration) ([]domain.Task, error) {
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -150,13 +167,7 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 	now := time.Now().UTC()
 	leaseExpires := now.Add(leaseTimeout)
 
-	rows, err := tx.QueryContext(ctx, `
-		SELECT
-			id, type, status, payload, result,
-			priority, max_attempts, attempt, timeout_seconds, retry_delay_seconds,
-			leased_by, lease_expires_at,
-			next_run_at, created_at, updated_at, started_at, finished_at,
-			last_error, dlq_reason, idempotency_key
+	rows, err := tx.QueryContext(ctx, `SELECT `+taskColumns+`
 		FROM tasks
 		WHERE
 			(
@@ -189,7 +200,6 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		return nil, nil
 	}
 
-	// Update claimed tasks atomically.
 	nowTime := time.Now().UTC()
 	for i := range claimed {
 		_, err := tx.ExecContext(ctx, `
@@ -197,6 +207,7 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 			SET status = 'running',
 			    leased_by = $1,
 			    lease_expires_at = $2,
+			    lease_version = lease_version + 1,
 			    started_at = COALESCE(started_at, $3),
 			    updated_at = $3,
 			    attempt = attempt + 1
@@ -209,34 +220,41 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		claimed[i].Status = domain.TaskStatusRunning
 		claimed[i].LeasedBy = &workerID
 		claimed[i].LeaseExpiresAt = &leaseExpires
+		claimed[i].LeaseVersion++
 		claimed[i].UpdatedAt = nowTime
 		if claimed[i].StartedAt == nil {
 			claimed[i].StartedAt = &nowTime
 		}
 		claimed[i].Attempt++
+
+		if err := q.insertEvent(ctx, tx, claimed[i].ID, domain.EventClaimed, workerID, "task claimed", map[string]any{"attempt": claimed[i].Attempt, "lease_version": claimed[i].LeaseVersion}); err != nil {
+			return nil, fmt.Errorf("claim: event: %w", err)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("claim: commit: %w", err)
 	}
-
-	for _, t := range claimed {
-		q.recordEvent(ctx, t.ID, domain.EventClaimed, workerID, "task claimed", map[string]any{"attempt": t.Attempt})
-	}
-
 	return claimed, nil
 }
 
-// MarkSuccess marks a task as successfully completed.
-// Ownership check: only updates if leased_by matches workerID and status is running.
-func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID string, result domain.TaskResult) error {
+// MarkSuccess marks a task as successfully completed in a single transaction.
+// The lease_version fencing token must match, preventing stale workers from
+// writing results after their lease was reclaimed.
+func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID string, leaseVersion int, result domain.TaskResult) error {
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		return fmt.Errorf("mark success: marshal result: %w", err)
 	}
 
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("mark success: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
 	now := time.Now().UTC()
-	res, err := q.db.ExecContext(ctx, `
+	res, err := tx.ExecContext(ctx, `
 		UPDATE tasks
 		SET status = 'success',
 		    result = $1,
@@ -247,7 +265,8 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 		WHERE id = $3
 		  AND status = 'running'
 		  AND leased_by = $4
-	`, resultJSON, now, taskID, workerID)
+		  AND lease_version = $5
+	`, resultJSON, now, taskID, workerID, leaseVersion)
 	if err != nil {
 		return fmt.Errorf("mark success: update: %w", err)
 	}
@@ -256,30 +275,49 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 	if n == 0 {
 		return fmt.Errorf("mark success: task %s: %w", taskID, domain.ErrTaskNotClaimed)
 	}
-	q.recordEvent(ctx, taskID, domain.EventSucceeded, workerID, "task completed", map[string]any{"summary": result.Summary})
+	if err := q.insertEvent(ctx, tx, taskID, domain.EventSucceeded, workerID, "task completed", map[string]any{"summary": result.Summary}); err != nil {
+		return fmt.Errorf("mark success: event: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("mark success: commit: %w", err)
+	}
 	return nil
 }
-// Ownership check: only updates if leased_by matches workerID and status is running.
-//
-// Retry behavior:
-//   - If attempt < max_attempts: status → pending, next_run_at = now + retry_delay, lease cleared
-//   - If attempt >= max_attempts: status → failed (DLQ comes in Phase 4)
-func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID string, failure domain.TaskFailure) error {
-	// Fetch current task state for retry decision.
-	task, err := q.GetTask(ctx, taskID)
+
+// MarkFailure handles retry/DLQ in a single transaction. It locks the task row
+// (FOR UPDATE) to read the current attempt without a TOCTOU race, then applies
+// retry-with-backoff or moves the task to the DLQ, recording the event in the
+// same transaction.
+func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID string, leaseVersion int, failure domain.TaskFailure) error {
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("mark failure: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	var attempt, maxAttempts, retryDelaySeconds, retryMaxDelaySeconds int
+	var backoffMultiplier float64
+	var jitter bool
+	err = tx.QueryRowContext(ctx, `
+		SELECT attempt, max_attempts, retry_delay_seconds,
+		       retry_max_delay_seconds, retry_backoff_multiplier, retry_jitter
+		FROM tasks
+		WHERE id = $1 AND status = 'running' AND leased_by = $2 AND lease_version = $3
+		FOR UPDATE
+	`, taskID, workerID, leaseVersion).Scan(&attempt, &maxAttempts, &retryDelaySeconds, &retryMaxDelaySeconds, &backoffMultiplier, &jitter)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("mark failure: task %s: %w", taskID, domain.ErrTaskNotClaimed)
+	}
 	if err != nil {
 		return fmt.Errorf("mark failure: get task: %w", err)
-	}
-	if task == nil {
-		return domain.ErrTaskNotFound
 	}
 
 	now := time.Now().UTC()
 
-	if task.Attempt >= task.MaxAttempts {
-		// Max attempts exhausted — move to DLQ.
-		dlqReason := "max attempts exceeded: " + failure.Message
-		res, err := q.db.ExecContext(ctx, `
+	// Non-retryable failures go straight to the DLQ regardless of attempts left.
+	if !failure.Retryable {
+		dlqReason := "non-retryable error: " + failure.Message
+		_, err := tx.ExecContext(ctx, `
 			UPDATE tasks
 			SET status = 'dlq',
 			    dlq_reason = $1,
@@ -289,23 +327,54 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 			    leased_by = NULL,
 			    lease_expires_at = NULL
 			WHERE id = $4
-			  AND status = 'running'
-			  AND leased_by = $5
-		`, dlqReason, failure.Message, now, taskID, workerID)
+		`, dlqReason, failure.Message, now, taskID)
 		if err != nil {
 			return fmt.Errorf("mark failure: dlq update: %w", err)
 		}
-		n, _ := res.RowsAffected()
-		if n == 0 {
-			return fmt.Errorf("mark failure: task %s: %w", taskID, domain.ErrTaskNotClaimed)
+		if err := q.insertEvent(ctx, tx, taskID, domain.EventMovedToDLQ, workerID, dlqReason, map[string]any{"error": failure.Message, "error_type": failure.ErrorType}); err != nil {
+			return fmt.Errorf("mark failure: event: %w", err)
 		}
-		q.recordEvent(ctx, taskID, domain.EventMovedToDLQ, workerID, dlqReason, map[string]any{"error": failure.Message})
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("mark failure: commit: %w", err)
+		}
 		return nil
 	}
 
-	// Schedule retry: back to pending with delayed next_run_at.
-	retryAt := now.Add(time.Duration(task.RetryDelaySeconds) * time.Second)
-	res, err := q.db.ExecContext(ctx, `
+	if attempt >= maxAttempts {
+		dlqReason := "max attempts exceeded: " + failure.Message
+		_, err := tx.ExecContext(ctx, `
+			UPDATE tasks
+			SET status = 'dlq',
+			    dlq_reason = $1,
+			    last_error = $2,
+			    finished_at = $3,
+			    updated_at = $3,
+			    leased_by = NULL,
+			    lease_expires_at = NULL
+			WHERE id = $4
+		`, dlqReason, failure.Message, now, taskID)
+		if err != nil {
+			return fmt.Errorf("mark failure: dlq update: %w", err)
+		}
+		if err := q.insertEvent(ctx, tx, taskID, domain.EventMovedToDLQ, workerID, dlqReason, map[string]any{"error": failure.Message, "error_type": failure.ErrorType}); err != nil {
+			return fmt.Errorf("mark failure: event: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("mark failure: commit: %w", err)
+		}
+		return nil
+	}
+
+	// Schedule retry with exponential backoff + jitter.
+	t := domain.Task{
+		RetryDelaySeconds:      retryDelaySeconds,
+		RetryMaxDelaySeconds:   retryMaxDelaySeconds,
+		RetryBackoffMultiplier: backoffMultiplier,
+		RetryJitter:            jitter,
+	}
+	retryAt := now.Add(t.RetryDelayForAttempt(attempt))
+
+	_, err = tx.ExecContext(ctx, `
 		UPDATE tasks
 		SET status = 'pending',
 		    last_error = $1,
@@ -314,18 +383,17 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 		    leased_by = NULL,
 		    lease_expires_at = NULL
 		WHERE id = $4
-		  AND status = 'running'
-		  AND leased_by = $5
-	`, failure.Message, retryAt, now, taskID, workerID)
+	`, failure.Message, retryAt, now, taskID)
 	if err != nil {
 		return fmt.Errorf("mark failure: retry update: %w", err)
 	}
 
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("mark failure: task %s: %w", taskID, domain.ErrTaskNotClaimed)
+	if err := q.insertEvent(ctx, tx, taskID, domain.EventRetried, workerID, failure.Message, map[string]any{"next_retry_at": retryAt.Format(time.RFC3339), "attempt": attempt, "error_type": failure.ErrorType}); err != nil {
+		return fmt.Errorf("mark failure: event: %w", err)
 	}
-	q.recordEvent(ctx, taskID, domain.EventRetried, workerID, failure.Message, map[string]any{"next_retry_at": retryAt.Format(time.RFC3339)})
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("mark failure: commit: %w", err)
+	}
 	return nil
 }
 
@@ -336,19 +404,27 @@ func (q *PostgresQueue) ListDLQ(ctx context.Context, filter domain.TaskFilter) (
 	return q.ListTasks(ctx, filter)
 }
 
-// recordEvent inserts a task lifecycle event (fire-and-forget, best-effort).
-func (q *PostgresQueue) recordEvent(ctx context.Context, taskID string, eventType domain.TaskEventType, workerID string, message string, metadata map[string]any) {
+// insertEvent inserts a task lifecycle event within the given transaction, so
+// the event is committed atomically with the state change it describes.
+func (q *PostgresQueue) insertEvent(ctx context.Context, tx *sql.Tx, taskID string, eventType domain.TaskEventType, workerID string, message string, metadata map[string]any) error {
 	metaJSON, _ := json.Marshal(metadata)
-	_, _ = q.db.ExecContext(ctx, `
+	_, err := tx.ExecContext(ctx, `
 		INSERT INTO task_events (task_id, event_type, worker_id, message, metadata)
 		VALUES ($1, $2, NULLIF($3, ''), $4, $5)
 	`, taskID, string(eventType), workerID, message, metaJSON)
+	return err
 }
 
 // Requeue resets a DLQ task back to pending. Only allowed for dlq tasks.
 func (q *PostgresQueue) Requeue(ctx context.Context, taskID string, reason string) error {
 	now := time.Now().UTC()
-	res, err := q.db.ExecContext(ctx, `
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("requeue: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx, `
 		UPDATE tasks
 		SET status = 'pending',
 		    attempt = 0,
@@ -358,6 +434,7 @@ func (q *PostgresQueue) Requeue(ctx context.Context, taskID string, reason strin
 		    dlq_reason = NULL,
 		    leased_by = NULL,
 		    lease_expires_at = NULL,
+		    lease_version = lease_version + 1,
 		    started_at = NULL,
 		    finished_at = NULL
 		WHERE id = $2 AND status = 'dlq'
@@ -369,14 +446,25 @@ func (q *PostgresQueue) Requeue(ctx context.Context, taskID string, reason strin
 	if n == 0 {
 		return fmt.Errorf("requeue: task %s not in dlq status", taskID)
 	}
-	q.recordEvent(ctx, taskID, domain.EventRequeued, "", reason, nil)
+	if err := q.insertEvent(ctx, tx, taskID, domain.EventRequeued, "", reason, nil); err != nil {
+		return fmt.Errorf("requeue: event: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("requeue: commit: %w", err)
+	}
 	return nil
 }
 
 // Cancel marks a task as cancelled. Only pending or running tasks can be cancelled.
 func (q *PostgresQueue) Cancel(ctx context.Context, taskID string, reason string) error {
 	now := time.Now().UTC()
-	res, err := q.db.ExecContext(ctx, `
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("cancel: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx, `
 		UPDATE tasks
 		SET status = 'failed',
 		    last_error = $1,
@@ -394,7 +482,12 @@ func (q *PostgresQueue) Cancel(ctx context.Context, taskID string, reason string
 	if n == 0 {
 		return fmt.Errorf("cancel: task %s not in cancellable status", taskID)
 	}
-	q.recordEvent(ctx, taskID, domain.EventCancelled, "", reason, nil)
+	if err := q.insertEvent(ctx, tx, taskID, domain.EventCancelled, "", reason, nil); err != nil {
+		return fmt.Errorf("cancel: event: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("cancel: commit: %w", err)
+	}
 	return nil
 }
 
@@ -431,8 +524,7 @@ func (q *PostgresQueue) GetTaskEvents(ctx context.Context, taskID string) ([]dom
 	return events, rows.Err()
 }
 
-// Stats returns task counts grouped by status using a single aggregate query,
-// avoiding O(n) full-table scans and payload deserialization.
+// Stats returns task counts grouped by status using a single aggregate query.
 func (q *PostgresQueue) Stats(ctx context.Context) (map[domain.TaskStatus]int64, error) {
 	rows, err := q.db.QueryContext(ctx, `SELECT status, COUNT(*) FROM tasks GROUP BY status`)
 	if err != nil {
@@ -466,7 +558,6 @@ func (q *PostgresQueue) Heartbeat(ctx context.Context, workerID string) error {
 }
 
 // RenewLease extends the lease on a task if the worker still owns it.
-// Returns an error if the lease is no longer valid (another worker claimed it).
 func (q *PostgresQueue) RenewLease(ctx context.Context, taskID string, workerID string, leaseTimeout time.Duration) error {
 	leaseExpires := time.Now().UTC().Add(leaseTimeout)
 	res, err := q.db.ExecContext(ctx, `
@@ -515,7 +606,8 @@ func scanTask(row *sql.Row) (*domain.Task, error) {
 	err := row.Scan(
 		&t.ID, &t.Type, &t.Status, &payloadBytes, &resultBytes,
 		&t.Priority, &t.MaxAttempts, &t.Attempt, &t.TimeoutSeconds, &t.RetryDelaySeconds,
-		&t.LeasedBy, &t.LeaseExpiresAt,
+		&t.RetryMaxDelaySeconds, &t.RetryBackoffMultiplier, &t.RetryJitter,
+		&t.LeasedBy, &t.LeaseExpiresAt, &t.LeaseVersion,
 		&t.NextRunAt, &t.CreatedAt, &t.UpdatedAt, &t.StartedAt, &t.FinishedAt,
 		&t.LastError, &t.DLQReason, &t.IdempotencyKey,
 	)
@@ -546,7 +638,8 @@ func scanTaskFromRows(rows *sql.Rows) (*domain.Task, error) {
 	err := rows.Scan(
 		&t.ID, &t.Type, &t.Status, &payloadBytes, &resultBytes,
 		&t.Priority, &t.MaxAttempts, &t.Attempt, &t.TimeoutSeconds, &t.RetryDelaySeconds,
-		&t.LeasedBy, &t.LeaseExpiresAt,
+		&t.RetryMaxDelaySeconds, &t.RetryBackoffMultiplier, &t.RetryJitter,
+		&t.LeasedBy, &t.LeaseExpiresAt, &t.LeaseVersion,
 		&t.NextRunAt, &t.CreatedAt, &t.UpdatedAt, &t.StartedAt, &t.FinishedAt,
 		&t.LastError, &t.DLQReason, &t.IdempotencyKey,
 	)

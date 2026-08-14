@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"github.com/fantasticyi/distributed-task-lab/internal/worker"
 )
 
@@ -16,7 +17,7 @@ import (
 //   mock_duration_ms           — simulated processing time in milliseconds (default 500)
 //   mock_failures_before_success — fail this many times before succeeding (uses attempt)
 //   mock_always_fail            — always fail regardless of attempt
-//   simulate                    — shortcut: "success", "failure", "timeout", "retry_then_success"
+//   simulate                    — shortcut: "success", "failure", "timeout", "retry_then_success", "validation_error" (non-retryable), "bad_payload" (non-retryable)
 //
 // The simulate shortcuts take precedence over the fine-grained controls.
 type MockHandler struct {
@@ -57,6 +58,12 @@ func (h *MockHandler) Handle(ctx context.Context, taskType string, payload map[s
 
 	case "failure":
 		return nil, fmt.Errorf("simulated failure for task type %s", taskType)
+
+	case "validation_error":
+		return nil, worker.NewNonRetryableError(fmt.Errorf("simulated validation error for task type %s", taskType), domain.ErrorTypeValidation)
+
+	case "bad_payload":
+		return nil, worker.NewNonRetryableError(fmt.Errorf("simulated bad payload for task type %s", taskType), domain.ErrorTypeBadPayload)
 
 	case "retry_then_success":
 		// Fail on attempt 1, succeed on attempt 2+.

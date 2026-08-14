@@ -22,13 +22,16 @@ func NewTaskService(q queue.Queue) *TaskService {
 
 // CreateTaskRequest is the input for creating a new task.
 type CreateTaskRequest struct {
-	Type              domain.TaskType
-	Payload           domain.TaskPayloadEnvelope
-	Priority          int
-	MaxAttempts       int
-	TimeoutSeconds    int
-	RetryDelaySeconds int
-	IdempotencyKey    *string
+	Type                    domain.TaskType         `json:"type"`
+	Payload                 domain.TaskPayloadEnvelope `json:"payload"`
+	Priority                int                     `json:"priority"`
+	MaxAttempts             int                     `json:"max_attempts"`
+	TimeoutSeconds          int                     `json:"timeout_seconds"`
+	RetryDelaySeconds       int                     `json:"retry_delay_seconds"`
+	RetryMaxDelaySeconds    int                     `json:"retry_max_delay_seconds"`
+	RetryBackoffMultiplier  float64                 `json:"retry_backoff_multiplier"`
+	RetryJitter             *bool                   `json:"retry_jitter"`
+	IdempotencyKey          *string                 `json:"idempotency_key"`
 }
 
 // CreateTaskResponse is the result of creating a task.
@@ -37,7 +40,9 @@ type CreateTaskResponse struct {
 	Status domain.TaskStatus `json:"status"`
 }
 
-// CreateTask creates a new task and enqueues it.
+// CreateTask creates a new task and enqueues it. If an idempotency_key is
+// provided and a task with that key already exists, the existing task is
+// returned instead of creating a duplicate.
 func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*CreateTaskResponse, error) {
 	if !domain.ValidTaskTypes[req.Type] {
 		return nil, fmt.Errorf("%w: %s", domain.ErrInvalidTaskType, req.Type)
@@ -52,26 +57,37 @@ func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*C
 	if req.RetryDelaySeconds <= 0 {
 		req.RetryDelaySeconds = 5
 	}
-
-	task := &domain.Task{
-		ID:                uuid.New().String(),
-		Type:              req.Type,
-		Payload:           req.Payload,
-		Priority:          req.Priority,
-		MaxAttempts:       req.MaxAttempts,
-		TimeoutSeconds:    req.TimeoutSeconds,
-		RetryDelaySeconds: req.RetryDelaySeconds,
-		NextRunAt:         time.Now().UTC(),
-		IdempotencyKey:    req.IdempotencyKey,
+	if req.RetryBackoffMultiplier <= 0 {
+		req.RetryBackoffMultiplier = 2.0
+	}
+	jitter := true
+	if req.RetryJitter != nil {
+		jitter = *req.RetryJitter
 	}
 
-	if err := s.q.Enqueue(ctx, task); err != nil {
+	task := &domain.Task{
+		ID:                      uuid.New().String(),
+		Type:                    req.Type,
+		Payload:                 req.Payload,
+		Priority:                req.Priority,
+		MaxAttempts:             req.MaxAttempts,
+		TimeoutSeconds:          req.TimeoutSeconds,
+		RetryDelaySeconds:       req.RetryDelaySeconds,
+		RetryMaxDelaySeconds:    req.RetryMaxDelaySeconds,
+		RetryBackoffMultiplier:  req.RetryBackoffMultiplier,
+		RetryJitter:             jitter,
+		NextRunAt:               time.Now().UTC(),
+		IdempotencyKey:          req.IdempotencyKey,
+	}
+
+	created, err := s.q.Enqueue(ctx, task)
+	if err != nil {
 		return nil, fmt.Errorf("task service: enqueue: %w", err)
 	}
 
 	return &CreateTaskResponse{
-		ID:     task.ID,
-		Status: domain.TaskStatusPending,
+		ID:     created.ID,
+		Status: created.Status,
 	}, nil
 }
 

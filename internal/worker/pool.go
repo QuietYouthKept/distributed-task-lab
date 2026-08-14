@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -97,6 +98,7 @@ type taskJob struct {
 	Payload        map[string]any
 	TimeoutSeconds int
 	Attempt        int
+	LeaseVersion   int
 }
 
 // claimLoop periodically claims tasks from the queue.
@@ -164,6 +166,7 @@ func (p *Pool) claimAndDispatch() {
 			Payload:        task.Payload.Data,
 			TimeoutSeconds: task.TimeoutSeconds,
 			Attempt:        task.Attempt,
+			LeaseVersion:   task.LeaseVersion,
 		}
 
 		select {
@@ -219,23 +222,33 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 	result, execErr := p.handler.Handle(ctx, job.Type, job.Payload, job.Attempt)
 
 	if execErr != nil {
-		errType := "execution_error"
+		errType := domain.ErrorTypeExecution
+		retryable := true
+		var execErr2 *ExecutionError
+		if errors.As(execErr, &execErr2) {
+			if execErr2.ErrorType != "" {
+				errType = execErr2.ErrorType
+			}
+			retryable = execErr2.Retryable
+		}
 		if ctx.Err() == context.DeadlineExceeded {
-			errType = "timeout"
+			errType = domain.ErrorTypeTimeout
+			retryable = true
 		}
 		p.logger.Warn("task execution failed",
 			"task_id", job.ID,
 			"error", execErr,
 			"error_type", errType,
+			"retryable", retryable,
 			"worker_id", p.workerID,
 		)
 		failure := domain.TaskFailure{
 			ErrorType:  errType,
 			Message:    execErr.Error(),
-			Retryable:  true,
+			Retryable:  retryable,
 			OccurredAt: time.Now().UTC().Format(time.RFC3339),
 		}
-		if err := p.q.MarkFailure(writeCtx, job.ID, p.workerID, failure); err != nil {
+		if err := p.q.MarkFailure(writeCtx, job.ID, p.workerID, job.LeaseVersion, failure); err != nil {
 			p.logger.Error("mark failure failed", "task_id", job.ID, "error", err)
 		}
 		return
@@ -250,7 +263,7 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 			Metrics:   result.Metrics,
 		}
 	}
-	if err := p.q.MarkSuccess(writeCtx, job.ID, p.workerID, domResult); err != nil {
+	if err := p.q.MarkSuccess(writeCtx, job.ID, p.workerID, job.LeaseVersion, domResult); err != nil {
 		p.logger.Error("mark success failed", "task_id", job.ID, "error", err)
 		return
 	}

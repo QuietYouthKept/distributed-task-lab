@@ -37,7 +37,7 @@ func NewRedisQueue(redisURL string) (*RedisQueue, error) {
 // Enqueue inserts a new task. In Redis, this means:
 // 1. Store task JSON in tasks:{id} hash
 // 2. Push task ID to queue:ready list
-func (q *RedisQueue) Enqueue(ctx context.Context, task *domain.Task) error {
+func (q *RedisQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain.Task, error) {
 	now := time.Now().UTC()
 	task.Status = domain.TaskStatusPending
 	task.CreatedAt = now
@@ -53,7 +53,7 @@ func (q *RedisQueue) Enqueue(ctx context.Context, task *domain.Task) error {
 	// pipe.HSet(ctx, fmt.Sprintf("tasks:%s", task.ID), "data", data)
 	// pipe.LPush(ctx, "queue:ready", task.ID)
 	// _, err := pipe.Exec(ctx)
-	return fmt.Errorf("redis: %w", domain.ErrNotImplemented)
+	return nil, fmt.Errorf("redis: %w", domain.ErrNotImplemented)
 }
 
 // GetTask retrieves a task by ID from its hash.
@@ -80,12 +80,12 @@ func (q *RedisQueue) ClaimTasks(ctx context.Context, workerID string, limit int,
 }
 
 // MarkSuccess updates the task hash and removes from running set.
-func (q *RedisQueue) MarkSuccess(ctx context.Context, taskID string, workerID string, result domain.TaskResult) error {
+func (q *RedisQueue) MarkSuccess(ctx context.Context, taskID string, workerID string, leaseVersion int, result domain.TaskResult) error {
 	return domain.ErrNotImplemented
 }
 
 // MarkFailure handles retry/DLQ using ZSet for delayed retry.
-func (q *RedisQueue) MarkFailure(ctx context.Context, taskID string, workerID string, failure domain.TaskFailure) error {
+func (q *RedisQueue) MarkFailure(ctx context.Context, taskID string, workerID string, leaseVersion int, failure domain.TaskFailure) error {
 	return domain.ErrNotImplemented
 }
 
