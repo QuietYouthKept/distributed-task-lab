@@ -22,7 +22,8 @@ func NewTaskService(q queue.Queue) *TaskService {
 
 // CreateTaskRequest is the input for creating a new task.
 type CreateTaskRequest struct {
-	Type                    domain.TaskType         `json:"type"`
+	Type                    domain.TaskType           `json:"type"`
+	Queue                   string                    `json:"queue"`
 	Payload                 domain.TaskPayloadEnvelope `json:"payload"`
 	Priority                int                     `json:"priority"`
 	MaxAttempts             int                     `json:"max_attempts"`
@@ -65,9 +66,15 @@ func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*C
 		jitter = *req.RetryJitter
 	}
 
+	queue := req.Queue
+	if queue == "" {
+		queue = domain.DefaultQueueName
+	}
+
 	task := &domain.Task{
 		ID:                      uuid.New().String(),
 		Type:                    req.Type,
+		Queue:                   queue,
 		Payload:                 req.Payload,
 		Priority:                req.Priority,
 		MaxAttempts:             req.MaxAttempts,
@@ -152,6 +159,39 @@ func (s *TaskService) GetTaskEvents(ctx context.Context, taskID string) ([]domai
 	return events, nil
 }
 
+// PauseQueue pauses a queue so workers stop claiming its tasks.
+func (s *TaskService) PauseQueue(ctx context.Context, name string) error {
+	if err := s.q.PauseQueue(ctx, name); err != nil {
+		return fmt.Errorf("task service: pause queue: %w", err)
+	}
+	return nil
+}
+
+// ResumeQueue resumes a paused queue.
+func (s *TaskService) ResumeQueue(ctx context.Context, name string) error {
+	if err := s.q.ResumeQueue(ctx, name); err != nil {
+		return fmt.Errorf("task service: resume queue: %w", err)
+	}
+	return nil
+}
+
+// ListQueues returns all queues with their governance config.
+func (s *TaskService) ListQueues(ctx context.Context) ([]domain.QueueConfig, error) {
+	queues, err := s.q.ListQueues(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("task service: list queues: %w", err)
+	}
+	return queues, nil
+}
+
+// SetQueueConfig upserts a queue's max concurrency and rate limit.
+func (s *TaskService) SetQueueConfig(ctx context.Context, config domain.QueueConfig) error {
+	if err := s.q.SetQueueConfig(ctx, config); err != nil {
+		return fmt.Errorf("task service: set queue config: %w", err)
+	}
+	return nil
+}
+
 // GetStats returns the number of tasks currently in each status.
 func (s *TaskService) GetStats(ctx context.Context) (map[domain.TaskStatus]int64, error) {
 	stats, err := s.q.Stats(ctx)
@@ -162,4 +202,22 @@ func (s *TaskService) GetStats(ctx context.Context) (map[domain.TaskStatus]int64
 		stats = map[domain.TaskStatus]int64{}
 	}
 	return stats, nil
+}
+
+// GetQueueDepth returns task counts grouped by queue and status.
+func (s *TaskService) GetQueueDepth(ctx context.Context) (map[string]map[domain.TaskStatus]int64, error) {
+	depth, err := s.q.QueueDepth(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("task service: queue depth: %w", err)
+	}
+	return depth, nil
+}
+
+// GetOldestPendingAge returns the age of the oldest pending task.
+func (s *TaskService) GetOldestPendingAge(ctx context.Context) (time.Duration, error) {
+	age, err := s.q.OldestPendingAge(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("task service: oldest pending age: %w", err)
+	}
+	return age, nil
 }

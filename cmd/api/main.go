@@ -43,8 +43,8 @@ func main() {
 	// Initialize HTTP handlers and router.
 	taskHandler := handlers.NewTaskHandler(svc, logger)
 
-	// Metrics handler reads aggregated task counts via a single GROUP BY query.
-	metricsHandler := handlers.NewMetricsHandler(svc.GetStats)
+	// Metrics handler reads aggregated counts, per-queue depth, and oldest-pending age.
+	metricsHandler := handlers.NewMetricsHandler(svc)
 
 	router := api.NewRouter(taskHandler, metricsHandler, logger)
 

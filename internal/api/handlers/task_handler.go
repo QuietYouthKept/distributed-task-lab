@@ -201,6 +201,73 @@ func (h *TaskHandler) GetTaskEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, events)
 }
 
+// PauseQueue handles POST /queues/{name}/pause.
+func (h *TaskHandler) PauseQueue(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing queue name"})
+		return
+	}
+	if err := h.svc.PauseQueue(r.Context(), name); err != nil {
+		h.logger.Error("pause queue failed", "queue", name, "error", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "paused", "queue": name})
+}
+
+// ResumeQueue handles POST /queues/{name}/resume.
+func (h *TaskHandler) ResumeQueue(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing queue name"})
+		return
+	}
+	if err := h.svc.ResumeQueue(r.Context(), name); err != nil {
+		h.logger.Error("resume queue failed", "queue", name, "error", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "resumed", "queue": name})
+}
+
+// ListQueues handles GET /queues.
+func (h *TaskHandler) ListQueues(w http.ResponseWriter, r *http.Request) {
+	queues, err := h.svc.ListQueues(r.Context())
+	if err != nil {
+		h.logger.Error("list queues failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, queues)
+}
+
+// SetQueueConfig handles PUT /queues/{name}.
+func (h *TaskHandler) SetQueueConfig(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing queue name"})
+		return
+	}
+	var body struct {
+		MaxConcurrency     int     `json:"max_concurrency"`
+		RateLimitPerSecond float64 `json:"rate_limit_per_second"`
+	}
+	json.NewDecoder(r.Body).Decode(&body)
+
+	config := domain.QueueConfig{
+		Name:               name,
+		MaxConcurrency:     body.MaxConcurrency,
+		RateLimitPerSecond: body.RateLimitPerSecond,
+	}
+	if err := h.svc.SetQueueConfig(r.Context(), config); err != nil {
+		h.logger.Error("set queue config failed", "queue", name, "error", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "configured", "queue": name})
+}
+
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

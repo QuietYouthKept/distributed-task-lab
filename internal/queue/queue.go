@@ -55,4 +55,22 @@ type Queue interface {
 
 	// Stats returns the number of tasks currently in each status.
 	Stats(ctx context.Context) (map[domain.TaskStatus]int64, error)
+
+	// PauseQueue pauses a queue so workers stop claiming its tasks.
+	PauseQueue(ctx context.Context, name string) error
+
+	// ResumeQueue resumes a paused queue.
+	ResumeQueue(ctx context.Context, name string) error
+
+	// ListQueues returns all queues with their governance config.
+	ListQueues(ctx context.Context) ([]domain.QueueConfig, error)
+
+	// SetQueueConfig upserts a queue's max concurrency and rate limit.
+	SetQueueConfig(ctx context.Context, config domain.QueueConfig) error
+
+	// QueueDepth returns task counts grouped by queue and status.
+	QueueDepth(ctx context.Context) (map[string]map[domain.TaskStatus]int64, error)
+
+	// OldestPendingAge returns the age of the oldest pending task (0 if none).
+	OldestPendingAge(ctx context.Context) (time.Duration, error)
 }

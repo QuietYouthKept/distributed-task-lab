@@ -7,6 +7,7 @@ type Task struct {
 	ID     string
 	Type   TaskType
 	Status TaskStatus
+	Queue  string
 
 	Payload TaskPayloadEnvelope
 	Result  *TaskResult

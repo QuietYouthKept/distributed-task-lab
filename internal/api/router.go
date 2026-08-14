@@ -30,6 +30,12 @@ func NewRouter(taskHandler *handlers.TaskHandler, metricsHandler *handlers.Metri
 	mux.HandleFunc("POST /tasks/{id}/cancel", taskHandler.Cancel)
 	mux.HandleFunc("GET /tasks/{id}/events", taskHandler.GetTaskEvents)
 
+	// Queue governance
+	mux.HandleFunc("GET /queues", taskHandler.ListQueues)
+	mux.HandleFunc("PUT /queues/{name}", taskHandler.SetQueueConfig)
+	mux.HandleFunc("POST /queues/{name}/pause", taskHandler.PauseQueue)
+	mux.HandleFunc("POST /queues/{name}/resume", taskHandler.ResumeQueue)
+
 	// Health check
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

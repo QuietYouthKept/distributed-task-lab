@@ -126,6 +126,32 @@ func (q *RedisQueue) Stats(ctx context.Context) (map[domain.TaskStatus]int64, er
 	return nil, domain.ErrNotImplemented
 }
 
+// PauseQueue pauses a queue.
+func (q *RedisQueue) PauseQueue(ctx context.Context, name string) error { return domain.ErrNotImplemented }
+
+// ResumeQueue resumes a paused queue.
+func (q *RedisQueue) ResumeQueue(ctx context.Context, name string) error { return domain.ErrNotImplemented }
+
+// ListQueues returns queue governance configs.
+func (q *RedisQueue) ListQueues(ctx context.Context) ([]domain.QueueConfig, error) {
+	return nil, domain.ErrNotImplemented
+}
+
+// SetQueueConfig upserts a queue governance config.
+func (q *RedisQueue) SetQueueConfig(ctx context.Context, config domain.QueueConfig) error {
+	return domain.ErrNotImplemented
+}
+
+// QueueDepth returns task counts by queue and status.
+func (q *RedisQueue) QueueDepth(ctx context.Context) (map[string]map[domain.TaskStatus]int64, error) {
+	return nil, domain.ErrNotImplemented
+}
+
+// OldestPendingAge returns the age of the oldest pending task.
+func (q *RedisQueue) OldestPendingAge(ctx context.Context) (time.Duration, error) {
+	return 0, domain.ErrNotImplemented
+}
+
 // --- Design notes for full Redis implementation ---
 
 // ClaimTasks Lua script (pseudocode):

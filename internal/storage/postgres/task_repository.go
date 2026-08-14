@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
@@ -26,7 +27,16 @@ func NewPostgresQueue(db *sql.DB) *PostgresQueue {
 }
 
 // taskColumns is the canonical column list used by every SELECT.
-const taskColumns = "id, type, status, payload, result, priority, max_attempts, attempt, timeout_seconds, retry_delay_seconds, retry_max_delay_seconds, retry_backoff_multiplier, retry_jitter, leased_by, lease_expires_at, lease_version, next_run_at, created_at, updated_at, started_at, finished_at, last_error, dlq_reason, idempotency_key"
+const taskColumns = "id, type, queue, status, payload, result, priority, max_attempts, attempt, timeout_seconds, retry_delay_seconds, retry_max_delay_seconds, retry_backoff_multiplier, retry_jitter, leased_by, lease_expires_at, lease_version, next_run_at, created_at, updated_at, started_at, finished_at, last_error, dlq_reason, idempotency_key"
+
+// taskColumnsAliased returns taskColumns with each column prefixed by alias.
+func taskColumnsAliased(alias string) string {
+	cols := strings.Split(taskColumns, ", ")
+	for i, c := range cols {
+		cols[i] = alias + "." + c
+	}
+	return strings.Join(cols, ", ")
+}
 
 // Enqueue inserts a new task in pending state. It is idempotent on the task's
 // idempotency_key: if a task with the same key already exists, that task is
@@ -42,6 +52,9 @@ func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain
 	task.CreatedAt = now
 	task.UpdatedAt = now
 	task.Attempt = 0
+	if task.Queue == "" {
+		task.Queue = domain.DefaultQueueName
+	}
 	if task.NextRunAt.IsZero() {
 		task.NextRunAt = now
 	}
@@ -55,20 +68,20 @@ func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain
 	var insertedID string
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO tasks (
-			id, type, status, payload, priority,
+			id, type, queue, status, payload, priority,
 			max_attempts, attempt, timeout_seconds, retry_delay_seconds,
 			retry_max_delay_seconds, retry_backoff_multiplier, retry_jitter,
 			next_run_at, created_at, updated_at, idempotency_key
 		) VALUES (
-			$1, $2, $3, $4, $5,
-			$6, $7, $8, $9,
-			$10, $11, $12,
-			$13, $14, $15, $16
+			$1, $2, $3, $4, $5, $6,
+			$7, $8, $9, $10,
+			$11, $12, $13,
+			$14, $15, $16, $17
 		)
 		ON CONFLICT (idempotency_key) DO NOTHING
 		RETURNING id
 	`,
-		task.ID, string(task.Type), string(task.Status), payloadJSON, task.Priority,
+		task.ID, string(task.Type), task.Queue, string(task.Status), payloadJSON, task.Priority,
 		task.MaxAttempts, task.Attempt, task.TimeoutSeconds, task.RetryDelaySeconds,
 		task.RetryMaxDelaySeconds, task.RetryBackoffMultiplier, task.RetryJitter,
 		task.NextRunAt, task.CreatedAt, task.UpdatedAt, task.IdempotencyKey,
@@ -167,17 +180,18 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 	now := time.Now().UTC()
 	leaseExpires := now.Add(leaseTimeout)
 
-	rows, err := tx.QueryContext(ctx, `SELECT `+taskColumns+`
-		FROM tasks
-		WHERE
-			(
-				(status = 'pending' AND next_run_at <= $1)
-				OR
-				(status = 'running' AND lease_expires_at < $1)
-			)
-		ORDER BY priority DESC, created_at ASC
+	rows, err := tx.QueryContext(ctx, `SELECT `+taskColumnsAliased("t")+`
+		FROM tasks t
+		JOIN queues q ON q.name = t.queue
+		WHERE q.paused = false
+		  AND (
+			(t.status = 'pending' AND t.next_run_at <= $1)
+			OR
+			(t.status = 'running' AND t.lease_expires_at < $1)
+		  )
+		ORDER BY t.priority DESC, t.created_at ASC
 		LIMIT $2
-		FOR UPDATE SKIP LOCKED
+		FOR UPDATE OF t SKIP LOCKED
 	`, now, limit)
 	if err != nil {
 		return nil, fmt.Errorf("claim: select: %w", err)
@@ -201,7 +215,22 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 	}
 
 	nowTime := time.Now().UTC()
+	accepted := make([]domain.Task, 0, len(claimed))
 	for i := range claimed {
+		// Enforce per-queue max concurrency. This is re-checked inside the
+		// transaction so tasks claimed earlier in this batch are counted.
+		var maxConc, running int
+		if err := tx.QueryRowContext(ctx, `
+			SELECT q.max_concurrency,
+			       (SELECT COUNT(*) FROM tasks r WHERE r.queue = q.name AND r.status = 'running')
+			FROM queues q WHERE q.name = $1
+		`, claimed[i].Queue).Scan(&maxConc, &running); err != nil {
+			return nil, fmt.Errorf("claim: queue check: %w", err)
+		}
+		if maxConc > 0 && running >= maxConc {
+			continue // queue at capacity — leave the task pending
+		}
+
 		_, err := tx.ExecContext(ctx, `
 			UPDATE tasks
 			SET status = 'running',
@@ -230,12 +259,13 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		if err := q.insertEvent(ctx, tx, claimed[i].ID, domain.EventClaimed, workerID, "task claimed", map[string]any{"attempt": claimed[i].Attempt, "lease_version": claimed[i].LeaseVersion}); err != nil {
 			return nil, fmt.Errorf("claim: event: %w", err)
 		}
+		accepted = append(accepted, claimed[i])
 	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("claim: commit: %w", err)
 	}
-	return claimed, nil
+	return accepted, nil
 }
 
 // MarkSuccess marks a task as successfully completed in a single transaction.
@@ -402,6 +432,103 @@ func (q *PostgresQueue) ListDLQ(ctx context.Context, filter domain.TaskFilter) (
 	dlqStatus := domain.TaskStatusDLQ
 	filter.Status = &dlqStatus
 	return q.ListTasks(ctx, filter)
+}
+
+// QueueDepth returns task counts grouped by queue and status.
+func (q *PostgresQueue) QueueDepth(ctx context.Context) (map[string]map[domain.TaskStatus]int64, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT queue, status, COUNT(*) FROM tasks GROUP BY queue, status`)
+	if err != nil {
+		return nil, fmt.Errorf("queue depth: query: %w", err)
+	}
+	defer rows.Close()
+
+	depth := map[string]map[domain.TaskStatus]int64{}
+	for rows.Next() {
+		var queueName, status string
+		var count int64
+		if err := rows.Scan(&queueName, &status, &count); err != nil {
+			return nil, fmt.Errorf("queue depth: scan: %w", err)
+		}
+		if depth[queueName] == nil {
+			depth[queueName] = map[domain.TaskStatus]int64{}
+		}
+		depth[queueName][domain.TaskStatus(status)] = count
+	}
+	return depth, rows.Err()
+}
+
+// OldestPendingAge returns the age of the oldest pending task (0 if none).
+func (q *PostgresQueue) OldestPendingAge(ctx context.Context) (time.Duration, error) {
+	var oldest sql.NullTime
+	if err := q.db.QueryRowContext(ctx, `SELECT MIN(next_run_at) FROM tasks WHERE status = 'pending'`).Scan(&oldest); err != nil {
+		return 0, fmt.Errorf("oldest pending age: %w", err)
+	}
+	if !oldest.Valid {
+		return 0, nil
+	}
+	age := time.Since(oldest.Time)
+	if age < 0 {
+		age = 0
+	}
+	return age, nil
+}
+
+// PauseQueue pauses a queue so workers stop claiming its tasks.
+func (q *PostgresQueue) PauseQueue(ctx context.Context, name string) error {
+	res, err := q.db.ExecContext(ctx, `UPDATE queues SET paused = true, updated_at = $1 WHERE name = $2`, time.Now().UTC(), name)
+	if err != nil {
+		return fmt.Errorf("pause queue: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("pause queue: queue %s not found", name)
+	}
+	return nil
+}
+
+// ResumeQueue resumes a paused queue.
+func (q *PostgresQueue) ResumeQueue(ctx context.Context, name string) error {
+	res, err := q.db.ExecContext(ctx, `UPDATE queues SET paused = false, updated_at = $1 WHERE name = $2`, time.Now().UTC(), name)
+	if err != nil {
+		return fmt.Errorf("resume queue: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("resume queue: queue %s not found", name)
+	}
+	return nil
+}
+
+// ListQueues returns all queues with their governance config.
+func (q *PostgresQueue) ListQueues(ctx context.Context) ([]domain.QueueConfig, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT name, max_concurrency, rate_limit_per_second, paused FROM queues ORDER BY name`)
+	if err != nil {
+		return nil, fmt.Errorf("list queues: %w", err)
+	}
+	defer rows.Close()
+
+	var queues []domain.QueueConfig
+	for rows.Next() {
+		var c domain.QueueConfig
+		if err := rows.Scan(&c.Name, &c.MaxConcurrency, &c.RateLimitPerSecond, &c.Paused); err != nil {
+			return nil, fmt.Errorf("list queues: scan: %w", err)
+		}
+		queues = append(queues, c)
+	}
+	return queues, rows.Err()
+}
+
+// SetQueueConfig upserts a queue's max concurrency and rate limit. It does not
+// change the paused flag (use PauseQueue/ResumeQueue for that).
+func (q *PostgresQueue) SetQueueConfig(ctx context.Context, config domain.QueueConfig) error {
+	_, err := q.db.ExecContext(ctx, `
+		INSERT INTO queues (name, max_concurrency, rate_limit_per_second, updated_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (name) DO UPDATE
+		SET max_concurrency = $2, rate_limit_per_second = $3, updated_at = $4
+	`, config.Name, config.MaxConcurrency, config.RateLimitPerSecond, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("set queue config: %w", err)
+	}
+	return nil
 }
 
 // insertEvent inserts a task lifecycle event within the given transaction, so
@@ -604,7 +731,7 @@ func scanTask(row *sql.Row) (*domain.Task, error) {
 	var payloadBytes, resultBytes []byte
 
 	err := row.Scan(
-		&t.ID, &t.Type, &t.Status, &payloadBytes, &resultBytes,
+		&t.ID, &t.Type, &t.Queue, &t.Status, &payloadBytes, &resultBytes,
 		&t.Priority, &t.MaxAttempts, &t.Attempt, &t.TimeoutSeconds, &t.RetryDelaySeconds,
 		&t.RetryMaxDelaySeconds, &t.RetryBackoffMultiplier, &t.RetryJitter,
 		&t.LeasedBy, &t.LeaseExpiresAt, &t.LeaseVersion,
@@ -636,7 +763,7 @@ func scanTaskFromRows(rows *sql.Rows) (*domain.Task, error) {
 	var payloadBytes, resultBytes []byte
 
 	err := rows.Scan(
-		&t.ID, &t.Type, &t.Status, &payloadBytes, &resultBytes,
+		&t.ID, &t.Type, &t.Queue, &t.Status, &payloadBytes, &resultBytes,
 		&t.Priority, &t.MaxAttempts, &t.Attempt, &t.TimeoutSeconds, &t.RetryDelaySeconds,
 		&t.RetryMaxDelaySeconds, &t.RetryBackoffMultiplier, &t.RetryJitter,
 		&t.LeasedBy, &t.LeaseExpiresAt, &t.LeaseVersion,
