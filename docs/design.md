@@ -340,10 +340,13 @@ Three layers prevent this:
 The `FOR UPDATE SKIP LOCKED` in a transaction ensures exactly one worker
 acquires each task row. This is enforced by PostgreSQL's MVCC.
 
-### Layer 2: Ownership Check
+### Layer 2: Ownership Check + Fencing Token
 
-`MarkSuccess` and `MarkFailure` verify `leased_by = $worker_id AND status = 'running'`.
-If another worker claimed the task, the original worker's update affects 0 rows.
+`MarkSuccess` and `MarkFailure` verify `leased_by = $worker_id AND status = 'running'
+AND lease_version = $version`. `lease_version` is a fencing token incremented on every
+claim: if a worker's lease expires and the task is reclaimed (bumping the token),
+the stale worker's write-back fails even if it still holds the same worker id. If
+another worker claimed the task, the original worker's update affects 0 rows.
 
 ### Layer 3: Idempotent Handlers
 
@@ -387,3 +390,33 @@ on queue depth.
 
 In-flight tasks that don't finish before the parent context deadline are
 abandoned — their leases expire and other workers pick them up.
+
+## Queue Governance
+
+Each task belongs to a named queue (`default` by default). The `queues` table
+holds per-queue policy so different workload classes can be governed
+independently (e.g. a RAG-ingestion queue that hammers a vector DB, and a
+low-priority benchmark queue).
+
+- `max_concurrency` caps concurrently running tasks in the queue (0 = unlimited).
+  Enforced inside the claim transaction with a per-task re-check so a batch claim
+  cannot overshoot the cap.
+- `paused` lets operators stop a queue from claiming new work without losing tasks.
+- `rate_limit_per_second` is reserved for a future token-bucket rate limiter.
+
+## Data Lifecycle and Retention
+
+The `tasks` table is the active working set. Over time, completed and DLQ'd rows
+accumulate. Production strategy:
+
+1. **Separate active vs. historical data.** Keep only `pending`/`running` rows in
+   the hot path (covered by `idx_tasks_queue_status`), and move terminal rows
+   (`success`, `failed`, `dlq`) to an archive table (or a partitioned table) on a
+   schedule.
+2. **Retain `task_events` for a bounded window** (e.g. 30 days), then purge. Events
+   are append-only audit data and grow without bound.
+3. **Cap payload size** at the API boundary to avoid `JSONB` bloat; large artifacts
+   should be stored as a URI, not inlined.
+
+These are documented as a strategy rather than implemented in the MVP; see the
+roadmap under "Archive / retention".

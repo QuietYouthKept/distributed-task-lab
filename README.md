@@ -102,7 +102,11 @@ Worker 1   Worker 2   ───   Independent goroutine pools
 | `GET` | `/tasks?status=dlq` | List DLQ tasks |
 | `GET` | `/dlq` | Same as above |
 | `GET` | `/stats` | Task counts by status (JSON) |
-| `GET` | `/metrics` | Prometheus-format metrics |
+| `GET` | `/metrics` | Prometheus-format metrics (per-queue depth, oldest-pending age) |
+| `GET` | `/queues` | List queues with governance config |
+| `PUT` | `/queues/{name}` | Set a queue's concurrency / rate limit |
+| `POST` | `/queues/{name}/pause` | Pause a queue |
+| `POST` | `/queues/{name}/resume` | Resume a queue |
 | `GET` | `/health` | Health check |
 
 ## Quick Start
@@ -183,14 +187,25 @@ WHERE id = $task_id AND status = 'running' AND leased_by = $worker_id;
 If 0 rows affected → the worker lost the lease (another worker reclaimed it).
 This prevents split-brain: a zombie worker can't corrupt task state.
 
+Each claim also increments a `lease_version` **fencing token**, and
+`MarkSuccess`/`MarkFailure` must present the matching token. This defends against
+a stale worker from an earlier lease generation writing back results — the
+classic distributed-systems fencing-token pattern.
+
 ## Retry, Timeout, and DLQ
 
-### Retry (Fixed-Interval)
+### Retry (Exponential Backoff + Jitter)
 
-- On failure: `status → pending`, `next_run_at = now + retry_delay_seconds`, lease cleared
+- On failure: `status → pending`, `next_run_at = now + backoff(attempt)`, lease cleared
+- Backoff grows exponentially: `initial_delay × multiplier^(attempt-1)`, capped by
+  `retry_max_delay_seconds`, with optional full jitter
 - `attempt` is incremented on each claim (in `ClaimTasks`), not on each failure
-- When `attempt < max_attempts`: task is retried
+- **Non-retryable** errors (validation, bad payload, unsupported type) go straight
+  to the DLQ regardless of attempts left
 - When `attempt >= max_attempts`: task enters DLQ
+
+Task fields: `retry_delay_seconds` (initial), `retry_backoff_multiplier` (default 2.0),
+`retry_max_delay_seconds` (cap), `retry_jitter` (default true).
 
 ### Task Timeout vs Lease Timeout
 
@@ -205,10 +220,32 @@ the buffer prevents premature re-claiming.
 ### DLQ (Dead Letter Queue)
 
 - Tasks that exhaust all retry attempts enter `status = 'dlq'`
-- `dlq_reason` records "max attempts exceeded: <last error>"
+- Non-retryable failures (validation/bad payload) enter `status = 'dlq'` immediately
+- `dlq_reason` records "max attempts exceeded: <last error>" or "non-retryable error: <last error>"
 - DLQ tasks are **never claimed** by workers (excluded by the WHERE clause)
 - Query via `GET /tasks?status=dlq` or `GET /dlq`
 - Manual requeue via `POST /tasks/{id}/requeue`
+
+## Idempotency and Queue Governance
+
+### Idempotent Submission
+
+A task may carry an `idempotency_key`. Enqueuing with an existing key returns the
+original task instead of creating a duplicate — backed by a `UNIQUE` index and
+`INSERT ... ON CONFLICT DO NOTHING`. Handlers must still be idempotent because
+the system is at-least-once.
+
+### Per-Queue Concurrency and Pause
+
+Each task belongs to a `queue` (default: `default`). The `queues` table holds
+per-queue governance policy:
+
+- `max_concurrency` — cap on concurrently running tasks in the queue (0 = unlimited)
+- `paused` — pause/resume a queue so workers stop claiming its tasks
+- `rate_limit_per_second` — reserved for rate limiting
+
+Manage queues via `GET /queues`, `PUT /queues/{name}`, `POST /queues/{name}/pause`,
+and `POST /queues/{name}/resume`.
 
 ## At-Least-Once Semantics
 
@@ -262,16 +299,64 @@ These are explicitly out of scope for this project:
 - [x] **M4:** Dead Letter Queue + query
 - [x] **M5:** Docker demo + README polish
 - [x] **Phase 6:** Task events audit log, manual requeue, cancel, heartbeat, Prometheus metrics, Redis backend skeleton
+- [x] **P1:** Idempotent enqueue, fencing token (`lease_version`), atomic state+event transactions, retryable classification, exponential backoff + jitter
+- [x] **P2:** Test evidence — concurrent-claim correctness (`go test -race`), worker timeout, e2e lifecycle, per-process test databases
+- [x] **P3:** Queue governance (per-queue concurrency caps, pause/resume) + richer metrics (queue depth, oldest-pending age)
+- [x] **P4:** Benchmarks (enqueue + full task lifecycle throughput)
 
 ### Future Ideas
 
-- Exponential backoff with jitter
-- Per-queue concurrency and rate limiting
 - OpenTelemetry distributed tracing
 - Full Redis backend implementation (Lua scripts for atomic claim)
+- Per-queue rate limiting (token bucket)
+- Archive / retention for completed tasks
 - `task_events` streaming / WebSocket
 - Worker dashboard / Web UI
 - Kubernetes deployment manifests
+
+## Testing
+
+The test suite runs against a real PostgreSQL instance. Each test package
+provisions its own database (via `internal/testutil`), so packages run safely in
+parallel.
+
+```bash
+# One-time: start a test Postgres (or set TEST_DATABASE_URL)
+docker run -d --name tasklab-test -p 5433:5432 \
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=tasklab_test postgres:16-alpine
+
+go test ./...            # unit + integration
+go test -race ./...      # race detector (concurrent-claim correctness)
+go test ./internal/storage/postgres/ -run TestConcurrentClaimNoDuplicates -v
+```
+
+Highlights:
+
+- **Concurrent claim**: 8 workers claim 100 tasks with zero duplicate claims.
+- **Worker timeout**: a timing-out task still persists its failure (regression test).
+- **e2e lifecycle**: pending → running → retry → DLQ → requeue → cancel.
+
+## Performance
+
+Benchmarks measure enqueue and full task-lifecycle throughput:
+
+```bash
+go test ./internal/storage/postgres/ -run '^$' -bench . -benchtime=5s
+```
+
+Measured on a developer laptop (Dockerized Postgres over a port-mapped connection,
+so these are conservative):
+
+| Benchmark | Result |
+|-----------|--------|
+| `BenchmarkEnqueue` | ~5.7 ms/op (~175 enqueues/s) |
+| `BenchmarkTaskLifecycle` | ~19 ms/op (~53 tasks/s end-to-end) |
+
+Each operation is a short transaction that trades raw throughput for correctness
+(atomic state + event writes, `SKIP LOCKED` claim, fencing-token ownership). A
+co-located/tuned Postgres is significantly faster; the design prioritizes
+correctness under concurrency and crashes over throughput.
 
 ## Development
 
@@ -280,6 +365,7 @@ make build    # Build binaries
 make api      # Run API server locally
 make worker   # Run worker locally
 make test     # Run all tests
+go test -race ./...   # Run tests with race detector
 make fmt      # Format code
 make logs     # View Docker logs
 ```
