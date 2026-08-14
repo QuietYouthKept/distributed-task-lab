@@ -2,11 +2,11 @@ package postgres
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/testutil"
 )
 
 // To run these integration tests you need a PostgreSQL instance. The easiest way:
@@ -17,32 +17,25 @@ import (
 //
 // Or set TEST_DATABASE_URL.
 
-func testDBURL() string {
-	if url := os.Getenv("TEST_DATABASE_URL"); url != "" {
-		return url
-	}
-	return "postgres://postgres:postgres@localhost:5433/tasklab_test?sslmode=disable"
-}
-
 func setupTestDB(t *testing.T) *PostgresQueue {
 	t.Helper()
 
-	db, err := NewDB(testDBURL())
+	tdb, err := testutil.EnsureDatabase(testutil.DefaultBaseURL(), "tasklab_test")
 	if err != nil {
-		t.Skipf("skipping integration test: cannot connect to PostgreSQL: %v", err)
+		t.Skipf("skipping integration test: cannot create PostgreSQL database: %v", err)
 	}
 
+	db, err := NewDB(tdb.URL)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
 	if err := RunMigrations(db); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 
-	db.Exec("DELETE FROM tasks")
-	db.Exec("DELETE FROM workers")
-
 	t.Cleanup(func() {
-		db.Exec("DELETE FROM tasks")
-		db.Exec("DELETE FROM workers")
 		db.Close()
+		tdb.Drop()
 	})
 
 	return NewPostgresQueue(db)
