@@ -14,10 +14,11 @@ import (
 // Supports simulating success, failure, retry, and timeout via payload parameters.
 //
 // Payload simulation keys:
-//   mock_duration_ms           — simulated processing time in milliseconds (default 500)
-//   mock_failures_before_success — fail this many times before succeeding (uses attempt)
-//   mock_always_fail            — always fail regardless of attempt
-//   simulate                    — shortcut: "success", "failure", "timeout", "retry_then_success", "validation_error" (non-retryable), "bad_payload" (non-retryable)
+//
+//	mock_duration_ms           — simulated processing time in milliseconds (default 500)
+//	mock_failures_before_success — fail this many times before succeeding (uses attempt)
+//	mock_always_fail            — always fail regardless of attempt
+//	simulate                    — shortcut: "success", "failure", "timeout", "retry_then_success", "validation_error" (non-retryable), "bad_payload" (non-retryable)
 //
 // The simulate shortcuts take precedence over the fine-grained controls.
 type MockHandler struct {
@@ -131,8 +132,8 @@ func (h *MockHandler) mockEval(payload map[string]any) *worker.TaskExecResult {
 			"model":       model,
 		},
 		Metrics: map[string]float64{
-			"accuracy":    0.85 + h.rng.Float64()*0.1,
-			"latency_ms":  float64(h.rng.Intn(2000) + 500),
+			"accuracy":   0.85 + h.rng.Float64()*0.1,
+			"latency_ms": float64(h.rng.Intn(2000) + 500),
 		},
 	}
 }

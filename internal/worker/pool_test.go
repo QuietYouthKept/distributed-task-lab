@@ -18,13 +18,13 @@ import (
 type fakeQueue struct {
 	queue.Queue
 
-	mu             sync.Mutex
-	claimCalls     int
-	markFailures   int
-	markSuccesses  int
-	lastErrorType  string
-	lastCtxLive    bool
-	claimed        bool
+	mu            sync.Mutex
+	claimCalls    int
+	markFailures  int
+	markSuccesses int
+	lastErrorType string
+	lastCtxLive   bool
+	claimed       bool
 }
 
 func (q *fakeQueue) ClaimTasks(ctx context.Context, workerID string, limit int, leaseTimeout time.Duration) ([]domain.Task, error) {

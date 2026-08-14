@@ -4,14 +4,14 @@ package domain
 type TaskEventType string
 
 const (
-	EventSubmitted   TaskEventType = "submitted"
-	EventClaimed     TaskEventType = "claimed"
-	EventSucceeded   TaskEventType = "succeeded"
-	EventFailed      TaskEventType = "failed"
-	EventRetried     TaskEventType = "retried"
-	EventMovedToDLQ  TaskEventType = "moved_to_dlq"
-	EventCancelled   TaskEventType = "cancelled"
-	EventRequeued    TaskEventType = "requeued"
+	EventSubmitted  TaskEventType = "submitted"
+	EventClaimed    TaskEventType = "claimed"
+	EventSucceeded  TaskEventType = "succeeded"
+	EventFailed     TaskEventType = "failed"
+	EventRetried    TaskEventType = "retried"
+	EventMovedToDLQ TaskEventType = "moved_to_dlq"
+	EventCancelled  TaskEventType = "cancelled"
+	EventRequeued   TaskEventType = "requeued"
 )
 
 // TaskEvent is an audit record of a task lifecycle transition.

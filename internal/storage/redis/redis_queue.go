@@ -16,10 +16,11 @@ var _ queue.Queue = (*RedisQueue)(nil)
 // Uses List for ready queue, ZSet for delayed retry, Hash for task metadata.
 //
 // Key structure:
-//   queue:ready          — List of task IDs ready to be claimed
-//   queue:delayed        — ZSet of task IDs with next_run_at as score
-//   tasks:{task_id}      — Hash storing full task JSON
-//   queue:dlq            — List of DLQ task IDs
+//
+//	queue:ready          — List of task IDs ready to be claimed
+//	queue:delayed        — ZSet of task IDs with next_run_at as score
+//	tasks:{task_id}      — Hash storing full task JSON
+//	queue:dlq            — List of DLQ task IDs
 type RedisQueue struct {
 	// In a real implementation, this would hold a redis.Client.
 	// For Phase 6 skeleton, we define the structure and key patterns.
@@ -127,10 +128,14 @@ func (q *RedisQueue) Stats(ctx context.Context) (map[domain.TaskStatus]int64, er
 }
 
 // PauseQueue pauses a queue.
-func (q *RedisQueue) PauseQueue(ctx context.Context, name string) error { return domain.ErrNotImplemented }
+func (q *RedisQueue) PauseQueue(ctx context.Context, name string) error {
+	return domain.ErrNotImplemented
+}
 
 // ResumeQueue resumes a paused queue.
-func (q *RedisQueue) ResumeQueue(ctx context.Context, name string) error { return domain.ErrNotImplemented }
+func (q *RedisQueue) ResumeQueue(ctx context.Context, name string) error {
+	return domain.ErrNotImplemented
+}
 
 // ListQueues returns queue governance configs.
 func (q *RedisQueue) ListQueues(ctx context.Context) ([]domain.QueueConfig, error) {

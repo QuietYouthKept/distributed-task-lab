@@ -44,12 +44,12 @@ func setupTestDB(t *testing.T) *PostgresQueue {
 // newTask builds a task with sensible defaults for tests.
 func newTask(id string, maxAttempts int) *domain.Task {
 	return &domain.Task{
-		ID:        id,
-		Type:      domain.TaskTypeRAGIngestion,
-		Payload:   domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"document_id": "doc-" + id}},
-		MaxAttempts: maxAttempts,
-		TimeoutSeconds: 60,
-		RetryDelaySeconds: 1,
+		ID:                     id,
+		Type:                   domain.TaskTypeRAGIngestion,
+		Payload:                domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"document_id": "doc-" + id}},
+		MaxAttempts:            maxAttempts,
+		TimeoutSeconds:         60,
+		RetryDelaySeconds:      1,
 		RetryBackoffMultiplier: 2.0,
 	}
 }

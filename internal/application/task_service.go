@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"github.com/fantasticyi/distributed-task-lab/internal/queue"
+	"github.com/google/uuid"
 )
 
 // TaskService orchestrates task lifecycle operations.
@@ -22,17 +22,17 @@ func NewTaskService(q queue.Queue) *TaskService {
 
 // CreateTaskRequest is the input for creating a new task.
 type CreateTaskRequest struct {
-	Type                    domain.TaskType           `json:"type"`
-	Queue                   string                    `json:"queue"`
-	Payload                 domain.TaskPayloadEnvelope `json:"payload"`
-	Priority                int                     `json:"priority"`
-	MaxAttempts             int                     `json:"max_attempts"`
-	TimeoutSeconds          int                     `json:"timeout_seconds"`
-	RetryDelaySeconds       int                     `json:"retry_delay_seconds"`
-	RetryMaxDelaySeconds    int                     `json:"retry_max_delay_seconds"`
-	RetryBackoffMultiplier  float64                 `json:"retry_backoff_multiplier"`
-	RetryJitter             *bool                   `json:"retry_jitter"`
-	IdempotencyKey          *string                 `json:"idempotency_key"`
+	Type                   domain.TaskType            `json:"type"`
+	Queue                  string                     `json:"queue"`
+	Payload                domain.TaskPayloadEnvelope `json:"payload"`
+	Priority               int                        `json:"priority"`
+	MaxAttempts            int                        `json:"max_attempts"`
+	TimeoutSeconds         int                        `json:"timeout_seconds"`
+	RetryDelaySeconds      int                        `json:"retry_delay_seconds"`
+	RetryMaxDelaySeconds   int                        `json:"retry_max_delay_seconds"`
+	RetryBackoffMultiplier float64                    `json:"retry_backoff_multiplier"`
+	RetryJitter            *bool                      `json:"retry_jitter"`
+	IdempotencyKey         *string                    `json:"idempotency_key"`
 }
 
 // CreateTaskResponse is the result of creating a task.
@@ -72,19 +72,19 @@ func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*C
 	}
 
 	task := &domain.Task{
-		ID:                      uuid.New().String(),
-		Type:                    req.Type,
-		Queue:                   queue,
-		Payload:                 req.Payload,
-		Priority:                req.Priority,
-		MaxAttempts:             req.MaxAttempts,
-		TimeoutSeconds:          req.TimeoutSeconds,
-		RetryDelaySeconds:       req.RetryDelaySeconds,
-		RetryMaxDelaySeconds:    req.RetryMaxDelaySeconds,
-		RetryBackoffMultiplier:  req.RetryBackoffMultiplier,
-		RetryJitter:             jitter,
-		NextRunAt:               time.Now().UTC(),
-		IdempotencyKey:          req.IdempotencyKey,
+		ID:                     uuid.New().String(),
+		Type:                   req.Type,
+		Queue:                  queue,
+		Payload:                req.Payload,
+		Priority:               req.Priority,
+		MaxAttempts:            req.MaxAttempts,
+		TimeoutSeconds:         req.TimeoutSeconds,
+		RetryDelaySeconds:      req.RetryDelaySeconds,
+		RetryMaxDelaySeconds:   req.RetryMaxDelaySeconds,
+		RetryBackoffMultiplier: req.RetryBackoffMultiplier,
+		RetryJitter:            jitter,
+		NextRunAt:              time.Now().UTC(),
+		IdempotencyKey:         req.IdempotencyKey,
 	}
 
 	created, err := s.q.Enqueue(ctx, task)
