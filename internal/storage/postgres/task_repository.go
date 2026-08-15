@@ -499,7 +499,7 @@ func (q *PostgresQueue) ResumeQueue(ctx context.Context, name string) error {
 
 // ListQueues returns all queues with their governance config.
 func (q *PostgresQueue) ListQueues(ctx context.Context) ([]domain.QueueConfig, error) {
-	rows, err := q.db.QueryContext(ctx, `SELECT name, max_concurrency, rate_limit_per_second, paused FROM queues ORDER BY name`)
+	rows, err := q.db.QueryContext(ctx, `SELECT name, max_concurrency, rate_limit_per_second, burst, paused FROM queues ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list queues: %w", err)
 	}
@@ -508,7 +508,7 @@ func (q *PostgresQueue) ListQueues(ctx context.Context) ([]domain.QueueConfig, e
 	var queues []domain.QueueConfig
 	for rows.Next() {
 		var c domain.QueueConfig
-		if err := rows.Scan(&c.Name, &c.MaxConcurrency, &c.RateLimitPerSecond, &c.Paused); err != nil {
+		if err := rows.Scan(&c.Name, &c.MaxConcurrency, &c.RateLimitPerSecond, &c.Burst, &c.Paused); err != nil {
 			return nil, fmt.Errorf("list queues: scan: %w", err)
 		}
 		queues = append(queues, c)
@@ -520,11 +520,11 @@ func (q *PostgresQueue) ListQueues(ctx context.Context) ([]domain.QueueConfig, e
 // change the paused flag (use PauseQueue/ResumeQueue for that).
 func (q *PostgresQueue) SetQueueConfig(ctx context.Context, config domain.QueueConfig) error {
 	_, err := q.db.ExecContext(ctx, `
-		INSERT INTO queues (name, max_concurrency, rate_limit_per_second, updated_at)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO queues (name, max_concurrency, rate_limit_per_second, burst, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (name) DO UPDATE
-		SET max_concurrency = $2, rate_limit_per_second = $3, updated_at = $4
-	`, config.Name, config.MaxConcurrency, config.RateLimitPerSecond, time.Now().UTC())
+		SET max_concurrency = $2, rate_limit_per_second = $3, burst = $4, updated_at = $5
+	`, config.Name, config.MaxConcurrency, config.RateLimitPerSecond, config.Burst, time.Now().UTC())
 	if err != nil {
 		return fmt.Errorf("set queue config: %w", err)
 	}

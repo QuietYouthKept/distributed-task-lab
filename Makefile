@@ -1,4 +1,4 @@
-.PHONY: up down build api worker migrate submit-rag-task submit-multi list-tasks watch-tasks demo demo-claim demo-retry demo-timeout demo-dlq test fmt logs logs-worker clean dev
+.PHONY: up down build api worker migrate submit-rag-task submit-multi list-tasks watch-tasks demo demo-claim demo-retry demo-timeout demo-dlq demo-failure-lab demo-rate-limit demo-observe loadgen bench test fmt logs logs-worker clean dev
 
 # Default target
 .DEFAULT_GOAL := help
@@ -150,6 +150,36 @@ demo-dlq: up ## Phase 4: task goes through retry → DLQ
 	@echo ""
 	@echo "=== DLQ tasks via status filter ==="
 	@curl -s "http://localhost:8080/tasks?status=dlq" | jq '.[] | {id, status, dlq_reason}'
+
+demo-failure-lab: ## Failure Lab: worker crash → lease expiry → fencing-token recovery
+	@docker rm -f tasklab-failurelab 2>/dev/null || true
+	@docker run -d --name tasklab-failurelab -p 5434:5432 \
+		-e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=tasklab \
+		postgres:16-alpine >/dev/null
+	@echo "Waiting for Postgres..."
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		docker exec tasklab-failurelab pg_isready -U postgres >/dev/null 2>&1 && break; \
+		sleep 1; \
+	done
+	@DATABASE_URL=postgres://postgres:postgres@localhost:5434/tasklab?sslmode=disable go run ./cmd/failurelab
+	@docker rm -f tasklab-failurelab >/dev/null
+
+demo-rate-limit: up ## Queue rate limit: 6 tasks dispatched at 2/s
+	@echo "Waiting for services..."
+	@sleep 5
+	@echo "=== Configuring rag_ingestion queue: 2 tasks/sec, burst 1 ==="
+	@curl -s -X PUT http://localhost:8080/queues/rag_ingestion -H "Content-Type: application/json" \
+		-d '{"max_concurrency":10,"rate_limit_per_second":2,"burst":1}' | jq .
+	@echo "=== Submitting 6 tasks to the rag_ingestion queue ==="
+	@for i in 1 2 3 4 5 6; do \
+		curl -s -X POST http://localhost:8080/tasks -H "Content-Type: application/json" \
+			-d "{\"type\":\"rag_ingestion\",\"queue\":\"rag_ingestion\",\"payload\":{\"version\":\"1\",\"kind\":\"rag_ingestion\",\"data\":{\"document_id\":\"doc-rl-$$i\",\"mock_duration_ms\":200}},\"max_attempts\":1,\"timeout_seconds\":30}" | jq '{id, status}'; \
+	done
+	@echo "=== Watching dispatch (success count should grow ~2/s) ==="
+	@for i in 1 2 3 4 5; do \
+		sleep 1; \
+		echo "--- t+$$i s: $$(curl -s 'http://localhost:8080/tasks?status=success' | jq 'length') succeeded ---"; \
+	done
 
 # ── Utility targets ─────────────────────────────────────────
 

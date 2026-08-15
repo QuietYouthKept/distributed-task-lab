@@ -252,6 +252,7 @@ func (h *TaskHandler) SetQueueConfig(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		MaxConcurrency     int     `json:"max_concurrency"`
 		RateLimitPerSecond float64 `json:"rate_limit_per_second"`
+		Burst              int     `json:"burst"`
 	}
 	json.NewDecoder(r.Body).Decode(&body)
 
@@ -259,6 +260,7 @@ func (h *TaskHandler) SetQueueConfig(w http.ResponseWriter, r *http.Request) {
 		Name:               name,
 		MaxConcurrency:     body.MaxConcurrency,
 		RateLimitPerSecond: body.RateLimitPerSecond,
+		Burst:              body.Burst,
 	}
 	if err := h.svc.SetQueueConfig(r.Context(), config); err != nil {
 		h.logger.Error("set queue config failed", "queue", name, "error", err)

@@ -25,6 +25,7 @@ type fakeQueue struct {
 	lastErrorType string
 	lastCtxLive   bool
 	claimed       bool
+	queues        []domain.QueueConfig
 }
 
 func (q *fakeQueue) ClaimTasks(ctx context.Context, workerID string, limit int, leaseTimeout time.Duration) ([]domain.Task, error) {
@@ -62,6 +63,10 @@ func (q *fakeQueue) MarkSuccess(ctx context.Context, taskID, workerID string, le
 }
 
 func (q *fakeQueue) Heartbeat(ctx context.Context, workerID string) error { return nil }
+
+func (q *fakeQueue) ListQueues(ctx context.Context) ([]domain.QueueConfig, error) {
+	return q.queues, nil
+}
 
 // blockingHandler blocks until its context is cancelled or times out.
 type blockingHandler struct{}

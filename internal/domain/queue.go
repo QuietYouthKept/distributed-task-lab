@@ -5,6 +5,7 @@ type QueueConfig struct {
 	Name               string  `json:"name"`
 	MaxConcurrency     int     `json:"max_concurrency"`
 	RateLimitPerSecond float64 `json:"rate_limit_per_second"`
+	Burst              int     `json:"burst"`
 	Paused             bool    `json:"paused"`
 }
 

@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"github.com/fantasticyi/distributed-task-lab/internal/queue"
 )
@@ -26,6 +28,9 @@ type Pool struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	jobs   chan taskJob
+
+	limitersMu sync.Mutex
+	limiters   map[string]*rate.Limiter
 }
 
 // Handler defines the interface for task-type-specific execution logic.
@@ -95,6 +100,7 @@ func (p *Pool) Stop() {
 type taskJob struct {
 	ID             string
 	Type           string
+	Queue          string
 	Payload        map[string]any
 	TimeoutSeconds int
 	Attempt        int
@@ -147,6 +153,8 @@ func (p *Pool) heartbeatLoop() {
 }
 
 func (p *Pool) claimAndDispatch() {
+	p.refreshLimiters()
+
 	tasks, err := p.q.ClaimTasks(p.ctx, p.workerID, p.batchSize, p.leaseTimeout)
 	if err != nil {
 		p.logger.Error("claim tasks failed", "error", err, "worker_id", p.workerID)
@@ -163,10 +171,19 @@ func (p *Pool) claimAndDispatch() {
 		job := taskJob{
 			ID:             task.ID,
 			Type:           string(task.Type),
+			Queue:          task.Queue,
 			Payload:        task.Payload.Data,
 			TimeoutSeconds: task.TimeoutSeconds,
 			Attempt:        task.Attempt,
 			LeaseVersion:   task.LeaseVersion,
+		}
+
+		// Enforce the queue's rate limit before dispatching. Note: for very
+		// large backlogs this dispatch-time throttle should be paired with
+		// lease renewal; demo volumes are modest so the lease comfortably
+		// outlives the spacing between dispatches.
+		if err := p.throttle(p.ctx, task.Queue); err != nil {
+			return
 		}
 
 		select {
@@ -175,6 +192,43 @@ func (p *Pool) claimAndDispatch() {
 		case p.jobs <- job:
 		}
 	}
+}
+
+// refreshLimiters reloads per-queue token buckets from the queue governance config.
+func (p *Pool) refreshLimiters() {
+	queues, err := p.q.ListQueues(p.ctx)
+	if err != nil {
+		p.logger.Warn("list queues failed (rate limiting skipped this cycle)", "error", err)
+		return
+	}
+
+	p.limitersMu.Lock()
+	defer p.limitersMu.Unlock()
+	if p.limiters == nil {
+		p.limiters = make(map[string]*rate.Limiter)
+	}
+	for _, qc := range queues {
+		if qc.RateLimitPerSecond > 0 {
+			burst := qc.Burst
+			if burst <= 0 {
+				burst = 1
+			}
+			p.limiters[qc.Name] = rate.NewLimiter(rate.Limit(qc.RateLimitPerSecond), burst)
+		} else {
+			delete(p.limiters, qc.Name)
+		}
+	}
+}
+
+// throttle waits until the given queue's token bucket admits one task.
+func (p *Pool) throttle(ctx context.Context, queueName string) error {
+	p.limitersMu.Lock()
+	limiter := p.limiters[queueName]
+	p.limitersMu.Unlock()
+	if limiter == nil {
+		return nil
+	}
+	return limiter.Wait(ctx)
 }
 
 // executeLoop processes claimed tasks.
