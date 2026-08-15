@@ -181,6 +181,29 @@ demo-rate-limit: up ## Queue rate limit: 6 tasks dispatched at 2/s
 		echo "--- t+$$i s: $$(curl -s 'http://localhost:8080/tasks?status=success' | jq 'length') succeeded ---"; \
 	done
 
+demo-observe: up ## Observability: Prometheus (:9090) + Grafana (:3000) with tasklab dashboard
+	@docker compose -f deployments/observability/docker-compose.observability.yml up -d
+	@echo ""
+	@echo "Prometheus : http://localhost:9090"
+	@echo "Grafana    : http://localhost:3000  (dashboard: distributed-task-lab Overview)"
+	@echo "Submit some tasks first (make submit-multi) to see metrics."
+
+loadgen: ## Load test: throughput + claim latency + duplicate detection (dedicated Postgres)
+	@docker rm -f tasklab-loadgen 2>/dev/null || true
+	@docker run -d --name tasklab-loadgen -p 5435:5432 \
+		-e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=tasklab \
+		postgres:16-alpine >/dev/null
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		docker exec tasklab-loadgen pg_isready -U postgres >/dev/null 2>&1 && break; \
+		sleep 1; \
+	done
+	@DATABASE_URL=postgres://postgres:postgres@localhost:5435/tasklab?sslmode=disable go run ./cmd/loadgen
+	@docker rm -f tasklab-loadgen >/dev/null
+
+bench: ## Run Go benchmarks (requires a test Postgres on :5433)
+	@TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5433/postgres?sslmode=disable \
+		go test ./internal/storage/postgres/ -run '^$$' -bench . -benchtime=5s
+
 # ── Utility targets ─────────────────────────────────────────
 
 logs: ## View all Docker Compose logs

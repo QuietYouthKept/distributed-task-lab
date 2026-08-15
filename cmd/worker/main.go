@@ -44,8 +44,8 @@ func main() {
 	// Initialize queue.
 	pq := postgres.NewPostgresQueue(db)
 
-	// Initialize mock handler.
-	handler := handlers.NewMockHandler()
+	// Composite handler: real RAG ingestion for source_path tasks, mock otherwise.
+	handler := handlers.NewComposite(cfg.DocDir, cfg.ArtifactDir)
 
 	// Create and start the worker pool.
 	pool := worker.NewPool(

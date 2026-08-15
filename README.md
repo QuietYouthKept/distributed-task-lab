@@ -24,13 +24,38 @@ once if a worker crashes. Task handlers must be designed to be idempotent.
 ```bash
 # Prerequisites: Docker, curl, jq
 
-# One command — the full story (success → retry → DLQ):
-make demo
+make demo              # The full story: success → retry → DLQ
+make demo-claim        # Multi-worker claiming
+make demo-retry        # Automatic retry on failure
+make demo-dlq          # Dead Letter Queue after max retries
 
-# Or step by step:
-make demo-claim    # Multi-worker claiming
-make demo-retry    # Automatic retry on failure
-make demo-dlq      # Dead Letter Queue after max retries
+# Production-hardening demos
+make demo-failure-lab  # Worker crash → lease expiry → fencing-token recovery
+make demo-rate-limit   # Per-queue token-bucket rate limiting
+make demo-observe      # Prometheus + Grafana dashboard
+make loadgen           # Throughput + claim-latency + duplicate-claim report
+```
+
+## Failure Lab
+
+`make demo-failure-lab` spins up a dedicated Postgres and drives a task through a
+worker crash and recovery, showing the fencing token in action:
+
+```text
+1. task submitted: failure-lab-...
+2. worker-a claimed: lease_version=1, attempt=1
+3. worker-a crashed (no heartbeat) — lease expires in ~2s
+4. worker-b reclaimed: lease_version=2, attempt=2
+5. stale write-back from worker-a (lease_version=1): REJECTED (task is not claimed by this worker)
+6. worker-b completed the task
+
+--- task_events timeline ---
+  ...  submitted  worker=          task submitted
+  ...  claimed    worker=worker-a  task claimed
+  ...  claimed    worker=worker-b  task claimed
+  ...  succeeded  worker=worker-b  task completed
+
+final status: success
 ```
 
 ## Architecture
@@ -247,6 +272,37 @@ per-queue governance policy:
 Manage queues via `GET /queues`, `PUT /queues/{name}`, `POST /queues/{name}/pause`,
 and `POST /queues/{name}/resume`.
 
+## Real RAG Ingestion Workload
+
+When a `rag_ingestion` task carries a `source_path`, the worker runs a lightweight
+but real pipeline instead of a mock: read a markdown file, chunk it by paragraph,
+generate deterministic SHA-256 embeddings, and write a JSONL artifact to
+`artifacts/index/`. Re-ingesting the same `document_id + version + chunking_profile
++ content` reuses the existing artifact (`idempotent_reused: true`) rather than
+rewriting it.
+
+```bash
+# Submit a real ingestion task (examples/docs/rag-pipeline.md)
+curl -X POST http://localhost:8080/tasks -H "Content-Type: application/json" \
+  -d @examples/payloads/rag_ingestion_real.json
+```
+
+No external embedding API or vector DB is required — the deterministic hash keeps
+the demo self-contained and idempotency easy to reason about.
+
+## Observability
+
+`GET /metrics` exposes Prometheus metrics: `tasklab_tasks_total{status}`,
+`tasklab_queue_depth{queue,status}`, and `tasklab_oldest_pending_age_seconds`. A
+ready-made Grafana stack (`deployments/observability/`) visualizes queue depth,
+oldest pending age, and per-status task counts:
+
+```bash
+make demo-observe
+# Grafana  : http://localhost:3000 (dashboard: distributed-task-lab Overview)
+# Prometheus: http://localhost:9090
+```
+
 ## At-Least-Once Semantics
 
 This system guarantees **at-least-once** delivery: every task will be attempted
@@ -282,7 +338,7 @@ examples/payloads/    JSON payloads for each scenario
 
 These are explicitly out of scope for this project:
 
-- Real RAG ingestion / AI model API calls (handlers are deterministic mocks)
+- Real embedding model / vector DB integration (a deterministic, self-contained RAG ingestion exists; no external model API)
 - Web UI / Dashboard / Kubernetes
 - Exactly-once semantics (the system is at-least-once by design)
 - Full Redis backend (only a design skeleton exists)
@@ -303,12 +359,12 @@ These are explicitly out of scope for this project:
 - [x] **P2:** Test evidence — concurrent-claim correctness (`go test -race`), worker timeout, e2e lifecycle, per-process test databases
 - [x] **P3:** Queue governance (per-queue concurrency caps, pause/resume) + richer metrics (queue depth, oldest-pending age)
 - [x] **P4:** Benchmarks (enqueue + full task lifecycle throughput)
+- [x] **P5:** Failure Lab (crash → lease expiry → fencing recovery), per-queue rate limiting, Grafana observability pack, lightweight real RAG ingestion, loadgen report
 
 ### Future Ideas
 
 - OpenTelemetry distributed tracing
 - Full Redis backend implementation (Lua scripts for atomic claim)
-- Per-queue rate limiting (token bucket)
 - Archive / retention for completed tasks
 - `task_events` streaming / WebSocket
 - Worker dashboard / Web UI
@@ -357,6 +413,26 @@ Each operation is a short transaction that trades raw throughput for correctness
 (atomic state + event writes, `SKIP LOCKED` claim, fencing-token ownership). A
 co-located/tuned Postgres is significantly faster; the design prioritizes
 correctness under concurrency and crashes over throughput.
+
+### Load Test (`make loadgen`)
+
+`cmd/loadgen` runs an in-process load test: N tasks, M worker pools, then reports
+throughput, claim-latency percentiles, and duplicate-claim detection. Measured on
+a developer laptop (Dockerized Postgres, 4 workers × 4 concurrency):
+
+```text
+tasks submitted   : 500
+workers           : 4 (concurrency 4 each)
+throughput        : 593 tasks/sec
+success           : 500
+dlq               : 0
+claim latency p50 : 90ms
+claim latency p95 : 102ms
+claim latency p99 : 102ms
+duplicate claims  : 0
+```
+
+Run with `LOADGEN_TASKS=1000 LOADGEN_WORKERS=8 make loadgen` to reproduce.
 
 ## Development
 

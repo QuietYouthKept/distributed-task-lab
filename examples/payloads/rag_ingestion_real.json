@@ -1,0 +1,16 @@
+{
+  "type": "rag_ingestion",
+  "queue": "rag_ingestion",
+  "payload": {
+    "version": "1",
+    "kind": "rag_ingestion",
+    "data": {
+      "document_id": "rag-pipeline",
+      "source_path": "rag-pipeline.md",
+      "version": "v1",
+      "chunking_profile": "paragraph"
+    }
+  },
+  "max_attempts": 3,
+  "timeout_seconds": 30
+}

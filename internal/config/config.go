@@ -25,6 +25,10 @@ type Config struct {
 	DefaultMaxAttempts       int
 	DefaultTimeoutSeconds    int
 	DefaultRetryDelaySeconds int
+
+	// RAG ingestion (real lightweight workload)
+	DocDir      string
+	ArtifactDir string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -40,6 +44,8 @@ func Load() *Config {
 		DefaultMaxAttempts:       getEnvInt("DEFAULT_MAX_ATTEMPTS", 3),
 		DefaultTimeoutSeconds:    getEnvInt("DEFAULT_TIMEOUT_SECONDS", 60),
 		DefaultRetryDelaySeconds: getEnvInt("DEFAULT_RETRY_DELAY_SECONDS", 5),
+		DocDir:                   getEnv("RAG_DOC_DIR", "examples/docs"),
+		ArtifactDir:              getEnv("RAG_ARTIFACT_DIR", "artifacts/index"),
 	}
 }
 
