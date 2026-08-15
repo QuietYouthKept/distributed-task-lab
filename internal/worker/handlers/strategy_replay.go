@@ -67,7 +67,7 @@ func (h *StrategyReplay) Run(ctx context.Context, payload map[string]any) (*work
 	// Deterministic replay loop over N synthetic historical cases.
 	delta := candidateRatio - replayBaselineRatio
 	passed, failed, violations := 0, 0, 0
-	var failures []map[string]any
+	failures := []map[string]any{}
 	for i := 0; i < caseCount; i++ {
 		select {
 		case <-ctx.Done():
@@ -119,7 +119,7 @@ func (h *StrategyReplay) Run(ctx context.Context, payload map[string]any) (*work
 		"strategy_key":            getString(payload, "strategy_key", ""),
 		"scenario_set":            getString(payload, "scenario_set", "default"),
 		"scenario_set_version":    getString(payload, "scenario_set_version", "v1"),
-		"simulator_version":       getString(payload, "simulator_version", replaySimulatorVersion),
+		"simulator_version":       replaySimulatorVersion,
 		"policy_version":          getString(payload, "policy_version", "v1"),
 		"seed":                    seed,
 		"case_count":              caseCount,
@@ -147,7 +147,7 @@ func (h *StrategyReplay) Run(ctx context.Context, payload map[string]any) (*work
 			"result_status":     resultStatus,
 			"risk_summary":      risk,
 			"proposal_id":       proposalID,
-			"simulator_version": getString(payload, "simulator_version", replaySimulatorVersion),
+			"simulator_version": replaySimulatorVersion,
 		},
 		Metrics: map[string]float64{
 			"total_cases":          float64(caseCount),
