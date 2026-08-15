@@ -290,6 +290,30 @@ curl -X POST http://localhost:8080/tasks -H "Content-Type: application/json" \
 No external embedding API or vector DB is required — the deterministic hash keeps
 the demo self-contained and idempotency easy to reason about.
 
+## Real AI Workload Integration: StrategyOps replay
+
+The system also runs a "strategy_replay" task type that serves StrategyOps
+historical replay / batch evaluation.
+
+StrategyOps submits an immutable execution snapshot (candidate config, versions,
+seed, case_count, guardrail config) with a stable idempotency key:
+
+    POST /tasks
+    {
+      "type": "strategy_replay",
+      "payload": {"version": "1", "kind": "strategy_replay", "data": {...}},
+      "idempotency_key": "strategyops:replay:{proposal_id}:{version}:..."
+    }
+
+The strategy_replay handler runs a deterministic replay over N synthetic cases
+and returns a self-contained, versioned result in result.artifacts.replay_result.
+It treats a regression as a successful business result (result_status:
+REGRESSION), never as a system failure — only malformed payloads / worker errors
+flow through retry/DLQ. The same snapshot always yields the same result, so
+at-least-once re-execution is safe.
+
+StrategyOps is an optional consumer; the task-lab runs fully standalone without it.
+
 ## Observability
 
 `GET /metrics` exposes Prometheus metrics: `tasklab_tasks_total{status}`,
