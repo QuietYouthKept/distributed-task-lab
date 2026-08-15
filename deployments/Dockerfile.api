@@ -1,5 +1,10 @@
 FROM golang:1.22-alpine AS builder
 
+# GOPROXY is a build arg so China users can use a mirror:
+#   docker compose build --build-arg GOPROXY=https://goproxy.cn,direct
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
+
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download

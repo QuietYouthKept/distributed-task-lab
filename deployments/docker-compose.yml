@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -19,8 +17,11 @@ services:
 
   api:
     build:
-      context: .
+      # context is relative to THIS file (deployments/), so .. is the repo root.
+      context: ..
       dockerfile: deployments/Dockerfile.api
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     ports:
       - "8080:8080"
     environment:
@@ -32,8 +33,10 @@ services:
 
   worker:
     build:
-      context: .
+      context: ..
       dockerfile: deployments/Dockerfile.worker
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/tasklab?sslmode=disable
       WORKER_CONCURRENCY: "4"

@@ -1,5 +1,8 @@
 FROM golang:1.22-alpine AS builder
 
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
+
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -10,4 +13,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /worker ./cmd/worker
 FROM alpine:3.19
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /worker /worker
+
+# Real RAG ingestion reads markdown from RAG_DOC_DIR and writes JSONL artifacts
+# to RAG_ARTIFACT_DIR. Copy the example docs and create a writable artifacts dir
+# so a source_path task works inside the container (not just the mock path).
+COPY --from=builder /app/examples/docs /app/examples/docs
+RUN mkdir -p /app/artifacts/index
+ENV RAG_DOC_DIR=/app/examples/docs \
+    RAG_ARTIFACT_DIR=/app/artifacts/index
+
 CMD ["/worker"]

@@ -1,0 +1,12 @@
+.git
+.gitignore
+.reasonix
+*.exe
+*.zip
+bin/
+artifacts/
+*.out
+coverage.out
+新建 Text Document.txt
+milestone-*.zip
+deployments/observability/

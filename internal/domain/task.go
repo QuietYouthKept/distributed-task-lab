@@ -3,40 +3,41 @@ package domain
 import "time"
 
 // Task is the core domain entity representing a unit of work.
+// JSON tags are snake_case to match the documented API contract.
 type Task struct {
-	ID     string
-	Type   TaskType
-	Status TaskStatus
-	Queue  string
+	ID     string     `json:"id"`
+	Type   TaskType   `json:"type"`
+	Status TaskStatus `json:"status"`
+	Queue  string     `json:"queue"`
 
-	Payload TaskPayloadEnvelope
-	Result  *TaskResult
+	Payload TaskPayloadEnvelope `json:"payload"`
+	Result  *TaskResult         `json:"result,omitempty"`
 
-	Priority          int
-	MaxAttempts       int
-	Attempt           int
-	TimeoutSeconds    int
-	RetryDelaySeconds int // base (initial) retry delay in seconds
+	Priority          int `json:"priority"`
+	MaxAttempts       int `json:"max_attempts"`
+	Attempt           int `json:"attempt"`
+	TimeoutSeconds    int `json:"timeout_seconds"`
+	RetryDelaySeconds int `json:"retry_delay_seconds"` // base (initial) retry delay in seconds
 
 	// Retry backoff configuration.
-	RetryMaxDelaySeconds   int     // cap on backoff delay (0 = no cap)
-	RetryBackoffMultiplier float64 // exponential factor (default 2.0)
-	RetryJitter            bool    // apply full jitter
+	RetryMaxDelaySeconds   int     `json:"retry_max_delay_seconds"`
+	RetryBackoffMultiplier float64 `json:"retry_backoff_multiplier"`
+	RetryJitter            bool    `json:"retry_jitter"`
 
-	LeasedBy       *string
-	LeaseExpiresAt *time.Time
-	LeaseVersion   int // fencing token, incremented on each claim
+	LeasedBy       *string    `json:"leased_by,omitempty"`
+	LeaseExpiresAt *time.Time `json:"lease_expires_at,omitempty"`
+	LeaseVersion   int        `json:"lease_version"` // fencing token, incremented on each claim
 
-	NextRunAt  time.Time
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	StartedAt  *time.Time
-	FinishedAt *time.Time
+	NextRunAt  time.Time  `json:"next_run_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+	StartedAt  *time.Time `json:"started_at,omitempty"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
 
-	LastError *string
-	DLQReason *string
+	LastError *string `json:"last_error,omitempty"`
+	DLQReason *string `json:"dlq_reason,omitempty"`
 
-	IdempotencyKey *string
+	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 }
 
 // RetryDelayForAttempt computes the delay before the next retry for a task that
