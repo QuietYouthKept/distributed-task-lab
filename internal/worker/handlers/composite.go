@@ -9,22 +9,28 @@ import (
 // Composite dispatches rag_ingestion tasks that carry a source_path to the
 // real RAG ingestion pipeline, and everything else to the mock handler.
 type Composite struct {
-	mock *MockHandler
-	rag  *RealRAGIngestion
+	mock   *MockHandler
+	rag    *RealRAGIngestion
+	replay *StrategyReplay
 }
 
 // NewComposite creates a composite handler.
 func NewComposite(docDir, artifactDir string) *Composite {
 	return &Composite{
-		mock: NewMockHandler(),
-		rag:  NewRealRAGIngestion(docDir, artifactDir),
+		mock:   NewMockHandler(),
+		rag:    NewRealRAGIngestion(docDir, artifactDir),
+		replay: NewStrategyReplay(),
 	}
 }
 
-// Handle routes a task to the real RAG pipeline or the mock handler.
+// Handle routes a task to the real RAG pipeline, the strategy replay worker, or
+// the mock handler.
 func (c *Composite) Handle(ctx context.Context, taskType string, payload map[string]any, attempt int) (*worker.TaskExecResult, error) {
 	if taskType == "rag_ingestion" && getString(payload, "source_path", "") != "" {
 		return c.rag.Ingest(ctx, payload)
+	}
+	if taskType == "strategy_replay" {
+		return c.replay.Run(ctx, payload)
 	}
 	return c.mock.Handle(ctx, taskType, payload, attempt)
 }

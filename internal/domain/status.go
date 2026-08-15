@@ -24,14 +24,16 @@ var ValidTaskStatuses = map[TaskStatus]bool{
 type TaskType string
 
 const (
-	TaskTypeRAGIngestion TaskType = "rag_ingestion"
-	TaskTypeEval         TaskType = "eval"
-	TaskTypeBenchmark    TaskType = "benchmark"
+	TaskTypeRAGIngestion   TaskType = "rag_ingestion"
+	TaskTypeEval           TaskType = "eval"
+	TaskTypeBenchmark      TaskType = "benchmark"
+	TaskTypeStrategyReplay TaskType = "strategy_replay"
 )
 
 // ValidTaskTypes is the set of all valid task types.
 var ValidTaskTypes = map[TaskType]bool{
-	TaskTypeRAGIngestion: true,
-	TaskTypeEval:         true,
-	TaskTypeBenchmark:    true,
+	TaskTypeRAGIngestion:   true,
+	TaskTypeEval:           true,
+	TaskTypeBenchmark:      true,
+	TaskTypeStrategyReplay: true,
 }
