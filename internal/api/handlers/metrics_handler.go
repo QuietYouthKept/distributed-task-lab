@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/observability"
 )
 
 // MetricsProvider supplies the data behind /metrics.
@@ -14,6 +15,7 @@ type MetricsProvider interface {
 	GetStats(ctx context.Context) (map[domain.TaskStatus]int64, error)
 	GetQueueDepth(ctx context.Context) (map[string]map[domain.TaskStatus]int64, error)
 	GetOldestPendingAge(ctx context.Context) (time.Duration, error)
+	GetDBPoolStats() domain.DBPoolStats
 }
 
 // MetricsHandler serves Prometheus-format metrics.
@@ -65,6 +67,14 @@ func (h *MetricsHandler) ServeMetrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "# HELP tasklab_oldest_pending_age_seconds Age of the oldest pending task.\n")
 	fmt.Fprintf(w, "# TYPE tasklab_oldest_pending_age_seconds gauge\n")
 	fmt.Fprintf(w, "tasklab_oldest_pending_age_seconds %d\n", int64(oldest.Seconds()))
+
+	db := h.provider.GetDBPoolStats()
+	fmt.Fprintf(w, "# HELP tasklab_db_pool_connections PostgreSQL pool connections.\n# TYPE tasklab_db_pool_connections gauge\n")
+	fmt.Fprintf(w, "tasklab_db_pool_connections{state=%q} %d\n", "open", db.OpenConnections)
+	fmt.Fprintf(w, "tasklab_db_pool_connections{state=%q} %d\n", "in_use", db.InUse)
+	fmt.Fprintf(w, "tasklab_db_pool_connections{state=%q} %d\n", "idle", db.Idle)
+	fmt.Fprintf(w, "tasklab_db_pool_wait_total %d\ntasklab_db_pool_wait_seconds_total %f\n", db.WaitCount, db.WaitDurationSeconds)
+	observability.Runtime().WritePrometheus(w)
 }
 
 func allStatuses() []domain.TaskStatus {

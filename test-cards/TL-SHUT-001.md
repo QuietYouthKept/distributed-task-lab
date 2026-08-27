@@ -1,0 +1,14 @@
+# TL-SHUT-001 — Graceful drain
+- Claim / Invariant: shutdown stops claims, renews owned work, and drains before deadline.
+- Reference: `TestPoolGracefulShutdown` and failure-lab `graceful-shutdown`.
+- Why this matters: immediate cancellation creates avoidable duplicate work.
+- Initial state: one cooperative in-flight handler.
+- Workload: invoke `StopContext` during execution.
+- Fault injection: shutdown signal/lifecycle cancellation.
+- Timeline: stop claims -> drain/renew -> ack -> stop heartbeat.
+- Oracle: bounded return; no deadlock; failure lab final status success.
+- Evidence: worker unit test plus PostgreSQL failure lab.
+- Acceptance criteria: unit/race pass and lab database oracle passes.
+- Seed: fixed fake task and timestamp-prefixed lab task.
+- Current result: [TEST VERIFIED] worker lifecycle/race tests and PostgreSQL drain lab passed locally.
+- Known limitations: a handler ignoring context may survive until process exit.

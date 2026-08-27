@@ -7,6 +7,8 @@ import (
 
 	"github.com/fantasticyi/distributed-task-lab/internal/application"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // TaskHandler handles HTTP requests for tasks.
@@ -32,11 +34,27 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	if req.Type == "" {
 		req.Type = domain.TaskTypeRAGIngestion
 	}
+	if req.Payload.Data == nil {
+		req.Payload.Data = map[string]any{}
+	}
+	// Trace propagation keys are service-owned. Discard client-supplied values
+	// before injecting the authenticated HTTP span so callers cannot forge a
+	// parent for worker-side telemetry.
+	delete(req.Payload.Data, "_traceparent")
+	delete(req.Payload.Data, "_tracestate")
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(r.Context(), carrier)
+	if traceparent := carrier.Get("traceparent"); traceparent != "" {
+		req.Payload.Data["_traceparent"] = traceparent
+	}
+	if tracestate := carrier.Get("tracestate"); tracestate != "" {
+		req.Payload.Data["_tracestate"] = tracestate
+	}
 
 	resp, err := h.svc.CreateTask(r.Context(), req)
 	if err != nil {
 		h.logger.Error("create task failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		return
 	}
 
@@ -59,7 +77,7 @@ func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.logger.Error("get task failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		return
 	}
 
@@ -90,7 +108,7 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	tasks, err := h.svc.ListTasks(r.Context(), filter)
 	if err != nil {
 		h.logger.Error("list tasks failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		return
 	}
 
@@ -106,7 +124,7 @@ func (h *TaskHandler) ListDLQ(w http.ResponseWriter, r *http.Request) {
 	tasks, err := h.svc.ListDLQ(r.Context(), filter)
 	if err != nil {
 		h.logger.Error("list dlq failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		return
 	}
 
@@ -118,7 +136,7 @@ func (h *TaskHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	counts, err := h.svc.GetStats(r.Context())
 	if err != nil {
 		h.logger.Error("stats query failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		return
 	}
 
@@ -194,7 +212,7 @@ func (h *TaskHandler) GetTaskEvents(w http.ResponseWriter, r *http.Request) {
 	events, err := h.svc.GetTaskEvents(r.Context(), id)
 	if err != nil {
 		h.logger.Error("get events failed", "task_id", id, "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		return
 	}
 
@@ -236,7 +254,7 @@ func (h *TaskHandler) ListQueues(w http.ResponseWriter, r *http.Request) {
 	queues, err := h.svc.ListQueues(r.Context())
 	if err != nil {
 		h.logger.Error("list queues failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		return
 	}
 	writeJSON(w, http.StatusOK, queues)

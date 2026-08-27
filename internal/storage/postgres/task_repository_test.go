@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -22,6 +23,9 @@ func setupTestDB(t *testing.T) *PostgresQueue {
 
 	tdb, err := testutil.EnsureDatabase(testutil.DefaultBaseURL(), "tasklab_test")
 	if err != nil {
+		if os.Getenv("REQUIRE_TEST_DATABASE") == "1" {
+			t.Fatalf("required PostgreSQL integration database unavailable: %v", err)
+		}
 		t.Skipf("skipping integration test: cannot create PostgreSQL database: %v", err)
 	}
 
@@ -99,6 +103,34 @@ func TestEnqueueAndGetTask(t *testing.T) {
 	}
 	if got.Status != domain.TaskStatusPending {
 		t.Errorf("Status = %q, want pending", got.Status)
+	}
+}
+
+func TestExpiredFinalCrashMovesTaskToDLQWithoutExtraClaim(t *testing.T) {
+	q := setupTestDB(t)
+	ctx := context.Background()
+	enqueue(t, q, newTask("test-hard-crash-budget", 1))
+	claimed := claimOne(t, q, "crashed-worker")
+	if claimed.Attempt != 1 {
+		t.Fatalf("first claim attempt = %d, want 1", claimed.Attempt)
+	}
+	if _, err := q.db.ExecContext(ctx, `UPDATE tasks SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE id = $1`, claimed.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	reclaimed, err := q.ClaimTasks(ctx, "replacement-worker", 1, 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reclaimed) != 0 {
+		t.Fatalf("exhausted task was reclaimed: %+v", reclaimed)
+	}
+	got, err := q.GetTask(ctx, claimed.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TaskStatusDLQ || got.Attempt != 1 {
+		t.Fatalf("final state = %s attempt=%d, want dlq attempt=1", got.Status, got.Attempt)
 	}
 }
 
@@ -273,8 +305,12 @@ func TestMarkFailureRetry(t *testing.T) {
 	if got.Status != domain.TaskStatusPending {
 		t.Errorf("Status = %q, want pending", got.Status)
 	}
-	if !got.NextRunAt.After(time.Now().UTC()) {
-		t.Errorf("NextRunAt should be in the future, got %v", got.NextRunAt)
+	// Retry eligibility is decided by PostgreSQL time. Comparing it with the
+	// test process clock after round trips is both non-authoritative and flaky
+	// for the one-second default delay. The persisted DB timestamps must still
+	// show that this retry was scheduled after the failure transition.
+	if !got.NextRunAt.After(got.UpdatedAt) {
+		t.Errorf("NextRunAt = %v, want after DB updated_at %v", got.NextRunAt, got.UpdatedAt)
 	}
 	if got.LeasedBy != nil {
 		t.Errorf("LeasedBy should be nil after retry, got %v", *got.LeasedBy)
@@ -346,17 +382,15 @@ func TestRetryBackoff(t *testing.T) {
 	enqueue(t, q, task)
 
 	// Attempt 1: fail -> next_run_at should be ~now + 1s.
-	before := time.Now().UTC()
 	c1 := claimOne(t, q, "worker-1")
 	q.MarkFailure(ctx, c1.ID, "worker-1", c1.LeaseVersion, domain.TaskFailure{Message: "e", ErrorType: "execution_error", Retryable: true})
 	got1, _ := q.GetTask(ctx, c1.ID)
-	if d := got1.NextRunAt.Sub(before); d < 800*time.Millisecond || d > 1500*time.Millisecond {
+	if d := got1.NextRunAt.Sub(got1.UpdatedAt); d < 800*time.Millisecond || d > 1500*time.Millisecond {
 		t.Errorf("attempt 1 backoff ~1s, got %v", d)
 	}
 
 	// Attempt 2: wait for retry, fail -> next_run_at should be ~now + 2s.
 	time.Sleep(1100 * time.Millisecond)
-	before2 := time.Now().UTC()
 	c2 := claimOne(t, q, "worker-1")
 	if c2.Attempt != 2 {
 		t.Errorf("Attempt = %d, want 2", c2.Attempt)
@@ -366,7 +400,7 @@ func TestRetryBackoff(t *testing.T) {
 	}
 	q.MarkFailure(ctx, c2.ID, "worker-1", c2.LeaseVersion, domain.TaskFailure{Message: "e", ErrorType: "execution_error", Retryable: true})
 	got2, _ := q.GetTask(ctx, c2.ID)
-	if d := got2.NextRunAt.Sub(before2); d < 1500*time.Millisecond || d > 3*time.Second {
+	if d := got2.NextRunAt.Sub(got2.UpdatedAt); d < 1500*time.Millisecond || d > 3*time.Second {
 		t.Errorf("attempt 2 backoff ~2s, got %v", d)
 	}
 }

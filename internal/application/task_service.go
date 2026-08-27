@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
@@ -70,6 +71,9 @@ func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*C
 	if queue == "" {
 		queue = domain.DefaultQueueName
 	}
+	if len(queue) > 128 || strings.TrimSpace(queue) != queue {
+		return nil, fmt.Errorf("invalid queue name")
+	}
 
 	task := &domain.Task{
 		ID:                     uuid.New().String(),
@@ -83,7 +87,6 @@ func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*C
 		RetryMaxDelaySeconds:   req.RetryMaxDelaySeconds,
 		RetryBackoffMultiplier: req.RetryBackoffMultiplier,
 		RetryJitter:            jitter,
-		NextRunAt:              time.Now().UTC(),
 		IdempotencyKey:         req.IdempotencyKey,
 	}
 
@@ -186,11 +189,26 @@ func (s *TaskService) ListQueues(ctx context.Context) ([]domain.QueueConfig, err
 
 // SetQueueConfig upserts a queue's max concurrency and rate limit.
 func (s *TaskService) SetQueueConfig(ctx context.Context, config domain.QueueConfig) error {
+	if config.Name == "" || len(config.Name) > 128 || strings.TrimSpace(config.Name) != config.Name {
+		return fmt.Errorf("task service: invalid queue name")
+	}
+	if config.MaxConcurrency < 0 || config.RateLimitPerSecond < 0 || config.Burst < 0 {
+		return fmt.Errorf("task service: queue limits must be non-negative")
+	}
+	if config.Burst == 0 {
+		config.Burst = 1
+	}
 	if err := s.q.SetQueueConfig(ctx, config); err != nil {
 		return fmt.Errorf("task service: set queue config: %w", err)
 	}
 	return nil
 }
+
+func (s *TaskService) HealthCheck(ctx context.Context) error {
+	return s.q.HealthCheck(ctx)
+}
+
+func (s *TaskService) GetDBPoolStats() domain.DBPoolStats { return s.q.DBStats() }
 
 // GetStats returns the number of tasks currently in each status.
 func (s *TaskService) GetStats(ctx context.Context) (map[domain.TaskStatus]int64, error) {

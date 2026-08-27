@@ -1,0 +1,14 @@
+# TL-MIG-001 — Forward migration safety
+- Claim / Invariant: migrations apply once, serialize, recover, and detect edits.
+- Reference: `migration_integration_test.go`.
+- Why this matters: startup DDL races and drift can corrupt deployments.
+- Initial state: fresh DB or previously untracked v1-v6 schema.
+- Workload: fresh/rerun/upgrade/two runners/lock timeout/checksum tamper.
+- Fault injection: held advisory lock, cancellation, checksum mutation.
+- Timeline: acquire -> transactional apply -> tracking commit.
+- Oracle: latest version exactly 7 or explicit bounded failure.
+- Evidence: PostgreSQL migration integration suite.
+- Acceptance criteria: all cases pass with `REQUIRE_TEST_DATABASE=1`.
+- Seed: unique test databases.
+- Current result: [TEST VERIFIED] all fresh/rerun/upgrade/concurrency/timeout/checksum cases passed locally.
+- Known limitations: restore/rollback is operational, not automatic down SQL.

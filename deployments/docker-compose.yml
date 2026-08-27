@@ -27,6 +27,8 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/tasklab?sslmode=disable
       API_PORT: "8080"
+      API_TOKEN: ${API_TOKEN:?set API_TOKEN to a deployment secret}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN to a distinct deployment secret}
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,9 +45,15 @@ services:
       WORKER_POLL_INTERVAL: "1s"
       LEASE_TIMEOUT: "90s"
       CLAIM_BATCH_SIZE: "5"
+      WORKER_HEALTH_PORT: "9091"
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9091/ready >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     deploy:
       replicas: 2
 

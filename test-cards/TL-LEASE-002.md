@@ -1,0 +1,14 @@
+# TL-LEASE-002 — Real stale same-worker renew
+- Claim / Invariant: generation 1 cannot renew generation 2 even with the same worker ID.
+- Reference: `TestRenewLeaseRejectsRealStaleSameWorkerGeneration`.
+- Why this matters: worker ID alone is not a fencing credential.
+- Initial state: generation 1 lease expires.
+- Workload: same worker ID reclaims to generation 2; old process renews version 1.
+- Fault injection: stale process resumes.
+- Timeline: v1 -> expiry -> v2 -> stale renew.
+- Oracle: `ErrTaskNotClaimed`; v2 expiry unchanged.
+- Evidence: PostgreSQL integration test.
+- Acceptance criteria: stale update affects zero rows.
+- Seed: `stale-renew`.
+- Current result: [TEST VERIFIED] real same-worker stale-renew integration oracle passed locally.
+- Known limitations: external effects remain outside fencing.

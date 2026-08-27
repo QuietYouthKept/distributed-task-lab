@@ -1,0 +1,14 @@
+# TL-CAP-001 — Strict queue capacity
+- Claim / Invariant: concurrent pending admission never exceeds `max_concurrency=1`.
+- Reference: `TestQueueMaxConcurrencyConcurrent`.
+- Why this matters: task-row locks alone do not protect a queue aggregate.
+- Initial state: one queue, limit 1, twelve pending tasks.
+- Workload: twelve synchronized independent claimers.
+- Fault injection: maximal overlapping admission.
+- Timeline: barrier -> claim transactions -> committed count.
+- Oracle: returned sum and DB running count are at most one.
+- Evidence: PostgreSQL integration test.
+- Acceptance criteria: no oversubscription in repeated CI runs.
+- Seed: deterministic IDs `strict-00..11`.
+- Current result: [TEST VERIFIED] required PostgreSQL integration and race suites passed locally.
+- Known limitations: proves one queue/limit value; lock algorithm generalizes.

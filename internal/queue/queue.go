@@ -51,7 +51,12 @@ type Queue interface {
 	Heartbeat(ctx context.Context, workerID string) error
 
 	// RenewLease extends the lease on a task currently owned by the worker.
-	RenewLease(ctx context.Context, taskID string, workerID string, leaseTimeout time.Duration) error
+	RenewLease(ctx context.Context, taskID string, workerID string, leaseVersion int, leaseTimeout time.Duration) error
+
+	// HealthCheck verifies that PostgreSQL is reachable and that the embedded
+	// schema version is installed. Implementations should fail closed.
+	HealthCheck(ctx context.Context) error
+	DBStats() domain.DBPoolStats
 
 	// Stats returns the number of tasks currently in each status.
 	Stats(ctx context.Context) (map[domain.TaskStatus]int64, error)

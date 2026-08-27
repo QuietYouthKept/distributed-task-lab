@@ -1,0 +1,14 @@
+# TL-SIDEFX-001 — Effect before ack
+- Claim / Invariant: execution may repeat; stable business idempotency converges effects.
+- Reference: failure-lab `effect-before-ack`.
+- Why this matters: fenced ack is not end-to-end exactly once.
+- Initial state: one task and fake external effect service.
+- Workload: effect succeeds, worker loses ack, lease expires, task re-executes.
+- Fault injection: crash between effect and `MarkSuccess`.
+- Timeline: claim/effect/crash -> reclaim/effect/ack.
+- Oracle: non-idempotent count two; idempotency-key ledger count one.
+- Evidence: deterministic failure-lab output.
+- Acceptance criteria: both truths are shown without exactly-once claims.
+- Seed: timestamp-prefixed deterministic scenario ID.
+- Current result: [TEST VERIFIED] PostgreSQL failure lab observed two executions and one converged business effect.
+- Known limitations: fake service models the boundary rather than a vendor API.

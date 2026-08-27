@@ -41,3 +41,10 @@ coverage
 coverage.out
 coverage.html
 
+# Local study snapshots and extracted reference material are deliberately not
+# part of the public release surface. They remain available in this checkout.
+Round*/
+tmp/
+02-distributed-task-lab-mastery-guide.md
+pack_rounds.sh
+reasonix.toml

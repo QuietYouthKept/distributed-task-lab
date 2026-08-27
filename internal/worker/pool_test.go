@@ -26,6 +26,8 @@ type fakeQueue struct {
 	lastCtxLive   bool
 	claimed       bool
 	queues        []domain.QueueConfig
+	renewCalls    int
+	renewErr      error
 }
 
 func (q *fakeQueue) ClaimTasks(ctx context.Context, workerID string, limit int, leaseTimeout time.Duration) ([]domain.Task, error) {
@@ -63,6 +65,13 @@ func (q *fakeQueue) MarkSuccess(ctx context.Context, taskID, workerID string, le
 }
 
 func (q *fakeQueue) Heartbeat(ctx context.Context, workerID string) error { return nil }
+
+func (q *fakeQueue) RenewLease(ctx context.Context, taskID, workerID string, leaseVersion int, leaseTimeout time.Duration) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.renewCalls++
+	return q.renewErr
+}
 
 func (q *fakeQueue) ListQueues(ctx context.Context) ([]domain.QueueConfig, error) {
 	return q.queues, nil
@@ -133,4 +142,105 @@ func TestPoolGracefulShutdown(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("Stop() did not return within 3s")
 	}
+}
+
+type delayedSuccessHandler struct{ delay time.Duration }
+
+func (h delayedSuccessHandler) Handle(ctx context.Context, _ string, _ map[string]any, _ int) (*TaskExecResult, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(h.delay):
+		return &TaskExecResult{Summary: "done"}, nil
+	}
+}
+
+func TestPoolRenewsLeaseDuringLongHandler(t *testing.T) {
+	q := &fakeQueue{}
+	p := NewPool(q, "worker-1", 1, 5*time.Millisecond, 90*time.Millisecond, 1, delayedSuccessHandler{220 * time.Millisecond}, discardLogger())
+	p.Start()
+	t.Cleanup(p.Stop)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		q.mu.Lock()
+		done, renews := q.markSuccesses, q.renewCalls
+		q.mu.Unlock()
+		if done == 1 {
+			if renews < 2 {
+				t.Fatalf("renew calls = %d, want at least 2", renews)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("long handler did not complete")
+}
+
+func TestPoolOwnershipLossCancelsAndDoesNotAck(t *testing.T) {
+	q := &fakeQueue{renewErr: domain.ErrTaskNotClaimed}
+	p := NewPool(q, "worker-1", 1, 5*time.Millisecond, 60*time.Millisecond, 1, blockingHandler{}, discardLogger())
+	p.Start()
+	t.Cleanup(p.Stop)
+	time.Sleep(150 * time.Millisecond)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.renewCalls == 0 {
+		t.Fatal("expected lease renewal")
+	}
+	if q.markSuccesses != 0 || q.markFailures != 0 {
+		t.Fatalf("stale execution acked: success=%d failure=%d", q.markSuccesses, q.markFailures)
+	}
+}
+
+type cancellationRaceQueue struct {
+	*fakeQueue
+	renewEntered chan struct{}
+	once         sync.Once
+}
+
+func (q *cancellationRaceQueue) RenewLease(ctx context.Context, taskID, workerID string, leaseVersion int, leaseTimeout time.Duration) error {
+	q.mu.Lock()
+	q.renewCalls++
+	q.mu.Unlock()
+	q.once.Do(func() { close(q.renewEntered) })
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+type finishDuringRenewHandler struct{ renewEntered <-chan struct{} }
+
+func (h finishDuringRenewHandler) Handle(ctx context.Context, _ string, _ map[string]any, _ int) (*TaskExecResult, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-h.renewEntered:
+		return &TaskExecResult{Summary: "completed while renewal was in flight"}, nil
+	}
+}
+
+// TestPoolLocalRenewCancellationDoesNotDiscardResult is the deterministic
+// regression for the Docker-discovered race where handler completion cancels
+// an in-flight renewal SQL call. That local cancellation is not lease loss.
+func TestPoolLocalRenewCancellationDoesNotDiscardResult(t *testing.T) {
+	entered := make(chan struct{})
+	q := &cancellationRaceQueue{fakeQueue: &fakeQueue{}, renewEntered: entered}
+	p := NewPool(q, "worker-1", 1, 5*time.Millisecond, 60*time.Millisecond, 1, finishDuringRenewHandler{entered}, discardLogger())
+	p.Start()
+	t.Cleanup(p.Stop)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		q.mu.Lock()
+		successes, failures := q.markSuccesses, q.markFailures
+		q.mu.Unlock()
+		if successes == 1 {
+			if failures != 0 {
+				t.Fatalf("unexpected failures=%d", failures)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("result was discarded when local renewal cancellation raced completion")
 }

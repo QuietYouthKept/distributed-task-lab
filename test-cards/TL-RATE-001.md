@@ -1,0 +1,14 @@
+# TL-RATE-001 — Stable rate config refresh
+- Claim / Invariant: writing unchanged queue config does not restore burst tokens.
+- Reference: `TestGlobalQueueRateLimitAcrossWorkersAndStableRefresh`.
+- Why this matters: periodic refresh must not bypass rate history.
+- Initial state: 5/s, burst 1; first token consumed.
+- Workload: same config write and immediate claim.
+- Fault injection: refresh immediately after consumption.
+- Timeline: consume -> refresh -> immediate claim -> refill delay.
+- Oracle: immediate claim denied; delayed claim admitted.
+- Evidence: PostgreSQL integration test.
+- Acceptance criteria: shared token/timestamp preserved on equal config.
+- Seed: `global-rate`.
+- Current result: [TEST VERIFIED] stable-refresh PostgreSQL integration oracle passed locally.
+- Known limitations: tolerance depends on real elapsed DB time.

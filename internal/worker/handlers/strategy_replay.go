@@ -40,6 +40,20 @@ func (h *StrategyReplay) Run(ctx context.Context, payload map[string]any) (*work
 	if proposalID == "" {
 		return nil, worker.NewNonRetryableError(fmt.Errorf("proposal_id is required"), domain.ErrorTypeBadPayload)
 	}
+	if getString(payload, "job_schema_version", "") != replayJobSchemaVersion {
+		return nil, worker.NewNonRetryableError(fmt.Errorf("unsupported job_schema_version"), domain.ErrorTypeBadPayload)
+	}
+	resultSchemaVersion := getString(payload, "replay_result_schema_version", "")
+	if resultSchemaVersion != replayJobSchemaVersion {
+		return nil, worker.NewNonRetryableError(fmt.Errorf("unsupported replay_result_schema_version"), domain.ErrorTypeBadPayload)
+	}
+	if getString(payload, "simulator_version", "") != replaySimulatorVersion {
+		return nil, worker.NewNonRetryableError(fmt.Errorf("unsupported simulator_version"), domain.ErrorTypeBadPayload)
+	}
+	executionFingerprint := getString(payload, "execution_fingerprint", "")
+	if executionFingerprint == "" {
+		return nil, worker.NewNonRetryableError(fmt.Errorf("execution_fingerprint is required"), domain.ErrorTypeBadPayload)
+	}
 
 	candidateCfg := getMap(payload, "candidate_config")
 	if candidateCfg == nil {
@@ -113,25 +127,27 @@ func (h *StrategyReplay) Run(ctx context.Context, payload map[string]any) (*work
 	}
 
 	result := map[string]any{
-		"job_schema_version":      replayJobSchemaVersion,
-		"proposal_id":             proposalID,
-		"proposal_version":        getInt(payload, "proposal_version", 1),
-		"strategy_key":            getString(payload, "strategy_key", ""),
-		"scenario_set":            getString(payload, "scenario_set", "default"),
-		"scenario_set_version":    getString(payload, "scenario_set_version", "v1"),
-		"simulator_version":       replaySimulatorVersion,
-		"policy_version":          getString(payload, "policy_version", "v1"),
-		"seed":                    seed,
-		"case_count":              caseCount,
-		"total_cases":             caseCount,
-		"passed":                  passed,
-		"failed":                  failed,
-		"guardrail_violations":    violations,
-		"risk_summary":            risk,
-		"result_status":           resultStatus,
-		"representative_failures": failures,
-		"started_at":              startedAt.Format(time.RFC3339Nano),
-		"completed_at":            time.Now().UTC().Format(time.RFC3339Nano),
+		"job_schema_version":           replayJobSchemaVersion,
+		"replay_result_schema_version": resultSchemaVersion,
+		"proposal_id":                  proposalID,
+		"proposal_version":             getInt(payload, "proposal_version", 1),
+		"strategy_key":                 getString(payload, "strategy_key", ""),
+		"scenario_set":                 getString(payload, "scenario_set", "default"),
+		"scenario_set_version":         getString(payload, "scenario_set_version", "v1"),
+		"simulator_version":            replaySimulatorVersion,
+		"policy_version":               getString(payload, "policy_version", "v1"),
+		"seed":                         seed,
+		"case_count":                   caseCount,
+		"execution_fingerprint":        executionFingerprint,
+		"total_cases":                  caseCount,
+		"passed":                       passed,
+		"failed":                       failed,
+		"guardrail_violations":         violations,
+		"risk_summary":                 risk,
+		"result_status":                resultStatus,
+		"representative_failures":      failures,
+		"started_at":                   startedAt.Format(time.RFC3339Nano),
+		"completed_at":                 time.Now().UTC().Format(time.RFC3339Nano),
 	}
 
 	resultJSON, err := json.Marshal(result)

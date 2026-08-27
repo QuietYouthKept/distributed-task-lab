@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # GOPROXY is a build arg so China users can use a mirror:
 #   docker compose build --build-arg GOPROXY=https://goproxy.cn,direct
@@ -13,7 +13,10 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /api ./cmd/api
 
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates
-COPY --from=builder /api /api
+RUN apk add --no-cache ca-certificates \
+    && addgroup -S tasklab \
+    && adduser -S -G tasklab -h /app tasklab
+COPY --from=builder --chown=tasklab:tasklab /api /api
+USER tasklab
 EXPOSE 8080
 CMD ["/api"]

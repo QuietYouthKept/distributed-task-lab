@@ -11,19 +11,21 @@ import (
 
 func replayPayload(candidateRatio float64, caseCount int) map[string]any {
 	return map[string]any{
-		"job_schema_version":   "1",
-		"proposal_id":          "p-123",
-		"proposal_version":     1,
-		"strategy_key":         "new_user_feed_exploration",
-		"baseline_config":      map[string]any{"exploration_ratio": 0.15},
-		"candidate_config":     map[string]any{"exploration_ratio": candidateRatio},
-		"scenario_set":         "default",
-		"scenario_set_version": "v1",
-		"simulator_version":    "go-v1",
-		"policy_version":       "v1",
-		"seed":                 42,
-		"case_count":           caseCount,
-		"guardrail_config":     map[string]any{"negative_feedback_delta": 0.02},
+		"job_schema_version":           "1",
+		"replay_result_schema_version": "1",
+		"proposal_id":                  "p-123",
+		"proposal_version":             1,
+		"strategy_key":                 "new_user_feed_exploration",
+		"baseline_config":              map[string]any{"exploration_ratio": 0.15},
+		"candidate_config":             map[string]any{"exploration_ratio": candidateRatio},
+		"scenario_set":                 "default",
+		"scenario_set_version":         "v1",
+		"simulator_version":            "go-v1",
+		"policy_version":               "v1",
+		"seed":                         42,
+		"case_count":                   caseCount,
+		"guardrail_config":             map[string]any{"negative_feedback_delta": 0.02},
+		"execution_fingerprint":        "abc123",
 	}
 }
 
@@ -115,6 +117,7 @@ func TestStrategyReplayResultSelfContained(t *testing.T) {
 		"proposal_id", "proposal_version", "scenario_set_version",
 		"simulator_version", "policy_version", "seed", "case_count",
 		"total_cases", "passed", "failed", "risk_summary", "result_status",
+		"replay_result_schema_version", "execution_fingerprint",
 	} {
 		if _, ok := m[k]; !ok {
 			t.Fatalf("missing field %s in self-contained result", k)

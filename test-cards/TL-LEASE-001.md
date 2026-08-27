@@ -1,0 +1,14 @@
+# TL-LEASE-001 — Long-handler renewal
+- Claim / Invariant: an owned task renews before lease expiry until handler completion.
+- Reference: `TestPoolRenewsLeaseDuringLongHandler`.
+- Why this matters: long handlers otherwise execute under stale ownership.
+- Initial state: 90ms lease and 220ms cooperative handler.
+- Workload: one worker executes one task.
+- Fault injection: execution longer than original lease.
+- Timeline: claim -> repeated renew -> success ack -> renewal stop.
+- Oracle: at least two renewals and exactly one success ack.
+- Evidence: worker unit test with deterministic queue fake.
+- Acceptance criteria: test and race detector pass.
+- Seed: fixed task `task-1`.
+- Current result: [TEST VERIFIED] passed locally.
+- Known limitations: PostgreSQL renewal SQL is covered separately.

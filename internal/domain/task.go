@@ -27,6 +27,9 @@ type Task struct {
 	LeasedBy       *string    `json:"leased_by,omitempty"`
 	LeaseExpiresAt *time.Time `json:"lease_expires_at,omitempty"`
 	LeaseVersion   int        `json:"lease_version"` // fencing token, incremented on each claim
+	// ClaimReason is transient delivery metadata populated by ClaimTasks. It is
+	// deliberately not persisted or returned by the task API.
+	ClaimReason string `json:"-"`
 
 	NextRunAt  time.Time  `json:"next_run_at"`
 	CreatedAt  time.Time  `json:"created_at"`

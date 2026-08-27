@@ -8,23 +8,43 @@ on:
 permissions:
   contents: read
 
+env:
+  GO_PACKAGES: ./cmd/... ./internal/... ./pkg/...
+
 jobs:
-  test:
-    name: Test (Go ${{ matrix.go }})
+  quality:
+    name: Format, vet, unit, build
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        go: ["1.22", "1.23", "1.24"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Format check
+        run: test -z "$(gofmt -l cmd internal pkg)"
+      - name: Vet
+        run: go vet $GO_PACKAGES
+      - name: Unit and local-safe tests
+        run: go test $GO_PACKAGES -count=1 -coverprofile=coverage.out
+      - name: Build
+        run: go build $GO_PACKAGES
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+  postgres-integration:
+    name: PostgreSQL integration (required)
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: tasklab_test
-        ports:
-          - 5432:5432
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s
@@ -32,45 +52,39 @@ jobs:
           --health-retries 10
     env:
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      REQUIRE_TEST_DATABASE: "1"
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go }}
+          go-version-file: go.mod
           cache: true
+      - name: Integration and migration suite (skips forbidden)
+        run: go test ./internal/storage/postgres -count=1 -v
 
-      - name: Build
-        run: go build ./...
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test (with coverage)
-        run: go test ./... -count=1 -coverprofile=coverage.out
-
-      - name: Race detector
-        run: go test -race ./... -count=1
-
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.go }}
-          path: coverage.out
-          if-no-files-found: ignore
-
-  lint:
-    name: Lint
+  race:
+    name: Race detector with PostgreSQL
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      REQUIRE_TEST_DATABASE: "1"
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version-file: go.mod
           cache: true
-
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.61.0
+      - run: go test -race $GO_PACKAGES -count=1

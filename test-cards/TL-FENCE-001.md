@@ -1,0 +1,14 @@
+# TL-FENCE-001 — Stale generation completion
+- Claim / Invariant: an earlier lease version cannot change current task state.
+- Reference: `TestMarkSuccessStaleLeaseVersion` and failure-lab same-worker scenario.
+- Why this matters: zombie workers may resume after reclaim.
+- Initial state: running task with a later fencing generation.
+- Workload: stale success/failure/renew operations.
+- Fault injection: old process resumes.
+- Timeline: v1 -> expiry -> v2 -> v1 write.
+- Oracle: zero rows and `ErrTaskNotClaimed`; v2 remains authoritative.
+- Evidence: unit predicate checks plus PostgreSQL integration/failure lab.
+- Acceptance criteria: every ownership mutation requires all three credentials.
+- Seed: deterministic task IDs.
+- Current result: [TEST VERIFIED] PostgreSQL stale-generation tests and failure-lab oracle passed locally.
+- Known limitations: does not roll back prior external calls.

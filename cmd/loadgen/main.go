@@ -11,7 +11,9 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
@@ -48,8 +50,21 @@ func (m *measuringQueue) ClaimTasks(ctx context.Context, workerID string, limit 
 func main() {
 	url := envStr("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/tasklab?sslmode=disable")
 	numTasks := envInt("LOADGEN_TASKS", 500)
+	profile := envStr("LOADGEN_PROFILE", "constant")
+	producers := envInt("LOADGEN_PRODUCERS", 4)
 	numWorkers := envInt("LOADGEN_WORKERS", 4)
 	concurrency := envInt("LOADGEN_CONCURRENCY", 4)
+	queueCount := envInt("LOADGEN_QUEUES", 1)
+	payloadSize := envInt("LOADGEN_PAYLOAD_SIZE", 128)
+	ratePerSecond := envInt("LOADGEN_RATE", 0)
+	duration := envDuration("LOADGEN_DURATION", 0)
+	seed := envInt("LOADGEN_SEED", 20260821)
+	producers = maxInt(1, producers)
+	queueCount = maxInt(1, queueCount)
+	payloadSize = maxInt(0, payloadSize)
+	if duration > 0 && ratePerSecond > 0 {
+		numTasks = int(duration.Seconds()) * ratePerSecond
+	}
 
 	db, err := postgres.NewDB(url)
 	if err != nil {
@@ -71,30 +86,65 @@ func main() {
 		fatal("clean tasks: %v", err)
 	}
 
-	// Submit tasks.
-	submitStart := time.Now()
-	for i := 0; i < numTasks; i++ {
-		task := &domain.Task{
-			ID:             fmt.Sprintf("loadgen-%05d", i),
-			Type:           domain.TaskTypeRAGIngestion,
-			Payload:        domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"document_id": fmt.Sprintf("doc-%d", i), "mock_duration_ms": 1}},
-			MaxAttempts:    1,
-			TimeoutSeconds: 30,
-		}
-		if _, err := q.Enqueue(ctx, task); err != nil {
-			fatal("enqueue: %v", err)
+	for i := 0; i < queueCount; i++ {
+		if err := q.SetQueueConfig(ctx, domain.QueueConfig{Name: fmt.Sprintf("loadgen-q-%d", i), Burst: 1}); err != nil {
+			fatal("queue config: %v", err)
 		}
 	}
-	submitDur := time.Since(submitStart)
 
-	// Start worker pools.
+	// Start workers before producers for steady profiles. Backlog-drain and spike
+	// intentionally build the entire backlog first.
 	handler := handlers.NewMockHandler()
 	var pools []*worker.Pool
-	for i := 0; i < numWorkers; i++ {
-		p := worker.NewPool(mq, fmt.Sprintf("loadgen-worker-%d", i), concurrency, 50*time.Millisecond, 30*time.Second, 20, handler, logger)
-		p.Start()
-		pools = append(pools, p)
+	startPools := func() {
+		if len(pools) > 0 {
+			return
+		}
+		for i := 0; i < numWorkers; i++ {
+			p := worker.NewPool(mq, fmt.Sprintf("loadgen-worker-%d", i), concurrency, 50*time.Millisecond, 30*time.Second, 20, handler, logger)
+			p.Start()
+			pools = append(pools, p)
+		}
 	}
+	if profile != "backlog-drain" && profile != "spike" {
+		startPools()
+	}
+
+	// Submit tasks with bounded producer concurrency and deterministic workload.
+	submitStart := time.Now()
+	indexes := make(chan int)
+	var submitWG sync.WaitGroup
+	var submitErrors atomic.Int64
+	for p := 0; p < producers; p++ {
+		submitWG.Add(1)
+		go func() {
+			defer submitWG.Done()
+			for i := range indexes {
+				queueName := fmt.Sprintf("loadgen-q-%d", (i+seed)%queueCount)
+				t := &domain.Task{ID: fmt.Sprintf("loadgen-%d-%06d", seed, i), Type: domain.TaskTypeRAGIngestion, Queue: queueName,
+					Payload:     domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"document_id": fmt.Sprintf("doc-%d", i), "padding": strings.Repeat("x", payloadSize), "mock_duration_ms": 1}},
+					MaxAttempts: 1, TimeoutSeconds: 30, RetryBackoffMultiplier: 2}
+				if _, err := q.Enqueue(ctx, t); err != nil {
+					submitErrors.Add(1)
+				}
+			}
+		}()
+	}
+	for i := 0; i < numTasks; i++ {
+		indexes <- i
+		if ratePerSecond > 0 && profile != "spike" && profile != "backlog-drain" {
+			interval := time.Second / time.Duration(ratePerSecond)
+			if profile == "ramp" {
+				interval = interval * time.Duration(numTasks-i) / time.Duration(maxInt(1, numTasks))
+			}
+			time.Sleep(interval)
+		}
+	}
+	close(indexes)
+	submitWG.Wait()
+	submitDur := time.Since(submitStart)
+
+	startPools()
 
 	// Wait for all tasks to reach a terminal state.
 	runStart := time.Now()
@@ -126,21 +176,56 @@ func main() {
 			duplicates++
 		}
 	}
+	oldest, _ := q.OldestPendingAge(ctx)
+	var retries, reclaims int64
+	_ = db.QueryRow(`SELECT COUNT(*) FROM task_events WHERE event_type='retried'`).Scan(&retries)
+	_ = db.QueryRow(`SELECT COUNT(*) FROM task_events WHERE event_type='claimed' AND metadata->>'claim_reason'='expired_lease'`).Scan(&reclaims)
 
 	fmt.Println("")
 	fmt.Println("================ loadgen report ================")
 	fmt.Printf("tasks submitted   : %d\n", numTasks)
+	fmt.Printf("profile/seed      : %s / %d\n", profile, seed)
+	fmt.Printf("producers/queues  : %d / %d\n", producers, queueCount)
+	fmt.Printf("payload bytes     : %d\n", payloadSize)
 	fmt.Printf("workers           : %d (concurrency %d each)\n", numWorkers, concurrency)
 	fmt.Printf("submit time       : %s (%d/s)\n", submitDur.Round(time.Millisecond), int(float64(numTasks)/submitDur.Seconds()))
 	fmt.Printf("processing time   : %s\n", runDur.Round(time.Millisecond))
 	fmt.Printf("throughput        : %d tasks/sec\n", int(float64(numTasks)/runDur.Seconds()))
 	fmt.Printf("success           : %d\n", stats[domain.TaskStatusSuccess])
 	fmt.Printf("dlq               : %d\n", stats[domain.TaskStatusDLQ])
+	fmt.Printf("submission errors : %d (%.3f%%)\n", submitErrors.Load(), 100*float64(submitErrors.Load())/float64(maxInt(1, numTasks)))
+	fmt.Printf("oldest queue age  : %s\n", oldest.Round(time.Millisecond))
+	fmt.Printf("retries/reclaims  : %d / %d\n", retries, reclaims)
 	fmt.Printf("claim latency p50 : %s\n", percentile(mq.latencies, 0.50).Round(time.Millisecond))
 	fmt.Printf("claim latency p95 : %s\n", percentile(mq.latencies, 0.95).Round(time.Millisecond))
 	fmt.Printf("claim latency p99 : %s\n", percentile(mq.latencies, 0.99).Round(time.Millisecond))
 	fmt.Printf("duplicate claims  : %d\n", duplicates)
 	fmt.Println("================================================")
+	if submitErrors.Load() != 0 {
+		fatal("invalid run: %d task submissions failed", submitErrors.Load())
+	}
+	if duplicates != 0 {
+		fatal("correctness oracle failed: %d task IDs were claimed more than once", duplicates)
+	}
+	if stats[domain.TaskStatusSuccess] != int64(numTasks) {
+		fatal("invalid run: success=%d, want %d", stats[domain.TaskStatusSuccess], numTasks)
+	}
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func envDuration(k string, fallback time.Duration) time.Duration {
+	if v := os.Getenv(k); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	return fallback
 }
 
 // percentile returns the p-th percentile of the claim latencies.

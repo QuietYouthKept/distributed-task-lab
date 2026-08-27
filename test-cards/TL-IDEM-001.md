@@ -1,0 +1,14 @@
+# TL-IDEM-001 — Concurrent enqueue idempotency
+- Claim / Invariant: 32 same-key callers converge on one task and submitted event.
+- Reference: `TestConcurrentEnqueueIdempotency`.
+- Why this matters: unique keys must cover concurrent, not only sequential, callers.
+- Initial state: empty database.
+- Workload: synchronized callers with distinct task IDs and one key.
+- Fault injection: unique-index conflict race.
+- Timeline: barrier -> inserts/conflicts -> canonical lookup.
+- Oracle: one task, one submitted event, one returned ID.
+- Evidence: PostgreSQL integration test.
+- Acceptance criteria: all callers succeed and agree.
+- Seed: `shared-idempotency`.
+- Current result: [TEST VERIFIED] 32-caller PostgreSQL integration and failure-lab oracles passed locally.
+- Known limitations: proves enqueue identity, not handler exactly once.

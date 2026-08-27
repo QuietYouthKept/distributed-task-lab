@@ -1,0 +1,14 @@
+# TL-RATE-002 — Cluster-global queue rate
+- Claim / Invariant: replicas share one queue token bucket.
+- Reference: `TestGlobalQueueRateLimitAcrossWorkersAndStableRefresh` and failure lab.
+- Why this matters: per-process buckets multiply configured rate by replica count.
+- Initial state: two workers, burst 1, two pending tasks.
+- Workload: simultaneous claims.
+- Fault injection: replica concurrency.
+- Timeline: both lock candidates -> serialized queue token decision.
+- Oracle: combined immediate claims equal one.
+- Evidence: PostgreSQL integration test.
+- Acceptance criteria: one shared burst across workers.
+- Seed: deterministic worker/task IDs.
+- Current result: [TEST VERIFIED] two-replica integration and failure-lab oracles passed locally.
+- Known limitations: measures claim admission, not handler completion timestamps.

@@ -117,9 +117,12 @@ func (q *RedisQueue) Heartbeat(ctx context.Context, workerID string) error {
 }
 
 // RenewLease updates lease_expires_at in the task hash (with Lua for atomicity).
-func (q *RedisQueue) RenewLease(ctx context.Context, taskID string, workerID string, leaseTimeout time.Duration) error {
+func (q *RedisQueue) RenewLease(ctx context.Context, taskID string, workerID string, leaseVersion int, leaseTimeout time.Duration) error {
 	return domain.ErrNotImplemented
 }
+
+func (q *RedisQueue) HealthCheck(ctx context.Context) error { return domain.ErrNotImplemented }
+func (q *RedisQueue) DBStats() domain.DBPoolStats           { return domain.DBPoolStats{} }
 
 // Stats returns task counts by status. Redis can compute this via a SCAN of
 // task:* keys, but it is O(n); a real implementation would maintain counters.

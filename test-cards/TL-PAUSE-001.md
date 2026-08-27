@@ -1,0 +1,14 @@
+# TL-PAUSE-001 — Queue pause semantics
+- Claim / Invariant: pause blocks new claims and resume restores admission.
+- Reference: `TestQueuePausePreventsClaim`.
+- Why this matters: operators need a lossless emergency brake.
+- Initial state: one pending task in a named queue.
+- Workload: pause, claim, resume, claim.
+- Fault injection: policy change concurrent with polling.
+- Timeline: pending -> paused/no claim -> resumed/claim.
+- Oracle: zero then one returned task.
+- Evidence: PostgreSQL integration test.
+- Acceptance criteria: running work is not forcibly cancelled.
+- Seed: `test-pause-001`.
+- Current result: [TEST VERIFIED] integration linearization and failure-lab pause oracles passed locally.
+- Known limitations: already-running tasks intentionally continue.

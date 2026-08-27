@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func benchQueue(b *testing.B) *PostgresQueue {
 }
 
 // BenchmarkEnqueue measures single-task enqueue throughput (idempotent insert).
-func BenchmarkEnqueue(b *testing.B) {
+func BenchmarkEnqueueSequential(b *testing.B) {
 	q := benchQueue(b)
 	ctx := context.Background()
 
@@ -44,9 +45,92 @@ func BenchmarkEnqueue(b *testing.B) {
 	}
 }
 
+func BenchmarkEnqueueParallel(b *testing.B) {
+	q := benchQueue(b)
+	var n atomic.Int64
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			i := n.Add(1)
+			if _, err := q.Enqueue(context.Background(), newTask(fmt.Sprintf("bench-par-%d", i), 3)); err != nil {
+				b.Errorf("enqueue: %v", err)
+				return
+			}
+		}
+	})
+}
+
+func BenchmarkEnqueueIdempotencyConflict(b *testing.B) {
+	q := benchQueue(b)
+	ctx := context.Background()
+	key := "bench-conflict"
+	base := newTask("bench-conflict-canonical", 3)
+	base.IdempotencyKey = &key
+	if _, err := q.Enqueue(ctx, base); err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		t := newTask(fmt.Sprintf("bench-conflict-%d", i), 3)
+		t.IdempotencyKey = &key
+		if _, err := q.Enqueue(ctx, t); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkClaimSameQueue(b *testing.B) {
+	q := benchQueue(b)
+	ctx := context.Background()
+	name := "bench-same"
+	_ = q.SetQueueConfig(ctx, domain.QueueConfig{Name: name, Burst: 1})
+	for i := 0; i < b.N; i++ {
+		t := newTask(fmt.Sprintf("bench-same-%d", i), 1)
+		t.Queue = name
+		if _, err := q.Enqueue(ctx, t); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		got, err := q.ClaimTasks(ctx, "bench", 1, time.Minute)
+		if err != nil || len(got) != 1 {
+			b.Fatalf("claim n=%d err=%v", len(got), err)
+		}
+		if err := q.MarkSuccess(ctx, got[0].ID, "bench", got[0].LeaseVersion, domain.TaskResult{}); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkClaimMultipleQueues(b *testing.B) {
+	q := benchQueue(b)
+	ctx := context.Background()
+	for _, name := range []string{"bench-a", "bench-b", "bench-c", "bench-d"} {
+		_ = q.SetQueueConfig(ctx, domain.QueueConfig{Name: name, Burst: 1})
+	}
+	for i := 0; i < b.N; i++ {
+		t := newTask(fmt.Sprintf("bench-multi-%d", i), 1)
+		t.Queue = fmt.Sprintf("bench-%c", 'a'+rune(i%4))
+		if _, err := q.Enqueue(ctx, t); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		got, err := q.ClaimTasks(ctx, "bench", 1, time.Minute)
+		if err != nil || len(got) != 1 {
+			b.Fatalf("claim n=%d err=%v", len(got), err)
+		}
+		if err := q.MarkSuccess(ctx, got[0].ID, "bench", got[0].LeaseVersion, domain.TaskResult{}); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 // BenchmarkTaskLifecycle measures the full enqueue -> claim -> success cycle,
 // i.e. the end-to-end cost of processing one task.
-func BenchmarkTaskLifecycle(b *testing.B) {
+func BenchmarkTaskLifecycleRepository(b *testing.B) {
 	q := benchQueue(b)
 	ctx := context.Background()
 

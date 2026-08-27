@@ -1,0 +1,14 @@
+# TL-CLOCK-001 — Database lease clock
+- Claim / Invariant: lease expiry is based on PostgreSQL time, not worker wall clock.
+- Reference: `TestLeaseUsesDatabaseClockAuthority`.
+- Why this matters: host skew must not cause premature or long ownership.
+- Initial state: due pending task.
+- Workload: claim with a two-second lease.
+- Fault injection: application time is not supplied to the claim SQL.
+- Timeline: DB clock read/update -> DB delta measurement.
+- Oracle: database-observed expiry delta is approximately two seconds.
+- Evidence: PostgreSQL integration test and SQL inspection.
+- Acceptance criteria: delta remains in the bounded tolerance.
+- Seed: `db-clock`.
+- Current result: [TEST VERIFIED] database-clock integration oracle passed locally.
+- Known limitations: handler deadlines still use local monotonic time by design.

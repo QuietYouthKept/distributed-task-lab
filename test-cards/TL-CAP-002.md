@@ -1,0 +1,14 @@
+# TL-CAP-002 — Reclaim at capacity
+- Claim / Invariant: expired-running replacement consumes no additional slot.
+- Reference: `TestExpiredRunningReclaimIgnoresCapacity`.
+- Why this matters: otherwise a full queue can never recover its expired owner.
+- Initial state: max concurrency 1; one expired running task.
+- Workload: another worker claims.
+- Fault injection: original lease expiry.
+- Timeline: pending -> generation 1 -> expiry -> generation 2.
+- Oracle: one running row; attempt/version advance; worker changes.
+- Evidence: PostgreSQL integration test.
+- Acceptance criteria: reclaim succeeds while DB running count remains one.
+- Seed: `expired-at-capacity`.
+- Current result: [TEST VERIFIED] required PostgreSQL integration suite passed locally.
+- Known limitations: does not simulate network partitions outside ownership fencing.

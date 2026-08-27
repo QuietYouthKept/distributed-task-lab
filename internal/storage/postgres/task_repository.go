@@ -5,12 +5,18 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"github.com/fantasticyi/distributed-task-lab/internal/queue"
+	"github.com/lib/pq"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Ensure PostgresQueue implements queue.Queue.
@@ -18,12 +24,28 @@ var _ queue.Queue = (*PostgresQueue)(nil)
 
 // PostgresQueue implements queue.Queue using PostgreSQL.
 type PostgresQueue struct {
-	db *sql.DB
+	db               *sql.DB
+	operationTimeout time.Duration
 }
 
 // NewPostgresQueue creates a new PostgreSQL-backed queue.
 func NewPostgresQueue(db *sql.DB) *PostgresQueue {
-	return &PostgresQueue{db: db}
+	return &PostgresQueue{db: db, operationTimeout: 10 * time.Second}
+}
+
+func NewPostgresQueueWithTimeout(db *sql.DB, operationTimeout time.Duration) *PostgresQueue {
+	q := NewPostgresQueue(db)
+	if operationTimeout > 0 {
+		q.operationTimeout = operationTimeout
+	}
+	return q
+}
+
+func (q *PostgresQueue) operationContext(parent context.Context) (context.Context, context.CancelFunc) {
+	if q.operationTimeout <= 0 {
+		return context.WithCancel(parent)
+	}
+	return context.WithTimeout(parent, q.operationTimeout)
 }
 
 // taskColumns is the canonical column list used by every SELECT.
@@ -42,21 +64,21 @@ func taskColumnsAliased(alias string) string {
 // idempotency_key: if a task with the same key already exists, that task is
 // returned instead of inserting a duplicate.
 func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain.Task, error) {
+	ctx, span := otel.Tracer("distributed-task-lab/postgres").Start(ctx, "task.enqueue",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(attribute.String("task.type", string(task.Type)), attribute.String("queue", task.Queue)))
+	defer span.End()
+	ctx, cancel := q.operationContext(ctx)
+	defer cancel()
 	payloadJSON, err := json.Marshal(task.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("enqueue: marshal payload: %w", err)
 	}
 
-	now := time.Now().UTC()
 	task.Status = domain.TaskStatusPending
-	task.CreatedAt = now
-	task.UpdatedAt = now
 	task.Attempt = 0
 	if task.Queue == "" {
 		task.Queue = domain.DefaultQueueName
-	}
-	if task.NextRunAt.IsZero() {
-		task.NextRunAt = now
 	}
 
 	tx, err := q.db.BeginTx(ctx, nil)
@@ -64,6 +86,18 @@ func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain
 		return nil, fmt.Errorf("enqueue: begin tx: %w", err)
 	}
 	defer tx.Rollback()
+
+	// Queue rows are the referential-integrity and governance authority. Queues
+	// are created transactionally on first use so a task can never become an
+	// unclaimable orphan.
+	if _, err := tx.ExecContext(ctx, `INSERT INTO queues (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, task.Queue); err != nil {
+		return nil, fmt.Errorf("enqueue: ensure queue: %w", err)
+	}
+
+	var nextRunAt any
+	if !task.NextRunAt.IsZero() {
+		nextRunAt = task.NextRunAt
+	}
 
 	var insertedID string
 	err = tx.QueryRowContext(ctx, `
@@ -76,21 +110,22 @@ func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10,
 			$11, $12, $13,
-			$14, $15, $16, $17
+			COALESCE($14::timestamptz, clock_timestamp()), clock_timestamp(), clock_timestamp(), $15
 		)
 		ON CONFLICT (idempotency_key) DO NOTHING
-		RETURNING id
+		RETURNING id, status, attempt, next_run_at, created_at, updated_at
 	`,
 		task.ID, string(task.Type), task.Queue, string(task.Status), payloadJSON, task.Priority,
 		task.MaxAttempts, task.Attempt, task.TimeoutSeconds, task.RetryDelaySeconds,
 		task.RetryMaxDelaySeconds, task.RetryBackoffMultiplier, task.RetryJitter,
-		task.NextRunAt, task.CreatedAt, task.UpdatedAt, task.IdempotencyKey,
-	).Scan(&insertedID)
+		nextRunAt, task.IdempotencyKey,
+	).Scan(&insertedID, &task.Status, &task.Attempt, &task.NextRunAt, &task.CreatedAt, &task.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		if task.IdempotencyKey == nil {
 			return nil, fmt.Errorf("enqueue: conflict without idempotency key")
 		}
+		_ = tx.Rollback()
 		return q.getTaskByIdempotencyKey(ctx, *task.IdempotencyKey)
 	}
 	if err != nil {
@@ -171,32 +206,141 @@ func (q *PostgresQueue) ListTasks(ctx context.Context, filter domain.TaskFilter)
 // row-level locking (FOR UPDATE SKIP LOCKED). Each claim increments the
 // lease_version fencing token so stale workers cannot write back results.
 func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit int, leaseTimeout time.Duration) ([]domain.Task, error) {
+	ctx, span := otel.Tracer("distributed-task-lab/postgres").Start(ctx, "claim.transaction",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(attribute.String("worker_id", workerID), attribute.Int("claim.limit", limit)))
+	defer span.End()
+	ctx, cancel := q.operationContext(ctx)
+	defer cancel()
+	if limit <= 0 || leaseTimeout <= 0 {
+		return nil, nil
+	}
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("claim: begin tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	now := time.Now().UTC()
-	leaseExpires := now.Add(leaseTimeout)
+	// A hard-crashed worker cannot call MarkFailure. Terminalize an expired
+	// final attempt before reclaim selection so a crash cannot exceed max_attempts.
+	exhaustedRows, err := tx.QueryContext(ctx, `
+		UPDATE tasks
+		SET status = 'dlq',
+		    dlq_reason = 'max attempts exceeded after worker lease expiry',
+		    last_error = 'worker lease expired',
+		    finished_at = clock_timestamp(),
+		    updated_at = clock_timestamp(),
+		    leased_by = NULL,
+		    lease_expires_at = NULL
+		WHERE status = 'running'
+		  AND lease_expires_at < clock_timestamp()
+		  AND attempt >= max_attempts
+		RETURNING id
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("claim: terminalize exhausted leases: %w", err)
+	}
+	var exhaustedIDs []string
+	for exhaustedRows.Next() {
+		var id string
+		if err := exhaustedRows.Scan(&id); err != nil {
+			exhaustedRows.Close()
+			return nil, fmt.Errorf("claim: scan exhausted lease: %w", err)
+		}
+		exhaustedIDs = append(exhaustedIDs, id)
+	}
+	if err := exhaustedRows.Close(); err != nil {
+		return nil, fmt.Errorf("claim: close exhausted leases: %w", err)
+	}
+	for _, id := range exhaustedIDs {
+		if err := q.insertEvent(ctx, tx, id, domain.EventMovedToDLQ, "", "max attempts exceeded after worker lease expiry", map[string]any{"error_type": "worker_crash"}); err != nil {
+			return nil, fmt.Errorf("claim: exhausted lease event: %w", err)
+		}
+	}
+
+	type queueState struct {
+		maxConcurrency int
+		rate           float64
+		burst          int
+		tokens         float64
+		rateUpdatedAt  time.Time
+		now            time.Time
+		running        int
+		paused         bool
+	}
+
+	// Queue rows are the aggregate admission authorities. Lock eligible queue
+	// authorities before task rows and skip an authority already held by another
+	// transaction. This preserves strict per-queue admission while preventing a
+	// contended queue A from head-of-line blocking independent queue B.
+	queueRows, err := tx.QueryContext(ctx, `
+		SELECT q.name
+		FROM queues q
+		JOIN LATERAL (
+			SELECT t.status, t.priority, t.created_at
+			FROM tasks t
+			WHERE t.queue = q.name
+			  AND (
+				(t.status = 'pending' AND t.next_run_at <= clock_timestamp())
+				OR (t.status = 'running' AND t.lease_expires_at < clock_timestamp())
+			  )
+			  AND (
+				t.status = 'running' OR q.max_concurrency = 0 OR
+				(SELECT COUNT(*) FROM tasks r WHERE r.queue=q.name AND r.status='running') < q.max_concurrency
+			  )
+			  AND (
+				q.rate_limit_per_second = 0 OR
+				LEAST(q.burst::double precision,
+				  q.rate_tokens + GREATEST(0, EXTRACT(EPOCH FROM (clock_timestamp()-q.rate_updated_at))) * q.rate_limit_per_second
+				) >= 1
+			  )
+			ORDER BY CASE WHEN t.status='running' THEN 0 ELSE 1 END,
+			         t.priority DESC, t.created_at ASC
+			LIMIT 1
+		) candidate ON true
+		WHERE q.paused = false
+		ORDER BY CASE WHEN candidate.status='running' THEN 0 ELSE 1 END,
+		         candidate.priority DESC, candidate.created_at ASC, q.name ASC
+		LIMIT $1
+		FOR UPDATE OF q SKIP LOCKED
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("claim: select queue authorities: %w", err)
+	}
+	queueNames := make([]string, 0, limit)
+	for queueRows.Next() {
+		var name string
+		if err := queueRows.Scan(&name); err != nil {
+			queueRows.Close()
+			return nil, fmt.Errorf("claim: scan queue authority: %w", err)
+		}
+		queueNames = append(queueNames, name)
+	}
+	if err := queueRows.Close(); err != nil {
+		return nil, fmt.Errorf("claim: close queue authorities: %w", err)
+	}
+	if len(queueNames) == 0 {
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("claim: commit exhausted leases: %w", err)
+		}
+		return nil, nil
+	}
 
 	rows, err := tx.QueryContext(ctx, `SELECT `+taskColumnsAliased("t")+`
 		FROM tasks t
-		JOIN queues q ON q.name = t.queue
-		WHERE q.paused = false
+		WHERE t.queue = ANY($2)
 		  AND (
-			(t.status = 'pending' AND t.next_run_at <= $1)
-			OR
-			(t.status = 'running' AND t.lease_expires_at < $1)
+			(t.status = 'pending' AND t.next_run_at <= clock_timestamp())
+			OR (t.status = 'running' AND t.lease_expires_at < clock_timestamp())
 		  )
-		ORDER BY t.priority DESC, t.created_at ASC
-		LIMIT $2
+		ORDER BY CASE WHEN t.status='running' THEN 0 ELSE 1 END,
+		         t.priority DESC, t.created_at ASC
+		LIMIT $1
 		FOR UPDATE OF t SKIP LOCKED
-	`, now, limit)
+	`, limit, pq.Array(queueNames))
 	if err != nil {
-		return nil, fmt.Errorf("claim: select: %w", err)
+		return nil, fmt.Errorf("claim: select tasks: %w", err)
 	}
-	defer rows.Close()
 
 	var claimed []domain.Task
 	for rows.Next() {
@@ -209,39 +353,79 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("claim: rows: %w", err)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("claim: close rows: %w", err)
+	}
 
 	if len(claimed) == 0 {
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("claim: commit exhausted leases: %w", err)
+		}
 		return nil, nil
 	}
 
-	nowTime := time.Now().UTC()
+	sort.Strings(queueNames)
+	states := make(map[string]*queueState, len(queueNames))
+	// Queue authorities are already locked by the SKIP LOCKED query above.
+	for _, name := range queueNames {
+		s := &queueState{}
+		if err := tx.QueryRowContext(ctx, `
+			SELECT max_concurrency, rate_limit_per_second, burst,
+			       rate_tokens, rate_updated_at, clock_timestamp(), paused
+			FROM queues WHERE name = $1
+		`, name).Scan(&s.maxConcurrency, &s.rate, &s.burst, &s.tokens, &s.rateUpdatedAt, &s.now, &s.paused); err != nil {
+			return nil, fmt.Errorf("claim: lock queue %s: %w", name, err)
+		}
+		// This is intentionally a second SQL statement after the queue lock is
+		// acquired. Under READ COMMITTED it receives a fresh snapshot that sees
+		// claims committed by the previous queue-lock holder; counting inside the
+		// potentially-blocking FOR UPDATE statement could use a pre-wait snapshot
+		// and admit beyond max_concurrency.
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks WHERE queue = $1 AND status = 'running'`, name).Scan(&s.running); err != nil {
+			return nil, fmt.Errorf("claim: count running queue %s: %w", name, err)
+		}
+		if s.rate > 0 {
+			s.tokens = math.Min(float64(s.burst), s.tokens+math.Max(0, s.now.Sub(s.rateUpdatedAt).Seconds())*s.rate)
+		}
+		states[name] = s
+	}
+
 	accepted := make([]domain.Task, 0, len(claimed))
 	for i := range claimed {
-		// Enforce per-queue max concurrency. This is re-checked inside the
-		// transaction so tasks claimed earlier in this batch are counted.
-		var maxConc, running int
-		if err := tx.QueryRowContext(ctx, `
-			SELECT q.max_concurrency,
-			       (SELECT COUNT(*) FROM tasks r WHERE r.queue = q.name AND r.status = 'running')
-			FROM queues q WHERE q.name = $1
-		`, claimed[i].Queue).Scan(&maxConc, &running); err != nil {
-			return nil, fmt.Errorf("claim: queue check: %w", err)
+		if len(accepted) >= limit {
+			break
 		}
-		if maxConc > 0 && running >= maxConc {
-			continue // queue at capacity — leave the task pending
+		s := states[claimed[i].Queue]
+		if s.paused {
+			continue
+		}
+		isReclaim := claimed[i].Status == domain.TaskStatusRunning
+		// A reclaim replaces an existing ownership generation and therefore
+		// never consumes another max-concurrency slot.
+		if !isReclaim && s.maxConcurrency > 0 && s.running >= s.maxConcurrency {
+			continue
+		}
+		// Cluster-global queue rate is admitted under the same queue row lock.
+		if s.rate > 0 && s.tokens < 1 {
+			continue
+		}
+		if s.rate > 0 {
+			s.tokens--
 		}
 
-		_, err := tx.ExecContext(ctx, `
+		var leaseExpires, updatedAt time.Time
+		err := tx.QueryRowContext(ctx, `
 			UPDATE tasks
 			SET status = 'running',
 			    leased_by = $1,
-			    lease_expires_at = $2,
+			    lease_expires_at = clock_timestamp() + ($2 * interval '1 microsecond'),
 			    lease_version = lease_version + 1,
-			    started_at = COALESCE(started_at, $3),
-			    updated_at = $3,
+			    started_at = COALESCE(started_at, clock_timestamp()),
+			    updated_at = clock_timestamp(),
 			    attempt = attempt + 1
-			WHERE id = $4
-		`, workerID, leaseExpires, nowTime, claimed[i].ID)
+			WHERE id = $3
+			RETURNING lease_expires_at, updated_at
+		`, workerID, leaseTimeout.Microseconds(), claimed[i].ID).Scan(&leaseExpires, &updatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("claim: update task %s: %w", claimed[i].ID, err)
 		}
@@ -250,16 +434,39 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		claimed[i].LeasedBy = &workerID
 		claimed[i].LeaseExpiresAt = &leaseExpires
 		claimed[i].LeaseVersion++
-		claimed[i].UpdatedAt = nowTime
+		claimed[i].UpdatedAt = updatedAt
 		if claimed[i].StartedAt == nil {
-			claimed[i].StartedAt = &nowTime
+			claimed[i].StartedAt = &updatedAt
 		}
 		claimed[i].Attempt++
 
-		if err := q.insertEvent(ctx, tx, claimed[i].ID, domain.EventClaimed, workerID, "task claimed", map[string]any{"attempt": claimed[i].Attempt, "lease_version": claimed[i].LeaseVersion}); err != nil {
+		reason := "pending"
+		if isReclaim {
+			reason = "expired_lease"
+		}
+		claimed[i].ClaimReason = reason
+		span.AddEvent("task.claimed", trace.WithAttributes(
+			attribute.String("task.type", string(claimed[i].Type)),
+			attribute.String("queue", claimed[i].Queue),
+			attribute.Int("attempt", claimed[i].Attempt),
+			attribute.Int("lease_version", claimed[i].LeaseVersion),
+			attribute.String("worker_id", workerID),
+			attribute.String("claim_reason", reason),
+		))
+		if err := q.insertEvent(ctx, tx, claimed[i].ID, domain.EventClaimed, workerID, "task claimed", map[string]any{"attempt": claimed[i].Attempt, "lease_version": claimed[i].LeaseVersion, "claim_reason": reason}); err != nil {
 			return nil, fmt.Errorf("claim: event: %w", err)
 		}
 		accepted = append(accepted, claimed[i])
+		if !isReclaim {
+			s.running++
+		}
+	}
+	for name, s := range states {
+		if s.rate > 0 {
+			if _, err := tx.ExecContext(ctx, `UPDATE queues SET rate_tokens=$1, rate_updated_at=$2 WHERE name=$3`, s.tokens, s.now, name); err != nil {
+				return nil, fmt.Errorf("claim: update rate state %s: %w", name, err)
+			}
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -272,6 +479,12 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 // The lease_version fencing token must match, preventing stale workers from
 // writing results after their lease was reclaimed.
 func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID string, leaseVersion int, result domain.TaskResult) error {
+	ctx, span := otel.Tracer("distributed-task-lab/postgres").Start(ctx, "task.mark_success",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(attribute.String("task.id", taskID), attribute.String("worker_id", workerID), attribute.Int("lease_version", leaseVersion)))
+	defer span.End()
+	ctx, cancel := q.operationContext(ctx)
+	defer cancel()
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		return fmt.Errorf("mark success: marshal result: %w", err)
@@ -283,20 +496,19 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 	}
 	defer tx.Rollback()
 
-	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `
 		UPDATE tasks
 		SET status = 'success',
 		    result = $1,
-		    finished_at = $2,
-		    updated_at = $2,
+		    finished_at = clock_timestamp(),
+		    updated_at = clock_timestamp(),
 		    leased_by = NULL,
 		    lease_expires_at = NULL
-		WHERE id = $3
+		WHERE id = $2
 		  AND status = 'running'
-		  AND leased_by = $4
-		  AND lease_version = $5
-	`, resultJSON, now, taskID, workerID, leaseVersion)
+		  AND leased_by = $3
+		  AND lease_version = $4
+	`, resultJSON, taskID, workerID, leaseVersion)
 	if err != nil {
 		return fmt.Errorf("mark success: update: %w", err)
 	}
@@ -319,6 +531,12 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 // retry-with-backoff or moves the task to the DLQ, recording the event in the
 // same transaction.
 func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID string, leaseVersion int, failure domain.TaskFailure) error {
+	ctx, span := otel.Tracer("distributed-task-lab/postgres").Start(ctx, "task.mark_failure",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(attribute.String("task.id", taskID), attribute.String("worker_id", workerID), attribute.Int("lease_version", leaseVersion)))
+	defer span.End()
+	ctx, cancel := q.operationContext(ctx)
+	defer cancel()
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("mark failure: begin tx: %w", err)
@@ -341,8 +559,12 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 	if err != nil {
 		return fmt.Errorf("mark failure: get task: %w", err)
 	}
+	span.SetAttributes(attribute.Int("attempt", attempt))
 
-	now := time.Now().UTC()
+	var now time.Time
+	if err := tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
+		return fmt.Errorf("mark failure: database time: %w", err)
+	}
 
 	// Non-retryable failures go straight to the DLQ regardless of attempts left.
 	if !failure.Retryable {
@@ -459,14 +681,14 @@ func (q *PostgresQueue) QueueDepth(ctx context.Context) (map[string]map[domain.T
 
 // OldestPendingAge returns the age of the oldest pending task (0 if none).
 func (q *PostgresQueue) OldestPendingAge(ctx context.Context) (time.Duration, error) {
-	var oldest sql.NullTime
-	if err := q.db.QueryRowContext(ctx, `SELECT MIN(next_run_at) FROM tasks WHERE status = 'pending'`).Scan(&oldest); err != nil {
+	var ageSeconds sql.NullFloat64
+	if err := q.db.QueryRowContext(ctx, `SELECT EXTRACT(EPOCH FROM (clock_timestamp() - MIN(next_run_at))) FROM tasks WHERE status = 'pending'`).Scan(&ageSeconds); err != nil {
 		return 0, fmt.Errorf("oldest pending age: %w", err)
 	}
-	if !oldest.Valid {
+	if !ageSeconds.Valid {
 		return 0, nil
 	}
-	age := time.Since(oldest.Time)
+	age := time.Duration(ageSeconds.Float64 * float64(time.Second))
 	if age < 0 {
 		age = 0
 	}
@@ -475,7 +697,7 @@ func (q *PostgresQueue) OldestPendingAge(ctx context.Context) (time.Duration, er
 
 // PauseQueue pauses a queue so workers stop claiming its tasks.
 func (q *PostgresQueue) PauseQueue(ctx context.Context, name string) error {
-	res, err := q.db.ExecContext(ctx, `UPDATE queues SET paused = true, updated_at = $1 WHERE name = $2`, time.Now().UTC(), name)
+	res, err := q.db.ExecContext(ctx, `UPDATE queues SET paused = true, updated_at = clock_timestamp() WHERE name = $1`, name)
 	if err != nil {
 		return fmt.Errorf("pause queue: %w", err)
 	}
@@ -487,7 +709,7 @@ func (q *PostgresQueue) PauseQueue(ctx context.Context, name string) error {
 
 // ResumeQueue resumes a paused queue.
 func (q *PostgresQueue) ResumeQueue(ctx context.Context, name string) error {
-	res, err := q.db.ExecContext(ctx, `UPDATE queues SET paused = false, updated_at = $1 WHERE name = $2`, time.Now().UTC(), name)
+	res, err := q.db.ExecContext(ctx, `UPDATE queues SET paused = false, updated_at = clock_timestamp() WHERE name = $1`, name)
 	if err != nil {
 		return fmt.Errorf("resume queue: %w", err)
 	}
@@ -519,12 +741,34 @@ func (q *PostgresQueue) ListQueues(ctx context.Context) ([]domain.QueueConfig, e
 // SetQueueConfig upserts a queue's max concurrency and rate limit. It does not
 // change the paused flag (use PauseQueue/ResumeQueue for that).
 func (q *PostgresQueue) SetQueueConfig(ctx context.Context, config domain.QueueConfig) error {
+	ctx, cancel := q.operationContext(ctx)
+	defer cancel()
+	if config.Name == "" || len(config.Name) > 128 {
+		return fmt.Errorf("set queue config: invalid queue name")
+	}
+	if config.MaxConcurrency < 0 || config.RateLimitPerSecond < 0 {
+		return fmt.Errorf("set queue config: negative limits are invalid")
+	}
+	if config.Burst <= 0 {
+		config.Burst = 1
+	}
 	_, err := q.db.ExecContext(ctx, `
-		INSERT INTO queues (name, max_concurrency, rate_limit_per_second, burst, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO queues (name, max_concurrency, rate_limit_per_second, burst, rate_tokens, rate_updated_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, clock_timestamp(), clock_timestamp())
 		ON CONFLICT (name) DO UPDATE
-		SET max_concurrency = $2, rate_limit_per_second = $3, burst = $4, updated_at = $5
-	`, config.Name, config.MaxConcurrency, config.RateLimitPerSecond, config.Burst, time.Now().UTC())
+		SET max_concurrency = $2,
+		    rate_limit_per_second = $3,
+		    burst = $4,
+		    rate_tokens = CASE
+		      WHEN queues.rate_limit_per_second = $3 AND queues.burst = $4 THEN queues.rate_tokens
+		      ELSE LEAST(queues.rate_tokens, $5)
+		    END,
+		    rate_updated_at = CASE
+		      WHEN queues.rate_limit_per_second = $3 AND queues.burst = $4 THEN queues.rate_updated_at
+		      ELSE clock_timestamp()
+		    END,
+		    updated_at = clock_timestamp()
+	`, config.Name, config.MaxConcurrency, config.RateLimitPerSecond, config.Burst, float64(config.Burst))
 	if err != nil {
 		return fmt.Errorf("set queue config: %w", err)
 	}
@@ -544,7 +788,6 @@ func (q *PostgresQueue) insertEvent(ctx context.Context, tx *sql.Tx, taskID stri
 
 // Requeue resets a DLQ task back to pending. Only allowed for dlq tasks.
 func (q *PostgresQueue) Requeue(ctx context.Context, taskID string, reason string) error {
-	now := time.Now().UTC()
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("requeue: begin tx: %w", err)
@@ -555,8 +798,8 @@ func (q *PostgresQueue) Requeue(ctx context.Context, taskID string, reason strin
 		UPDATE tasks
 		SET status = 'pending',
 		    attempt = 0,
-		    next_run_at = $1,
-		    updated_at = $1,
+		    next_run_at = clock_timestamp(),
+		    updated_at = clock_timestamp(),
 		    last_error = NULL,
 		    dlq_reason = NULL,
 		    leased_by = NULL,
@@ -564,8 +807,8 @@ func (q *PostgresQueue) Requeue(ctx context.Context, taskID string, reason strin
 		    lease_version = lease_version + 1,
 		    started_at = NULL,
 		    finished_at = NULL
-		WHERE id = $2 AND status = 'dlq'
-	`, now, taskID)
+		WHERE id = $1 AND status = 'dlq'
+	`, taskID)
 	if err != nil {
 		return fmt.Errorf("requeue: update: %w", err)
 	}
@@ -584,7 +827,6 @@ func (q *PostgresQueue) Requeue(ctx context.Context, taskID string, reason strin
 
 // Cancel marks a task as cancelled. Only pending or running tasks can be cancelled.
 func (q *PostgresQueue) Cancel(ctx context.Context, taskID string, reason string) error {
-	now := time.Now().UTC()
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("cancel: begin tx: %w", err)
@@ -595,13 +837,14 @@ func (q *PostgresQueue) Cancel(ctx context.Context, taskID string, reason string
 		UPDATE tasks
 		SET status = 'failed',
 		    last_error = $1,
-		    finished_at = $2,
-		    updated_at = $2,
+		    finished_at = clock_timestamp(),
+		    updated_at = clock_timestamp(),
 		    leased_by = NULL,
-		    lease_expires_at = NULL
-		WHERE id = $3
+		    lease_expires_at = NULL,
+		    lease_version = lease_version + 1
+		WHERE id = $2
 		  AND status IN ('pending', 'running')
-	`, "cancelled: "+reason, now, taskID)
+	`, "cancelled: "+reason, taskID)
 	if err != nil {
 		return fmt.Errorf("cancel: update: %w", err)
 	}
@@ -673,41 +916,55 @@ func (q *PostgresQueue) Stats(ctx context.Context) (map[domain.TaskStatus]int64,
 
 // Heartbeat registers or updates a worker's last_seen_at timestamp.
 func (q *PostgresQueue) Heartbeat(ctx context.Context, workerID string) error {
-	now := time.Now().UTC()
+	ctx, cancel := q.operationContext(ctx)
+	defer cancel()
 	host, _ := os.Hostname()
 	_, err := q.db.ExecContext(ctx, `
 		INSERT INTO workers (worker_id, hostname, last_seen_at, status)
-		VALUES ($1, $2, $3, 'active')
+		VALUES ($1, $2, clock_timestamp(), 'active')
 		ON CONFLICT (worker_id) DO UPDATE
-		SET last_seen_at = $3, hostname = $2
-	`, workerID, host, now)
+		SET last_seen_at = clock_timestamp(), hostname = $2, status = 'active'
+	`, workerID, host)
 	return err
 }
 
-// RenewLease extends the lease on a task if the worker still owns it.
-func (q *PostgresQueue) RenewLease(ctx context.Context, taskID string, workerID string, leaseTimeout time.Duration) error {
-	leaseExpires := time.Now().UTC().Add(leaseTimeout)
+// RenewLease extends a live lease only when the complete ownership credential
+// (task, worker, fencing generation) still matches. An already expired lease
+// cannot be resurrected, even if no replacement worker has claimed it yet.
+func (q *PostgresQueue) RenewLease(ctx context.Context, taskID string, workerID string, leaseVersion int, leaseTimeout time.Duration) error {
+	ctx, span := otel.Tracer("distributed-task-lab/postgres").Start(ctx, "lease.renew",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(attribute.String("task.id", taskID), attribute.String("worker_id", workerID), attribute.Int("lease_version", leaseVersion)))
+	defer span.End()
+	ctx, cancel := q.operationContext(ctx)
+	defer cancel()
 	res, err := q.db.ExecContext(ctx, `
 		UPDATE tasks
-		SET lease_expires_at = $1, updated_at = $2
-		WHERE id = $3 AND status = 'running' AND leased_by = $4
-	`, leaseExpires, time.Now().UTC(), taskID, workerID)
+		SET lease_expires_at = clock_timestamp() + ($1 * interval '1 microsecond'),
+		    updated_at = clock_timestamp()
+		WHERE id = $2
+		  AND status = 'running'
+		  AND leased_by = $3
+		  AND lease_version = $4
+		  AND lease_expires_at >= clock_timestamp()
+	`, leaseTimeout.Microseconds(), taskID, workerID, leaseVersion)
 	if err != nil {
 		return fmt.Errorf("renew lease: %w", err)
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return domain.ErrLeaseExpired
+		return fmt.Errorf("renew lease: task %s: %w", taskID, domain.ErrTaskNotClaimed)
 	}
 	return nil
 }
 
 // DetectStaleWorkers returns worker IDs that haven't sent a heartbeat within the threshold.
 func (q *PostgresQueue) DetectStaleWorkers(ctx context.Context, threshold time.Duration) ([]string, error) {
-	cutoff := time.Now().UTC().Add(-threshold)
 	rows, err := q.db.QueryContext(ctx, `
-		SELECT worker_id FROM workers WHERE last_seen_at < $1 AND status = 'active'
-	`, cutoff)
+		SELECT worker_id FROM workers
+		WHERE last_seen_at < clock_timestamp() - ($1 * interval '1 microsecond')
+		  AND status = 'active'
+	`, threshold.Microseconds())
 	if err != nil {
 		return nil, fmt.Errorf("detect stale workers: %w", err)
 	}
@@ -722,6 +979,26 @@ func (q *PostgresQueue) DetectStaleWorkers(ctx context.Context, threshold time.D
 		ids = append(ids, id)
 	}
 	return ids, nil
+}
+
+const latestSchemaVersion int64 = 7
+
+func (q *PostgresQueue) HealthCheck(ctx context.Context) error {
+	var version sql.NullInt64
+	var count int64
+	if err := q.db.QueryRowContext(ctx, `SELECT COUNT(*), MAX(version) FROM schema_migrations`).Scan(&count, &version); err != nil {
+		return fmt.Errorf("health: database/schema unavailable: %w", err)
+	}
+	if !version.Valid || version.Int64 != latestSchemaVersion || count != latestSchemaVersion {
+		return fmt.Errorf("health: schema version/count %d/%d, want %d/%d", version.Int64, count, latestSchemaVersion, latestSchemaVersion)
+	}
+	return nil
+}
+
+func (q *PostgresQueue) DBStats() domain.DBPoolStats {
+	s := q.db.Stats()
+	return domain.DBPoolStats{OpenConnections: s.OpenConnections, InUse: s.InUse, Idle: s.Idle,
+		WaitCount: s.WaitCount, WaitDurationSeconds: s.WaitDuration.Seconds()}
 }
 
 // --- Internal helpers ---
