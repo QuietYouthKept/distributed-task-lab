@@ -1,0 +1,6 @@
+{
+  "deadlocks": 0,
+  "postgres_version": "16.15",
+  "xact_commit": 9224,
+  "xact_rollback": 0
+}

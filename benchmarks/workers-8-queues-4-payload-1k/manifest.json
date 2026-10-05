@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-10-05T14:04:30.2487553Z",
+  "git_sha": "cd3696e7141527b01b2b0361f2674729855203d1",
+  "go_version": "go1.26.6",
+  "machine": {
+    "arch": "amd64",
+    "cpu_count": 24,
+    "os": "windows"
+  },
+  "parameters": {
+    "payload_bytes": 1024,
+    "producers": 4,
+    "profile": "backlog-drain",
+    "queues": 4,
+    "tasks": 1000,
+    "worker_concurrency": 1,
+    "workers": 8
+  },
+  "postgres_version": "16.15",
+  "run_id": "workers-8-queues-4-payload-1k"
+}
