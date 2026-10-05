@@ -1,0 +1,14 @@
+{
+  "type": "payment",
+  "queue": "payments",
+  "payload": {
+    "version": "1",
+    "kind": "notification",
+    "data": {
+      "operation": "payment",
+      "operation_id": "invoice-42",
+      "target": "customer-7",
+      "simulate_response_loss": true
+    }
+  }
+}

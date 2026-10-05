@@ -59,6 +59,8 @@ func main() {
 	ratePerSecond := envInt("LOADGEN_RATE", 0)
 	duration := envDuration("LOADGEN_DURATION", 0)
 	seed := envInt("LOADGEN_SEED", 20260821)
+	outputRoot := envStr("LOADGEN_OUTPUT_DIR", "benchmarks")
+	runID := envStr("LOADGEN_RUN_ID", time.Now().UTC().Format("20060102T150405Z"))
 	producers = maxInt(1, producers)
 	queueCount = maxInt(1, queueCount)
 	payloadSize = maxInt(0, payloadSize)
@@ -180,6 +182,47 @@ func main() {
 	var retries, reclaims int64
 	_ = db.QueryRow(`SELECT COUNT(*) FROM task_events WHERE event_type='retried'`).Scan(&retries)
 	_ = db.QueryRow(`SELECT COUNT(*) FROM task_events WHERE event_type='claimed' AND metadata->>'claim_reason'='expired_lease'`).Scan(&reclaims)
+	rawSamples := make([]loadgenRawSample, 0, len(mq.latencies)+2*numTasks)
+	for i, latency := range mq.latencies {
+		rawSamples = append(rawSamples, loadgenRawSample{Metric: "claim_latency", TaskID: strconv.Itoa(i), ValueMS: float64(latency) / float64(time.Millisecond)})
+	}
+	queueWaits, endToEnds := []time.Duration{}, []time.Duration{}
+	rows, err := db.Query(`SELECT id,
+		EXTRACT(EPOCH FROM (started_at - created_at)) * 1000,
+		EXTRACT(EPOCH FROM (finished_at - created_at)) * 1000
+		FROM tasks WHERE status = 'success' ORDER BY id`)
+	if err != nil {
+		fatal("read completion latency: %v", err)
+	}
+	for rows.Next() {
+		var id string
+		var queueWaitMS, endToEndMS float64
+		if err := rows.Scan(&id, &queueWaitMS, &endToEndMS); err != nil {
+			rows.Close()
+			fatal("scan completion latency: %v", err)
+		}
+		queueWaits, endToEnds = append(queueWaits, time.Duration(queueWaitMS*float64(time.Millisecond))), append(endToEnds, time.Duration(endToEndMS*float64(time.Millisecond)))
+		rawSamples = append(rawSamples, loadgenRawSample{Metric: "queue_wait", TaskID: id, ValueMS: queueWaitMS}, loadgenRawSample{Metric: "end_to_end", TaskID: id, ValueMS: endToEndMS})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		fatal("completion latency rows: %v", err)
+	}
+	if err := rows.Close(); err != nil {
+		fatal("close completion latency rows: %v", err)
+	}
+	summary := loadgenArtifactSummary{
+		RunID: runID, Profile: profile, Tasks: numTasks, Producers: producers, Workers: numWorkers, Concurrency: concurrency, Queues: queueCount, PayloadBytes: payloadSize,
+		SubmitSeconds: submitDur.Seconds(), ProcessingSeconds: runDur.Seconds(), Throughput: float64(numTasks) / runDur.Seconds(),
+		Success: stats[domain.TaskStatusSuccess], DLQ: stats[domain.TaskStatusDLQ], SubmissionErrors: submitErrors.Load(), Retries: retries, Reclaims: reclaims, DuplicateClaims: int64(duplicates),
+		ClaimP50MS: float64(percentile(mq.latencies, 0.50)) / float64(time.Millisecond), ClaimP95MS: float64(percentile(mq.latencies, 0.95)) / float64(time.Millisecond), ClaimP99MS: float64(percentile(mq.latencies, 0.99)) / float64(time.Millisecond),
+		QueueWaitP50MS: float64(percentile(queueWaits, 0.50)) / float64(time.Millisecond), QueueWaitP95MS: float64(percentile(queueWaits, 0.95)) / float64(time.Millisecond), QueueWaitP99MS: float64(percentile(queueWaits, 0.99)) / float64(time.Millisecond),
+		EndToEndP50MS: float64(percentile(endToEnds, 0.50)) / float64(time.Millisecond), EndToEndP95MS: float64(percentile(endToEnds, 0.95)) / float64(time.Millisecond), EndToEndP99MS: float64(percentile(endToEnds, 0.99)) / float64(time.Millisecond),
+	}
+	artifactDir, artifactErr := writeLoadgenArtifacts(outputRoot, runID, db, summary, rawSamples)
+	if artifactErr != nil {
+		fatal("write evidence bundle: %v", artifactErr)
+	}
 
 	fmt.Println("")
 	fmt.Println("================ loadgen report ================")
@@ -199,7 +242,10 @@ func main() {
 	fmt.Printf("claim latency p50 : %s\n", percentile(mq.latencies, 0.50).Round(time.Millisecond))
 	fmt.Printf("claim latency p95 : %s\n", percentile(mq.latencies, 0.95).Round(time.Millisecond))
 	fmt.Printf("claim latency p99 : %s\n", percentile(mq.latencies, 0.99).Round(time.Millisecond))
+	fmt.Printf("queue wait p95    : %s\n", percentile(queueWaits, 0.95).Round(time.Millisecond))
+	fmt.Printf("end-to-end p95   : %s\n", percentile(endToEnds, 0.95).Round(time.Millisecond))
 	fmt.Printf("duplicate claims  : %d\n", duplicates)
+	fmt.Printf("evidence bundle  : %s\n", artifactDir)
 	fmt.Println("================================================")
 	if submitErrors.Load() != 0 {
 		fatal("invalid run: %d task submissions failed", submitErrors.Load())

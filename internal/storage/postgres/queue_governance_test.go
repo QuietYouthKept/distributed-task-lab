@@ -78,7 +78,7 @@ func TestListQueues(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 
-	if err := q.SetQueueConfig(ctx, domain.QueueConfig{Name: "listme", MaxConcurrency: 4, RateLimitPerSecond: 2.5}); err != nil {
+	if err := q.SetQueueConfig(ctx, domain.QueueConfig{Name: "listme", MaxConcurrency: 4, RateLimitPerSecond: 2.5, AgingAfterSeconds: 30, AgingPriorityBoost: 50}); err != nil {
 		t.Fatalf("SetQueueConfig: %v", err)
 	}
 
@@ -96,9 +96,49 @@ func TestListQueues(t *testing.T) {
 			if c.RateLimitPerSecond != 2.5 {
 				t.Errorf("RateLimitPerSecond = %v, want 2.5", c.RateLimitPerSecond)
 			}
+			if c.AgingAfterSeconds != 30 || c.AgingPriorityBoost != 50 {
+				t.Errorf("aging = %d/%d, want 30/50", c.AgingAfterSeconds, c.AgingPriorityBoost)
+			}
 		}
 	}
 	if !found {
 		t.Error("queue 'listme' not found in ListQueues")
+	}
+}
+
+func TestQueueAgingPromotesOldPendingTask(t *testing.T) {
+	q := setupTestDB(t)
+	ctx := context.Background()
+	if err := q.SetQueueConfig(ctx, domain.QueueConfig{Name: "aged", AgingAfterSeconds: 1, AgingPriorityBoost: 20}); err != nil {
+		t.Fatal(err)
+	}
+	old := newTask("aged-low", 1)
+	old.Queue, old.Priority = "aged", 0
+	enqueue(t, q, old)
+	if _, err := q.db.ExecContext(ctx, `UPDATE tasks SET created_at = clock_timestamp() - interval '2 seconds' WHERE id = $1`, old.ID); err != nil {
+		t.Fatal(err)
+	}
+	newer := newTask("aged-high", 1)
+	newer.Queue, newer.Priority = "aged", 10
+	enqueue(t, q, newer)
+	claimed, err := q.ClaimTasks(ctx, "aging-worker", 1, time.Minute)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("ClaimTasks = %#v, %v", claimed, err)
+	}
+	if claimed[0].ID != old.ID {
+		t.Fatalf("claimed %s, want aged low priority task", claimed[0].ID)
+	}
+	events, err := q.GetTaskEvents(ctx, old.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, event := range events {
+		if event.EventType == domain.EventPriorityPromoted {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("missing priority promotion audit event")
 	}
 }

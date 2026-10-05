@@ -192,7 +192,7 @@ func (s *TaskService) SetQueueConfig(ctx context.Context, config domain.QueueCon
 	if config.Name == "" || len(config.Name) > 128 || strings.TrimSpace(config.Name) != config.Name {
 		return fmt.Errorf("task service: invalid queue name")
 	}
-	if config.MaxConcurrency < 0 || config.RateLimitPerSecond < 0 || config.Burst < 0 {
+	if config.MaxConcurrency < 0 || config.RateLimitPerSecond < 0 || config.Burst < 0 || config.AgingAfterSeconds < 0 || config.AgingPriorityBoost < 0 {
 		return fmt.Errorf("task service: queue limits must be non-negative")
 	}
 	if config.Burst == 0 {

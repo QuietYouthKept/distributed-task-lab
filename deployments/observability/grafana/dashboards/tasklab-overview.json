@@ -112,6 +112,44 @@
           }
         }
       }
+    },
+    {
+      "type": "timeseries",
+      "title": "Claims, Reclaims, and Fencing Rejections",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "targets": [
+        {"expr": "rate(tasklab_claim_total[5m])", "legendFormat": "claims/s", "refId": "A"},
+        {"expr": "rate(tasklab_reclaim_total[5m])", "legendFormat": "reclaims/s", "refId": "B"},
+        {"expr": "rate(tasklab_fencing_rejection_total[5m])", "legendFormat": "fencing rejections/s", "refId": "C"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker Execution and Lease Health",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "targets": [
+        {"expr": "tasklab_active_handlers", "legendFormat": "active handlers", "refId": "A"},
+        {"expr": "rate(tasklab_handler_failure_total[5m])", "legendFormat": "handler failures/s", "refId": "B"},
+        {"expr": "rate(tasklab_lease_renew_failure_total[5m])", "legendFormat": "lease renewal failures/s", "refId": "C"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Database Pool Wait",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "targets": [
+        {"expr": "tasklab_db_pool_connections{state=\"in_use\"}", "legendFormat": "connections in use", "refId": "A"},
+        {"expr": "rate(tasklab_db_pool_wait_seconds_total[5m])", "legendFormat": "wait seconds/s", "refId": "B"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Average Claim and Handler Latency",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "targets": [
+        {"expr": "tasklab_claim_latency_seconds_sum / tasklab_claim_latency_seconds_count", "legendFormat": "claim average", "refId": "A"},
+        {"expr": "tasklab_handler_latency_seconds_sum / tasklab_handler_latency_seconds_count", "legendFormat": "handler average", "refId": "B"}
+      ]
     }
   ]
 }

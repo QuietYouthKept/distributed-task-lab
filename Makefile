@@ -1,4 +1,4 @@
-.PHONY: up down build api worker migrate submit-rag-task submit-multi list-tasks watch-tasks demo demo-claim demo-retry demo-timeout demo-dlq demo-failure-lab demo-rate-limit demo-observe loadgen assetlab bench test integration race vet verify fmt logs logs-worker clean dev
+.PHONY: up down build api worker migrate submit-rag-task submit-multi list-tasks watch-tasks demo demo-claim demo-retry demo-timeout demo-dlq demo-failure-lab demo-rate-limit demo-observe loadgen benchmark-matrix assetlab bench test integration race vet verify fmt logs logs-worker clean dev
 
 GO_PACKAGES := ./cmd/... ./internal/... ./pkg/...
 CURL_API = curl -s -H "Authorization: Bearer $(API_TOKEN)"
@@ -203,6 +203,11 @@ loadgen: ## Load test: throughput + claim latency + duplicate detection (dedicat
 	done
 	@DATABASE_URL=postgres://postgres:postgres@localhost:5435/tasklab?sslmode=disable go run ./cmd/loadgen
 	@docker rm -f tasklab-loadgen >/dev/null
+
+benchmark-matrix: ## Run the fixed 1/4/8/16-worker benchmark matrix and keep evidence bundles
+	@for workers in 1 4 8 16; do \
+		LOADGEN_WORKERS=$$workers LOADGEN_CONCURRENCY=1 LOADGEN_TASKS=1000 LOADGEN_QUEUES=4 LOADGEN_PAYLOAD_SIZE=1024 LOADGEN_PROFILE=backlog-drain LOADGEN_RUN_ID=workers-$$workers-queues-4-payload-1k $(MAKE) loadgen; \
+	done
 
 assetlab: ## Run asset-derived histories/oracles (requires ASSETLAB_RESULT_DIR and DATABASE_URL)
 	@test -n "$(ASSETLAB_RESULT_DIR)" || (echo "ASSETLAB_RESULT_DIR is required and must be new"; exit 2)

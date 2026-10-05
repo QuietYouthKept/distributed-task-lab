@@ -28,6 +28,8 @@ const (
 	TaskTypeEval           TaskType = "eval"
 	TaskTypeBenchmark      TaskType = "benchmark"
 	TaskTypeStrategyReplay TaskType = "strategy_replay"
+	TaskTypeNotification   TaskType = "notification"
+	TaskTypePayment        TaskType = "payment"
 )
 
 // ValidTaskTypes is the set of all valid task types.
@@ -36,4 +38,6 @@ var ValidTaskTypes = map[TaskType]bool{
 	TaskTypeEval:           true,
 	TaskTypeBenchmark:      true,
 	TaskTypeStrategyReplay: true,
+	TaskTypeNotification:   true,
+	TaskTypePayment:        true,
 }

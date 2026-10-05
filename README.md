@@ -72,6 +72,7 @@ make vet
 make bench         # PostgreSQL on localhost:5433
 make demo-failure-lab
 make loadgen
+make benchmark-matrix
 ASSETLAB_RESULT_DIR=/new/evidence/path DATABASE_URL=... go run ./cmd/assetlab
 ```
 
@@ -96,6 +97,7 @@ container fault orchestration is [`scripts/run_asset_docker_faults.ps1`](scripts
 | `API_TOKEN` | empty in binary; required by Compose | general bearer token |
 | `ADMIN_TOKEN` | empty in binary; required by Compose | queue/DLQ/cancel bearer token |
 | `MAX_REQUEST_BODY_BYTES` | `1048576` | HTTP body limit |
+| `RAG_ARTIFACT_DIR` | `artifacts/index` | durable mount for RAG, eval, and simulated receipts |
 
 ## Semantics that matter
 
@@ -110,8 +112,8 @@ container fault orchestration is [`scripts/run_asset_docker_faults.ps1`](scripts
   effect. Use a stable business idempotency key at the effect boundary.
 - `task_events` is atomic transition history, not an immutable compliance audit
   log; it currently follows task retention via `ON DELETE CASCADE`.
-- Scheduling is strict priority (`priority DESC`, then FIFO). Continuous higher
-  priority input can starve lower priority work; no aging policy is claimed.
+- Scheduling is strict priority by default. Queues can opt into an audited
+  aging boost; see [priority fairness](docs/fairness.md).
 
 ## Documentation
 
@@ -123,6 +125,11 @@ container fault orchestration is [`scripts/run_asset_docker_faults.ps1`](scripts
 - [Handler idempotency](docs/handler-idempotency.md)
 - [Operations](docs/operations.md)
 - [Benchmark methodology](docs/benchmark-methodology.md)
+- [LLM eval shards](docs/llm-eval.md)
+- [External side-effect adapter](docs/side-effect-adapter.md)
+- [Priority fairness](docs/fairness.md)
+- [Database capacity analysis](docs/database-capacity.md)
+- [Storage lifecycle](docs/storage-lifecycle.md)
 - [Review bundle](docs/review/FINAL-REVIEW-GUIDE.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)

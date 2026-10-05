@@ -267,6 +267,8 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		now            time.Time
 		running        int
 		paused         bool
+		agingAfter     int
+		agingBoost     int
 	}
 
 	// Queue rows are the aggregate admission authorities. Lock eligible queue
@@ -277,7 +279,11 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		SELECT q.name
 		FROM queues q
 		JOIN LATERAL (
-			SELECT t.status, t.priority, t.created_at
+			SELECT t.status, t.priority, t.created_at,
+			       t.priority + CASE WHEN t.status = 'pending'
+			           AND q.aging_after_seconds > 0
+			           AND t.created_at <= clock_timestamp() - (q.aging_after_seconds * interval '1 second')
+			         THEN q.aging_priority_boost ELSE 0 END AS effective_priority
 			FROM tasks t
 			WHERE t.queue = q.name
 			  AND (
@@ -295,12 +301,12 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 				) >= 1
 			  )
 			ORDER BY CASE WHEN t.status='running' THEN 0 ELSE 1 END,
-			         t.priority DESC, t.created_at ASC
+			         effective_priority DESC, t.created_at ASC
 			LIMIT 1
 		) candidate ON true
 		WHERE q.paused = false
 		ORDER BY CASE WHEN candidate.status='running' THEN 0 ELSE 1 END,
-		         candidate.priority DESC, candidate.created_at ASC, q.name ASC
+		         candidate.effective_priority DESC, candidate.created_at ASC, q.name ASC
 		LIMIT $1
 		FOR UPDATE OF q SKIP LOCKED
 	`, limit)
@@ -328,13 +334,18 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 
 	rows, err := tx.QueryContext(ctx, `SELECT `+taskColumnsAliased("t")+`
 		FROM tasks t
+		JOIN queues q ON q.name = t.queue
 		WHERE t.queue = ANY($2)
 		  AND (
 			(t.status = 'pending' AND t.next_run_at <= clock_timestamp())
 			OR (t.status = 'running' AND t.lease_expires_at < clock_timestamp())
 		  )
 		ORDER BY CASE WHEN t.status='running' THEN 0 ELSE 1 END,
-		         t.priority DESC, t.created_at ASC
+		         (t.priority + CASE WHEN t.status = 'pending'
+		             AND q.aging_after_seconds > 0
+		             AND t.created_at <= clock_timestamp() - (q.aging_after_seconds * interval '1 second')
+		           THEN q.aging_priority_boost ELSE 0 END) DESC,
+		         t.created_at ASC
 		LIMIT $1
 		FOR UPDATE OF t SKIP LOCKED
 	`, limit, pq.Array(queueNames))
@@ -371,9 +382,10 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		s := &queueState{}
 		if err := tx.QueryRowContext(ctx, `
 			SELECT max_concurrency, rate_limit_per_second, burst,
-			       rate_tokens, rate_updated_at, clock_timestamp(), paused
+			       rate_tokens, rate_updated_at, clock_timestamp(), paused,
+			       aging_after_seconds, aging_priority_boost
 			FROM queues WHERE name = $1
-		`, name).Scan(&s.maxConcurrency, &s.rate, &s.burst, &s.tokens, &s.rateUpdatedAt, &s.now, &s.paused); err != nil {
+		`, name).Scan(&s.maxConcurrency, &s.rate, &s.burst, &s.tokens, &s.rateUpdatedAt, &s.now, &s.paused, &s.agingAfter, &s.agingBoost); err != nil {
 			return nil, fmt.Errorf("claim: lock queue %s: %w", name, err)
 		}
 		// This is intentionally a second SQL statement after the queue lock is
@@ -445,6 +457,7 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 			reason = "expired_lease"
 		}
 		claimed[i].ClaimReason = reason
+		promoted := !isReclaim && s.agingAfter > 0 && s.agingBoost > 0 && !claimed[i].CreatedAt.Add(time.Duration(s.agingAfter)*time.Second).After(s.now)
 		span.AddEvent("task.claimed", trace.WithAttributes(
 			attribute.String("task.type", string(claimed[i].Type)),
 			attribute.String("queue", claimed[i].Queue),
@@ -453,7 +466,12 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 			attribute.String("worker_id", workerID),
 			attribute.String("claim_reason", reason),
 		))
-		if err := q.insertEvent(ctx, tx, claimed[i].ID, domain.EventClaimed, workerID, "task claimed", map[string]any{"attempt": claimed[i].Attempt, "lease_version": claimed[i].LeaseVersion, "claim_reason": reason}); err != nil {
+		if promoted {
+			if err := q.insertEvent(ctx, tx, claimed[i].ID, domain.EventPriorityPromoted, workerID, "task priority promoted by aging", map[string]any{"original_priority": claimed[i].Priority, "effective_priority": claimed[i].Priority + s.agingBoost, "wait_threshold_seconds": s.agingAfter}); err != nil {
+				return nil, fmt.Errorf("claim: priority promotion event: %w", err)
+			}
+		}
+		if err := q.insertEvent(ctx, tx, claimed[i].ID, domain.EventClaimed, workerID, "task claimed", map[string]any{"attempt": claimed[i].Attempt, "lease_version": claimed[i].LeaseVersion, "claim_reason": reason, "priority_promoted": promoted}); err != nil {
 			return nil, fmt.Errorf("claim: event: %w", err)
 		}
 		accepted = append(accepted, claimed[i])
@@ -721,7 +739,7 @@ func (q *PostgresQueue) ResumeQueue(ctx context.Context, name string) error {
 
 // ListQueues returns all queues with their governance config.
 func (q *PostgresQueue) ListQueues(ctx context.Context) ([]domain.QueueConfig, error) {
-	rows, err := q.db.QueryContext(ctx, `SELECT name, max_concurrency, rate_limit_per_second, burst, paused FROM queues ORDER BY name`)
+	rows, err := q.db.QueryContext(ctx, `SELECT name, max_concurrency, rate_limit_per_second, burst, aging_after_seconds, aging_priority_boost, paused FROM queues ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list queues: %w", err)
 	}
@@ -730,7 +748,7 @@ func (q *PostgresQueue) ListQueues(ctx context.Context) ([]domain.QueueConfig, e
 	var queues []domain.QueueConfig
 	for rows.Next() {
 		var c domain.QueueConfig
-		if err := rows.Scan(&c.Name, &c.MaxConcurrency, &c.RateLimitPerSecond, &c.Burst, &c.Paused); err != nil {
+		if err := rows.Scan(&c.Name, &c.MaxConcurrency, &c.RateLimitPerSecond, &c.Burst, &c.AgingAfterSeconds, &c.AgingPriorityBoost, &c.Paused); err != nil {
 			return nil, fmt.Errorf("list queues: scan: %w", err)
 		}
 		queues = append(queues, c)
@@ -746,29 +764,31 @@ func (q *PostgresQueue) SetQueueConfig(ctx context.Context, config domain.QueueC
 	if config.Name == "" || len(config.Name) > 128 {
 		return fmt.Errorf("set queue config: invalid queue name")
 	}
-	if config.MaxConcurrency < 0 || config.RateLimitPerSecond < 0 {
+	if config.MaxConcurrency < 0 || config.RateLimitPerSecond < 0 || config.AgingAfterSeconds < 0 || config.AgingPriorityBoost < 0 {
 		return fmt.Errorf("set queue config: negative limits are invalid")
 	}
 	if config.Burst <= 0 {
 		config.Burst = 1
 	}
 	_, err := q.db.ExecContext(ctx, `
-		INSERT INTO queues (name, max_concurrency, rate_limit_per_second, burst, rate_tokens, rate_updated_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, clock_timestamp(), clock_timestamp())
+		INSERT INTO queues (name, max_concurrency, rate_limit_per_second, burst, aging_after_seconds, aging_priority_boost, rate_tokens, rate_updated_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, clock_timestamp(), clock_timestamp())
 		ON CONFLICT (name) DO UPDATE
 		SET max_concurrency = $2,
 		    rate_limit_per_second = $3,
 		    burst = $4,
+		    aging_after_seconds = $5,
+		    aging_priority_boost = $6,
 		    rate_tokens = CASE
 		      WHEN queues.rate_limit_per_second = $3 AND queues.burst = $4 THEN queues.rate_tokens
-		      ELSE LEAST(queues.rate_tokens, $5)
+		      ELSE LEAST(queues.rate_tokens, $7)
 		    END,
 		    rate_updated_at = CASE
 		      WHEN queues.rate_limit_per_second = $3 AND queues.burst = $4 THEN queues.rate_updated_at
 		      ELSE clock_timestamp()
 		    END,
 		    updated_at = clock_timestamp()
-	`, config.Name, config.MaxConcurrency, config.RateLimitPerSecond, config.Burst, float64(config.Burst))
+	`, config.Name, config.MaxConcurrency, config.RateLimitPerSecond, config.Burst, config.AgingAfterSeconds, config.AgingPriorityBoost, float64(config.Burst))
 	if err != nil {
 		return fmt.Errorf("set queue config: %w", err)
 	}
@@ -981,7 +1001,7 @@ func (q *PostgresQueue) DetectStaleWorkers(ctx context.Context, threshold time.D
 	return ids, nil
 }
 
-const latestSchemaVersion int64 = 7
+const latestSchemaVersion int64 = 8
 
 func (q *PostgresQueue) HealthCheck(ctx context.Context) error {
 	var version sql.NullInt64

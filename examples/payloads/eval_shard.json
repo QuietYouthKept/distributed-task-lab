@@ -1,0 +1,17 @@
+{
+  "type": "eval",
+  "queue": "llm-eval",
+  "idempotency_key": "release-gate:golden-2026-10:0000-0100",
+  "payload": {
+    "version": "1",
+    "kind": "eval",
+    "data": {
+      "dataset_version": "golden-2026-10",
+      "model_profile": "mock-gpt",
+      "prompt_version": "v3",
+      "run_id": "release-gate",
+      "case_start": 0,
+      "case_end": 100
+    }
+  }
+}
