@@ -53,6 +53,25 @@ type TaskExecResult struct {
 	Metrics   map[string]float64
 }
 
+// ExecutionMetadata is trusted scheduler state made available to handlers via
+// context. It deliberately stays out of the user payload, where task submitters
+// could otherwise forge ownership generations or effect audit identities.
+type ExecutionMetadata struct {
+	TaskID, TaskType    string
+	Generation, Attempt int
+}
+
+type executionMetadataKey struct{}
+
+func WithExecutionMetadata(ctx context.Context, metadata ExecutionMetadata) context.Context {
+	return context.WithValue(ctx, executionMetadataKey{}, metadata)
+}
+
+func ExecutionMetadataFromContext(ctx context.Context) (ExecutionMetadata, bool) {
+	metadata, ok := ctx.Value(executionMetadataKey{}).(ExecutionMetadata)
+	return metadata, ok
+}
+
 func NewPool(q queue.Queue, workerID string, concurrency int, pollInterval, leaseTimeout time.Duration, batchSize int, handler Handler, logger *slog.Logger) *Pool {
 	if concurrency <= 0 {
 		concurrency = 1
@@ -319,6 +338,7 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 		carrier.Set("tracestate", tracestate)
 	}
 	execCtx = otel.GetTextMapPropagator().Extract(execCtx, carrier)
+	execCtx = WithExecutionMetadata(execCtx, ExecutionMetadata{TaskID: job.ID, TaskType: job.Type, Generation: job.LeaseVersion, Attempt: job.Attempt})
 	handlerPayload := make(map[string]any, len(job.Payload))
 	for key, value := range job.Payload {
 		if key != "_traceparent" && key != "_tracestate" {

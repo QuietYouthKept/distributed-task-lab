@@ -20,6 +20,12 @@ import (
 func main() {
 	cfg := config.Load()
 	logger := observability.Logger()
+	if err := cfg.Validate(); err != nil {
+		logger.Error("invalid startup configuration", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("validated effective configuration", "profile", cfg.Profile,
+		"database", cfg.DatabaseURLWithoutCredentials(), "config_checksum", cfg.EffectiveChecksum())
 	shutdownTracing, err := observability.SetupTracing(context.Background(), "distributed-task-lab-api")
 	if err != nil {
 		logger.Error("failed to initialize tracing", "error", err)

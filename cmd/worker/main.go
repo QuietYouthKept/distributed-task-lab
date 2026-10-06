@@ -19,6 +19,12 @@ import (
 func main() {
 	cfg := config.Load()
 	logger := observability.Logger()
+	if err := cfg.Validate(); err != nil {
+		logger.Error("invalid startup configuration", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("validated effective configuration", "profile", cfg.Profile,
+		"database", cfg.DatabaseURLWithoutCredentials(), "config_checksum", cfg.EffectiveChecksum())
 	shutdownTracing, err := observability.SetupTracing(context.Background(), "distributed-task-lab-worker")
 	if err != nil {
 		logger.Error("failed to initialize tracing", "error", err)
@@ -58,7 +64,7 @@ func main() {
 	pq := postgres.NewPostgresQueueWithTimeout(db, cfg.DBOperationTimeout)
 
 	// Composite handler: real RAG ingestion for source_path tasks, mock otherwise.
-	handler := handlers.NewComposite(cfg.DocDir, cfg.ArtifactDir)
+	handler := handlers.NewComposite(cfg.DocDir, cfg.ArtifactDir, postgres.NewEffectLedger(db))
 
 	// Create and start the worker pool.
 	pool := worker.NewPool(

@@ -44,6 +44,10 @@ func TestMigrationsFreshAndRerun(t *testing.T) {
 	if count != int(latestSchemaVersion) {
 		t.Fatalf("migration rows=%d want=%d", count, latestSchemaVersion)
 	}
+	var effectTable *string
+	if err := db.QueryRow(`SELECT to_regclass('public.effects')::text`).Scan(&effectTable); err != nil || effectTable == nil {
+		t.Fatalf("effects table missing after migration: table=%v err=%v", effectTable, err)
+	}
 }
 
 func TestMigrationsUpgradePreviouslyUntrackedSchema(t *testing.T) {

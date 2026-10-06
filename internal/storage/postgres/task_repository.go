@@ -1001,7 +1001,7 @@ func (q *PostgresQueue) DetectStaleWorkers(ctx context.Context, threshold time.D
 	return ids, nil
 }
 
-const latestSchemaVersion int64 = 8
+const latestSchemaVersion int64 = 9
 
 func (q *PostgresQueue) HealthCheck(ctx context.Context) error {
 	var version sql.NullInt64

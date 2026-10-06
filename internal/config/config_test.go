@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDefaultWorkerIDIsUniquePerLoad(t *testing.T) {
@@ -13,6 +14,57 @@ func TestDefaultWorkerIDIsUniquePerLoad(t *testing.T) {
 	}
 	if !strings.Contains(a, "-") {
 		t.Fatalf("worker ID lacks instance identity: %q", a)
+	}
+}
+
+func TestValidateCollectsParseAndSafetyErrors(t *testing.T) {
+	t.Setenv("APP_PROFILE", "production")
+	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/tasklab?sslmode=disable")
+	t.Setenv("WORKER_CONCURRENCY", "many")
+	t.Setenv("LEASE_TIMEOUT", "0s")
+	t.Setenv("DB_OPERATION_TIMEOUT", "4h")
+	t.Setenv("RAG_ARTIFACT_DIR", "artifacts/index")
+	cfg := Load()
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() unexpectedly succeeded")
+	}
+	for _, want := range []string{
+		"WORKER_CONCURRENCY must be an integer", "LEASE_TIMEOUT must be greater than zero",
+		"DB_OPERATION_TIMEOUT must be less than LEASE_TIMEOUT", "API_TOKEN is required in production",
+		"sslmode=disable", "shared object storage",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("Validate error missing %q:\n%s", want, err)
+		}
+	}
+}
+
+func TestValidateProductionAcceptsStrictConfiguration(t *testing.T) {
+	t.Setenv("APP_PROFILE", "production")
+	t.Setenv("DATABASE_URL", "postgres://app:an-adequately-long-password@db.example:5432/tasklab?sslmode=require")
+	t.Setenv("API_TOKEN", "api-token")
+	t.Setenv("ADMIN_TOKEN", "admin-token")
+	t.Setenv("RAG_ARTIFACT_DIR", "s3://tasklab-artifacts/index")
+	cfg := Load()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() = %v", err)
+	}
+	if cfg.EffectiveChecksum() == "" || strings.Contains(cfg.DatabaseURLWithoutCredentials(), "an-adequately") {
+		t.Fatal("effective configuration leaked credentials or lacked checksum")
+	}
+}
+
+func TestValidateCrossFieldLimits(t *testing.T) {
+	cfg := Load()
+	cfg.Concurrency = 3
+	cfg.DBMaxOpenConns = 2
+	cfg.DBMaxIdleConns = 3
+	cfg.DBOperationTimeout = 5 * time.Second
+	cfg.LeaseTimeout = 5 * time.Second
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "WORKER_CONCURRENCY must not exceed") || !strings.Contains(err.Error(), "DB_MAX_IDLE_CONNS") || !strings.Contains(err.Error(), "DB_OPERATION_TIMEOUT") {
+		t.Fatalf("expected all cross-field errors, got %v", err)
 	}
 }
 

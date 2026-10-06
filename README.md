@@ -87,6 +87,7 @@ container fault orchestration is [`scripts/run_asset_docker_faults.ps1`](scripts
 | Variable | Default | Purpose |
 |---|---:|---|
 | `DATABASE_URL` | local tasklab PostgreSQL | durable authority |
+| `APP_PROFILE` | `development` | `production` enables strict fail-fast deployment validation |
 | `WORKER_ID` | hostname + pid + boot UUID | explicit override for unique process identity |
 | `WORKER_CONCURRENCY` | `4` | active handlers |
 | `CLAIM_BATCH_SIZE` | `5` | upper claim batch; local ownership remains bounded |
@@ -97,7 +98,7 @@ container fault orchestration is [`scripts/run_asset_docker_faults.ps1`](scripts
 | `API_TOKEN` | empty in binary; required by Compose | general bearer token |
 | `ADMIN_TOKEN` | empty in binary; required by Compose | queue/DLQ/cancel bearer token |
 | `MAX_REQUEST_BODY_BYTES` | `1048576` | HTTP body limit |
-| `RAG_ARTIFACT_DIR` | `artifacts/index` | durable mount for RAG, eval, and simulated receipts |
+| `RAG_ARTIFACT_DIR` | `artifacts/index` | local development artifact path; production validation requires an `s3://` or `minio://` location |
 | `EVAL_BACKEND` | `deterministic` | `deterministic` for CI or `gateway` for a real evaluator |
 | `EVAL_GATEWAY_URL` / `EVAL_GATEWAY_PROFILE` | unset | required only for the Gateway backend |
 | `EVAL_GATEWAY_API_KEY` | unset | secret bearer token; never place it in task data |
@@ -131,7 +132,9 @@ external enterprise retriever until such an evaluator is wired into this handler
 - Shared queue token buckets are consumed under the queue row lock. Refreshing
   unchanged config preserves token history.
 - A handler may perform an effect and crash before ack. Retrying can repeat that
-  effect. Use a stable business idempotency key at the effect boundary.
+  effect. `payment`/`notification` persist a generation-scoped effect intent
+  and receipt hash; real providers must use a stable business idempotency key
+  or move uncertain outcomes to manual resolution.
 - `task_events` is atomic transition history, not an immutable compliance audit
   log; it currently follows task retention via `ON DELETE CASCADE`.
 - Scheduling is strict priority by default. Queues can opt into an audited

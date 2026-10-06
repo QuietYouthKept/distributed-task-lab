@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/effects"
 	"github.com/fantasticyi/distributed-task-lab/internal/worker"
 )
 
@@ -21,13 +22,17 @@ type Composite struct {
 }
 
 // NewComposite creates a composite handler.
-func NewComposite(docDir, artifactDir string) *Composite {
+func NewComposite(docDir, artifactDir string, ledgers ...effects.Ledger) *Composite {
+	var ledger effects.Ledger
+	if len(ledgers) > 0 {
+		ledger = ledgers[0]
+	}
 	return &Composite{
 		mock:    NewMockHandler(),
 		rag:     NewRealRAGIngestion(docDir, artifactDir),
 		replay:  NewStrategyReplay(artifactDir),
 		eval:    newEvalBackend(artifactDir),
-		effects: NewSideEffectHandler(filepath.Join(artifactDir, "receipts")),
+		effects: NewSideEffectHandler(filepath.Join(artifactDir, "receipts"), ledger),
 	}
 }
 

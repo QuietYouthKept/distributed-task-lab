@@ -20,6 +20,12 @@ Set separate high-entropy `API_TOKEN` and `ADMIN_TOKEN`, terminate TLS at the
 ingress, restrict PostgreSQL network access, and inject secrets through the
 platform secret store. Empty tokens are local-development mode only.
 
+Set `APP_PROFILE=production` for deployed processes. Startup validates all
+environment parsing and cross-field limits before opening the database. The
+production profile requires separate API/admin tokens, PostgreSQL TLS, a
+non-default database password, and an `s3://` or `minio://` artifact location;
+the log includes only a redacted database endpoint and a configuration checksum.
+
 ## Alerts
 
 Alert on readiness failures, oldest pending age, DLQ/retry/reclaim growth,
@@ -52,6 +58,14 @@ repair the payload or downstream dependency. Requeue only after identifying the
 failure class; `POST /tasks/{id}/requeue` resets it to pending and creates an
 audit event. For external effects, reconcile the provider receipt first rather
 than blindly replaying.
+
+### Unknown external effect
+
+Find the `effects` record using the task and business operation key. Its
+generation and request hash identify the actual provider request. Query the
+provider with that idempotency key before changing task state. If the provider
+cannot be queried or made idempotent, set the effect to `manual_resolution` and
+resolve it with a documented operator decision; do not retry automatically.
 
 ### Connection exhaustion and worker drain
 
