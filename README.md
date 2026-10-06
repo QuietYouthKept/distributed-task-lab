@@ -98,6 +98,28 @@ container fault orchestration is [`scripts/run_asset_docker_faults.ps1`](scripts
 | `ADMIN_TOKEN` | empty in binary; required by Compose | queue/DLQ/cancel bearer token |
 | `MAX_REQUEST_BODY_BYTES` | `1048576` | HTTP body limit |
 | `RAG_ARTIFACT_DIR` | `artifacts/index` | durable mount for RAG, eval, and simulated receipts |
+| `EVAL_BACKEND` | `deterministic` | `deterministic` for CI or `gateway` for a real evaluator |
+| `EVAL_GATEWAY_URL` / `EVAL_GATEWAY_PROFILE` | unset | required only for the Gateway backend |
+| `EVAL_GATEWAY_API_KEY` | unset | secret bearer token; never place it in task data |
+| `EVAL_REQUEST_TIMEOUT` / `EVAL_PROVIDER_CONCURRENCY` | `30s` / `8` | per-call timeout and in-process gateway cap |
+
+## StrategyOps RAG replay
+
+`strategy_replay` supports the existing `new_user_feed_exploration` payload and the
+`rag_retrieval_policy` payload used by StrategyOps. A RAG replay requires at least 100 cases,
+strict `top_k`/`reranker_enabled`/`min_score` configuration, and immutable
+`dataset_version`, `prompt_version`, `retriever_version`, `producer_commit`, and
+`evaluator_schema_version` fields.
+
+The worker writes a content-addressed JSON report under
+`$RAG_ARTIFACT_DIR/rag-replay/` and returns its URI and SHA-256 together with Recall@k, MRR,
+nDCG, answer-point recall, unsupported-claim rate, refusal accuracy, latency, token, and cost
+metrics. Safety, latency, or cost breaches are successful `REGRESSION` results—not worker errors—
+so StrategyOps can fail approval closed.
+
+The bundled scorer is deterministic development scaffolding. It preserves the production-facing
+receipt, provenance, hash, retry, and reconciliation contract, but does not claim to evaluate an
+external enterprise retriever until such an evaluator is wired into this handler.
 
 ## Semantics that matter
 

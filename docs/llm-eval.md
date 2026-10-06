@@ -1,18 +1,31 @@
 # LLM evaluation shards
 
-`eval` tasks become a deterministic eval workload when the payload contains
-`dataset_version`, `model_profile`, `prompt_version`, `run_id`, `case_start`,
-and `case_end` (an end-exclusive range). The worker writes one result artifact
-per immutable input fingerprint under `RAG_ARTIFACT_DIR/eval/<run_id>/`.
+`eval` has two separate backends. `EVAL_BACKEND=deterministic` (the default)
+is a reproducible pseudo evaluator for CI, load tests, and fault injection. It
+must never be described as model quality or provider throughput.
 
-The shipped evaluator intentionally calculates reproducible pseudo-results: it
-has no model-provider account or hidden network dependency. Its purpose is to
-exercise the queue contract faithfully. Replace the per-case logic with a real
-gateway while retaining the fingerprint, result URI, token/cost metrics, and
-lookup-before-write behavior.
+`EVAL_BACKEND=gateway` calls `POST $EVAL_GATEWAY_URL/v1/evaluations` with a
+stable request ID: `run_id:case_id:model_profile:prompt_version`. The gateway
+must deduplicate that request ID and return `status` (`passed` or `failed`),
+`score`, `input_tokens`, `output_tokens`, and `cost_usd`.
 
-Retrying a shard reads the same artifact and reports `idempotent_reused=true`.
-Consumers can reconcile a run using `run_id`, `result_fingerprint`, and
-`case_results_uri`; no retry creates another final-shard artifact.
+Gateway tasks require v2 provenance: `run_id`, `dataset_version`,
+`dataset_uri`, `dataset_sha256`, `case_start`, `case_end`, `model_profile`,
+`prompt_version`, `retriever_version`, and `evaluator_schema_version`. The
+range is end-exclusive and capped by `EVAL_MAX_CASES_PER_SHARD` (50 by default).
 
-See [`examples/payloads/eval_shard.json`](../examples/payloads/eval_shard.json).
+Every completed case is fsynced to a partial JSONL receipt before the next call.
+Final files are atomically published under:
+
+```text
+$RAG_ARTIFACT_DIR/eval/<run-id>/<fingerprint>/manifest.json
+$RAG_ARTIFACT_DIR/eval/<run-id>/<fingerprint>/case-results.jsonl
+$RAG_ARTIFACT_DIR/eval/<run-id>/<fingerprint>/summary.json
+$RAG_ARTIFACT_DIR/eval/<run-id>/<fingerprint>/failures.jsonl
+```
+
+Consequently a reclaim resumes from receipts. A crash after a provider response
+but before its receipt is handled by the gateway's stable request ID. API keys
+come only from `EVAL_GATEWAY_API_KEY`; they are never written to task data,
+results, artifacts, or logs. Optional `EVAL_*_ALLOWLIST` variables restrict
+version fields. `EVAL_MAX_COST_USD` defaults to $10.

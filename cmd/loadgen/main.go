@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,6 +31,32 @@ type measuringQueue struct {
 	mu        sync.Mutex
 	claimed   map[string]int
 	latencies []time.Duration
+}
+
+// measuringHandler records only business-handler time. The database task
+// timestamps then let the report distinguish queue wait, handler work, and
+// fenced terminal-write time without changing worker semantics.
+type measuringHandler struct {
+	worker.Handler
+	mu        sync.Mutex
+	durations map[string]time.Duration
+}
+
+func (m *measuringHandler) Handle(ctx context.Context, taskType string, payload map[string]any, attempt int) (*worker.TaskExecResult, error) {
+	started := time.Now()
+	result, err := m.Handler.Handle(ctx, taskType, payload, attempt)
+	if id, ok := payload["loadgen_task_id"].(string); ok {
+		m.mu.Lock()
+		m.durations[id] = time.Since(started)
+		m.mu.Unlock()
+	}
+	return result, err
+}
+
+func (m *measuringHandler) duration(id string) time.Duration {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.durations[id]
 }
 
 // ClaimTasks records latency and claimed IDs for every non-empty claim.
@@ -56,14 +83,31 @@ func main() {
 	concurrency := envInt("LOADGEN_CONCURRENCY", 4)
 	queueCount := envInt("LOADGEN_QUEUES", 1)
 	payloadSize := envInt("LOADGEN_PAYLOAD_SIZE", 128)
+	taskKind := envStr("LOADGEN_TASK_TYPE", "noop")
+	handlerMode := envStr("LOADGEN_HANDLER_MODE", "deterministic")
+	casesPerTask := envInt("LOADGEN_CASES_PER_TASK", 25)
+	providerConcurrency := envInt("LOADGEN_PROVIDER_CONCURRENCY", 8)
 	ratePerSecond := envInt("LOADGEN_RATE", 0)
 	duration := envDuration("LOADGEN_DURATION", 0)
 	seed := envInt("LOADGEN_SEED", 20260821)
 	outputRoot := envStr("LOADGEN_OUTPUT_DIR", "benchmarks")
 	runID := envStr("LOADGEN_RUN_ID", time.Now().UTC().Format("20060102T150405Z"))
+	artifactRoot := envStr("LOADGEN_ARTIFACT_DIR", filepath.Join(outputRoot, "artifacts", runID))
 	producers = maxInt(1, producers)
 	queueCount = maxInt(1, queueCount)
 	payloadSize = maxInt(0, payloadSize)
+	if casesPerTask < 1 {
+		casesPerTask = 1
+	}
+	if providerConcurrency < 1 {
+		providerConcurrency = 1
+	}
+	if taskKind != "noop" && taskKind != "llm_eval" && taskKind != "strategy_replay" {
+		fatal("LOADGEN_TASK_TYPE must be noop, llm_eval, or strategy_replay")
+	}
+	if handlerMode != "deterministic" && handlerMode != "gateway" {
+		fatal("LOADGEN_HANDLER_MODE must be deterministic or gateway")
+	}
 	if duration > 0 && ratePerSecond > 0 {
 		numTasks = int(duration.Seconds()) * ratePerSecond
 	}
@@ -96,7 +140,17 @@ func main() {
 
 	// Start workers before producers for steady profiles. Backlog-drain and spike
 	// intentionally build the entire backlog first.
-	handler := handlers.NewMockHandler()
+	var baseHandler worker.Handler = handlers.NewMockHandler()
+	if taskKind != "noop" {
+		if handlerMode == "gateway" {
+			_ = os.Setenv("EVAL_BACKEND", "gateway")
+			_ = os.Setenv("EVAL_PROVIDER_CONCURRENCY", strconv.Itoa(providerConcurrency))
+		} else {
+			_ = os.Setenv("EVAL_BACKEND", "deterministic")
+		}
+		baseHandler = handlers.NewComposite("", artifactRoot)
+	}
+	handler := &measuringHandler{Handler: baseHandler, durations: map[string]time.Duration{}}
 	var pools []*worker.Pool
 	startPools := func() {
 		if len(pools) > 0 {
@@ -123,9 +177,7 @@ func main() {
 			defer submitWG.Done()
 			for i := range indexes {
 				queueName := fmt.Sprintf("loadgen-q-%d", (i+seed)%queueCount)
-				t := &domain.Task{ID: fmt.Sprintf("loadgen-%d-%06d", seed, i), Type: domain.TaskTypeRAGIngestion, Queue: queueName,
-					Payload:     domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"document_id": fmt.Sprintf("doc-%d", i), "padding": strings.Repeat("x", payloadSize), "mock_duration_ms": 1}},
-					MaxAttempts: 1, TimeoutSeconds: 30, RetryBackoffMultiplier: 2}
+				t := loadgenTask(taskKind, runID, seed, i, queueName, payloadSize, casesPerTask)
 				if _, err := q.Enqueue(ctx, t); err != nil {
 					submitErrors.Add(1)
 				}
@@ -186,23 +238,36 @@ func main() {
 	for i, latency := range mq.latencies {
 		rawSamples = append(rawSamples, loadgenRawSample{Metric: "claim_latency", TaskID: strconv.Itoa(i), ValueMS: float64(latency) / float64(time.Millisecond)})
 	}
-	queueWaits, endToEnds := []time.Duration{}, []time.Duration{}
+	queueWaits, handlerLatencies, ackLatencies, endToEnds, providerWaits, providerDurations, artifactWrites := []time.Duration{}, []time.Duration{}, []time.Duration{}, []time.Duration{}, []time.Duration{}, []time.Duration{}, []time.Duration{}
 	rows, err := db.Query(`SELECT id,
 		EXTRACT(EPOCH FROM (started_at - created_at)) * 1000,
-		EXTRACT(EPOCH FROM (finished_at - created_at)) * 1000
+		EXTRACT(EPOCH FROM (finished_at - created_at)) * 1000,
+		EXTRACT(EPOCH FROM (finished_at - started_at)) * 1000,
+		COALESCE((result->'metrics'->>'provider_wait_ms')::double precision, 0),
+		COALESCE((result->'metrics'->>'provider_duration_ms')::double precision, 0)
 		FROM tasks WHERE status = 'success' ORDER BY id`)
 	if err != nil {
 		fatal("read completion latency: %v", err)
 	}
 	for rows.Next() {
 		var id string
-		var queueWaitMS, endToEndMS float64
-		if err := rows.Scan(&id, &queueWaitMS, &endToEndMS); err != nil {
+		var queueWaitMS, endToEndMS, terminalMS, providerWaitMS, providerDurationMS float64
+		if err := rows.Scan(&id, &queueWaitMS, &endToEndMS, &terminalMS, &providerWaitMS, &providerDurationMS); err != nil {
 			rows.Close()
 			fatal("scan completion latency: %v", err)
 		}
-		queueWaits, endToEnds = append(queueWaits, time.Duration(queueWaitMS*float64(time.Millisecond))), append(endToEnds, time.Duration(endToEndMS*float64(time.Millisecond)))
-		rawSamples = append(rawSamples, loadgenRawSample{Metric: "queue_wait", TaskID: id, ValueMS: queueWaitMS}, loadgenRawSample{Metric: "end_to_end", TaskID: id, ValueMS: endToEndMS})
+		handlerLatency := handler.duration(id)
+		ackLatency := time.Duration(terminalMS*float64(time.Millisecond)) - handlerLatency
+		if ackLatency < 0 {
+			ackLatency = 0
+		}
+		artifactWrite := handlerLatency - time.Duration((providerWaitMS+providerDurationMS)*float64(time.Millisecond))
+		if artifactWrite < 0 {
+			artifactWrite = 0
+		}
+		queueWaits, handlerLatencies, ackLatencies, endToEnds = append(queueWaits, time.Duration(queueWaitMS*float64(time.Millisecond))), append(handlerLatencies, handlerLatency), append(ackLatencies, ackLatency), append(endToEnds, time.Duration(endToEndMS*float64(time.Millisecond)))
+		providerWaits, providerDurations, artifactWrites = append(providerWaits, time.Duration(providerWaitMS*float64(time.Millisecond))), append(providerDurations, time.Duration(providerDurationMS*float64(time.Millisecond))), append(artifactWrites, artifactWrite)
+		rawSamples = append(rawSamples, loadgenRawSample{Metric: "queue_wait", TaskID: id, ValueMS: queueWaitMS}, loadgenRawSample{Metric: "handler_latency", TaskID: id, ValueMS: float64(handlerLatency) / float64(time.Millisecond)}, loadgenRawSample{Metric: "ack_latency", TaskID: id, ValueMS: float64(ackLatency) / float64(time.Millisecond)}, loadgenRawSample{Metric: "end_to_end", TaskID: id, ValueMS: endToEndMS}, loadgenRawSample{Metric: "provider_wait", TaskID: id, ValueMS: providerWaitMS}, loadgenRawSample{Metric: "provider_duration", TaskID: id, ValueMS: providerDurationMS}, loadgenRawSample{Metric: "artifact_write", TaskID: id, ValueMS: float64(artifactWrite) / float64(time.Millisecond)})
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
@@ -212,12 +277,13 @@ func main() {
 		fatal("close completion latency rows: %v", err)
 	}
 	summary := loadgenArtifactSummary{
-		RunID: runID, Profile: profile, Tasks: numTasks, Producers: producers, Workers: numWorkers, Concurrency: concurrency, Queues: queueCount, PayloadBytes: payloadSize,
+		RunID: runID, Profile: profile, TaskType: taskKind, HandlerMode: handlerMode, CasesPerTask: casesPerTask, ProviderConcurrency: providerConcurrency, Tasks: numTasks, Producers: producers, Workers: numWorkers, Concurrency: concurrency, Queues: queueCount, PayloadBytes: payloadSize,
 		SubmitSeconds: submitDur.Seconds(), ProcessingSeconds: runDur.Seconds(), Throughput: float64(numTasks) / runDur.Seconds(),
 		Success: stats[domain.TaskStatusSuccess], DLQ: stats[domain.TaskStatusDLQ], SubmissionErrors: submitErrors.Load(), Retries: retries, Reclaims: reclaims, DuplicateClaims: int64(duplicates),
 		ClaimP50MS: float64(percentile(mq.latencies, 0.50)) / float64(time.Millisecond), ClaimP95MS: float64(percentile(mq.latencies, 0.95)) / float64(time.Millisecond), ClaimP99MS: float64(percentile(mq.latencies, 0.99)) / float64(time.Millisecond),
 		QueueWaitP50MS: float64(percentile(queueWaits, 0.50)) / float64(time.Millisecond), QueueWaitP95MS: float64(percentile(queueWaits, 0.95)) / float64(time.Millisecond), QueueWaitP99MS: float64(percentile(queueWaits, 0.99)) / float64(time.Millisecond),
 		EndToEndP50MS: float64(percentile(endToEnds, 0.50)) / float64(time.Millisecond), EndToEndP95MS: float64(percentile(endToEnds, 0.95)) / float64(time.Millisecond), EndToEndP99MS: float64(percentile(endToEnds, 0.99)) / float64(time.Millisecond),
+		HandlerP50MS: float64(percentile(handlerLatencies, 0.50)) / float64(time.Millisecond), HandlerP95MS: float64(percentile(handlerLatencies, 0.95)) / float64(time.Millisecond), AckP50MS: float64(percentile(ackLatencies, 0.50)) / float64(time.Millisecond), AckP95MS: float64(percentile(ackLatencies, 0.95)) / float64(time.Millisecond), ProviderWaitP95MS: float64(percentile(providerWaits, 0.95)) / float64(time.Millisecond), ProviderDurationP95MS: float64(percentile(providerDurations, 0.95)) / float64(time.Millisecond), ArtifactWriteP95MS: float64(percentile(artifactWrites, 0.95)) / float64(time.Millisecond),
 	}
 	artifactDir, artifactErr := writeLoadgenArtifacts(outputRoot, runID, db, summary, rawSamples)
 	if artifactErr != nil {
@@ -230,6 +296,7 @@ func main() {
 	fmt.Printf("profile/seed      : %s / %d\n", profile, seed)
 	fmt.Printf("producers/queues  : %d / %d\n", producers, queueCount)
 	fmt.Printf("payload bytes     : %d\n", payloadSize)
+	fmt.Printf("task/mode         : %s / %s (cases/task=%d, provider cap=%d)\n", taskKind, handlerMode, casesPerTask, providerConcurrency)
 	fmt.Printf("workers           : %d (concurrency %d each)\n", numWorkers, concurrency)
 	fmt.Printf("submit time       : %s (%d/s)\n", submitDur.Round(time.Millisecond), int(float64(numTasks)/submitDur.Seconds()))
 	fmt.Printf("processing time   : %s\n", runDur.Round(time.Millisecond))
@@ -243,6 +310,7 @@ func main() {
 	fmt.Printf("claim latency p95 : %s\n", percentile(mq.latencies, 0.95).Round(time.Millisecond))
 	fmt.Printf("claim latency p99 : %s\n", percentile(mq.latencies, 0.99).Round(time.Millisecond))
 	fmt.Printf("queue wait p95    : %s\n", percentile(queueWaits, 0.95).Round(time.Millisecond))
+	fmt.Printf("handler/ack p95   : %s / %s\n", percentile(handlerLatencies, 0.95).Round(time.Millisecond), percentile(ackLatencies, 0.95).Round(time.Millisecond))
 	fmt.Printf("end-to-end p95   : %s\n", percentile(endToEnds, 0.95).Round(time.Millisecond))
 	fmt.Printf("duplicate claims  : %d\n", duplicates)
 	fmt.Printf("evidence bundle  : %s\n", artifactDir)
@@ -263,6 +331,21 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func loadgenTask(kind, runID string, seed, index int, queueName string, payloadSize, casesPerTask int) *domain.Task {
+	id := fmt.Sprintf("loadgen-%d-%06d", seed, index)
+	data := map[string]any{"loadgen_task_id": id, "padding": strings.Repeat("x", payloadSize), "mock_duration_ms": 1}
+	typeName, payloadKind := domain.TaskTypeRAGIngestion, "rag_ingestion"
+	switch kind {
+	case "llm_eval":
+		typeName, payloadKind = domain.TaskTypeEval, "eval"
+		data = map[string]any{"version": "2", "loadgen_task_id": id, "run_id": fmt.Sprintf("%s-%06d", runID, index), "dataset_version": "loadgen-golden-v1", "dataset_uri": "artifact://loadgen/dataset.jsonl", "dataset_sha256": strings.Repeat("0", 64), "case_start": 0, "case_end": casesPerTask, "model_profile": "loadgen-model", "prompt_version": "loadgen-prompt-v1", "retriever_version": "loadgen-retriever-v1", "evaluator_schema_version": "2"}
+	case "strategy_replay":
+		typeName, payloadKind = domain.TaskTypeStrategyReplay, "strategy_replay"
+		data = map[string]any{"loadgen_task_id": id, "strategy_key": "rag_retrieval_policy", "candidate_config": map[string]any{"top_k": 10.0, "reranker_enabled": true, "min_score": 0.4}, "case_count": maxInt(100, casesPerTask), "dataset_version": "loadgen-golden-v1", "prompt_version": "loadgen-prompt-v1", "retriever_version": "loadgen-retriever-v1", "evaluator_schema_version": "2", "producer_commit": strings.Repeat("0", 40)}
+	}
+	return &domain.Task{ID: id, Type: typeName, Queue: queueName, Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: payloadKind, Data: data}, MaxAttempts: 1, TimeoutSeconds: 60, RetryBackoffMultiplier: 2}
 }
 
 func envDuration(k string, fallback time.Duration) time.Duration {

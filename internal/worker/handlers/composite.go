@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/worker"
@@ -10,10 +11,12 @@ import (
 // Composite dispatches rag_ingestion tasks that carry a source_path to the
 // real RAG ingestion pipeline, and everything else to the mock handler.
 type Composite struct {
-	mock    *MockHandler
-	rag     *RealRAGIngestion
-	replay  *StrategyReplay
-	eval    *LLMEval
+	mock   *MockHandler
+	rag    *RealRAGIngestion
+	replay *StrategyReplay
+	eval   interface {
+		Run(context.Context, map[string]any) (*worker.TaskExecResult, error)
+	}
 	effects *SideEffectHandler
 }
 
@@ -22,10 +25,19 @@ func NewComposite(docDir, artifactDir string) *Composite {
 	return &Composite{
 		mock:    NewMockHandler(),
 		rag:     NewRealRAGIngestion(docDir, artifactDir),
-		replay:  NewStrategyReplay(),
-		eval:    NewLLMEval(artifactDir),
+		replay:  NewStrategyReplay(artifactDir),
+		eval:    newEvalBackend(artifactDir),
 		effects: NewSideEffectHandler(filepath.Join(artifactDir, "receipts")),
 	}
+}
+
+func newEvalBackend(artifactDir string) interface {
+	Run(context.Context, map[string]any) (*worker.TaskExecResult, error)
+} {
+	if os.Getenv("EVAL_BACKEND") == "gateway" {
+		return NewGatewayLLMEvalFromEnv(artifactDir)
+	}
+	return NewLLMEval(artifactDir)
 }
 
 // Handle routes a task to the real RAG pipeline, the strategy replay worker, or

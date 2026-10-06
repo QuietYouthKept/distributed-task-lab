@@ -27,3 +27,15 @@ Use `make benchmark-matrix` for the initial worker scaling curve: 1, 4, 8, and
 generated evidence directories only after running on the stated benchmark
 machine. The harness intentionally does not invent a throughput result when a
 PostgreSQL/Docker environment is absent.
+
+## AI workload matrix
+
+`LOADGEN_TASK_TYPE=noop|llm_eval|strategy_replay` separates scheduler-kernel
+results from AI-handler results. Set `LOADGEN_HANDLER_MODE=deterministic` for
+artifact and fingerprint overhead, or `gateway` only with a controlled real
+gateway. `LOADGEN_CASES_PER_TASK` bounds shard size and
+`LOADGEN_PROVIDER_CONCURRENCY` maps to the in-process provider gate.
+
+The report records queue wait, handler latency, fenced-ack latency,
+end-to-end latency, provider semaphore wait, provider duration, and estimated
+artifact-write time. Do not compare Gateway tasks/s to scheduler noop tasks/s.

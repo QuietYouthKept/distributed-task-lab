@@ -1,0 +1,22 @@
+{
+  "type": "eval",
+  "queue": "llm-eval",
+  "idempotency_key": "assistgen-v1.2-release:0000-0025",
+  "payload": {
+    "version": "2",
+    "kind": "llm_eval",
+    "data": {
+      "version": "2",
+      "run_id": "assistgen-v1.2-release",
+      "dataset_version": "serviceops-v1.2.0-generation-gold",
+      "dataset_uri": "artifact://datasets/serviceops-v1.2.0-generation-gold.jsonl",
+      "dataset_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "case_start": 0,
+      "case_end": 25,
+      "model_profile": "qwen2.5-3b-local",
+      "prompt_version": "serviceops-rag-v4",
+      "retriever_version": "hybrid-reranker-v2",
+      "evaluator_schema_version": "2"
+    }
+  }
+}
