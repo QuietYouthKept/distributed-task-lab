@@ -5,8 +5,9 @@
     "version": "1",
     "kind": "rag_ingestion",
     "data": {
+      "execution_mode": "real",
       "document_id": "rag-pipeline",
-      "source_path": "rag-pipeline.md",
+      "object_key": "rag-pipeline.md",
       "version": "v1",
       "chunking_profile": "paragraph"
     }

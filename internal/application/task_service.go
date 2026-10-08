@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload"
 	"github.com/fantasticyi/distributed-task-lab/internal/queue"
 	"github.com/google/uuid"
 )
@@ -47,7 +48,14 @@ type CreateTaskResponse struct {
 // returned instead of creating a duplicate.
 func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*CreateTaskResponse, error) {
 	if !domain.ValidTaskTypes[req.Type] {
-		return nil, fmt.Errorf("%w: %s", domain.ErrInvalidTaskType, req.Type)
+		return nil, domain.InvalidArgument("invalid_task_type", "task type is not supported", domain.ErrInvalidTaskType)
+	}
+	canonicalPayload, err := taskpayload.Validate(req.Type, req.Payload)
+	if err != nil {
+		return nil, domain.InvalidArgument("invalid_task_payload", "task payload does not match its task type", err)
+	}
+	if req.MaxAttempts < 0 || req.TimeoutSeconds < 0 || req.RetryDelaySeconds < 0 || req.RetryMaxDelaySeconds < 0 || req.RetryBackoffMultiplier < 0 {
+		return nil, domain.InvalidArgument("invalid_retry_policy", "retry and timeout values must be non-negative", nil)
 	}
 
 	if req.MaxAttempts <= 0 {
@@ -72,14 +80,14 @@ func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*C
 		queue = domain.DefaultQueueName
 	}
 	if len(queue) > 128 || strings.TrimSpace(queue) != queue {
-		return nil, fmt.Errorf("invalid queue name")
+		return nil, domain.InvalidArgument("invalid_queue", "queue name is invalid", nil)
 	}
 
 	task := &domain.Task{
 		ID:                     uuid.New().String(),
 		Type:                   req.Type,
 		Queue:                  queue,
-		Payload:                req.Payload,
+		Payload:                domain.TaskPayloadEnvelope{Version: req.Payload.Version, Kind: req.Payload.Kind, Data: canonicalPayload},
 		Priority:               req.Priority,
 		MaxAttempts:            req.MaxAttempts,
 		TimeoutSeconds:         req.TimeoutSeconds,
@@ -190,10 +198,10 @@ func (s *TaskService) ListQueues(ctx context.Context) ([]domain.QueueConfig, err
 // SetQueueConfig upserts a queue's max concurrency and rate limit.
 func (s *TaskService) SetQueueConfig(ctx context.Context, config domain.QueueConfig) error {
 	if config.Name == "" || len(config.Name) > 128 || strings.TrimSpace(config.Name) != config.Name {
-		return fmt.Errorf("task service: invalid queue name")
+		return domain.InvalidArgument("invalid_queue", "queue name is invalid", nil)
 	}
 	if config.MaxConcurrency < 0 || config.RateLimitPerSecond < 0 || config.Burst < 0 || config.AgingAfterSeconds < 0 || config.AgingPriorityBoost < 0 {
-		return fmt.Errorf("task service: queue limits must be non-negative")
+		return domain.InvalidArgument("invalid_queue_config", "queue limits must be non-negative", nil)
 	}
 	if config.Burst == 0 {
 		config.Burst = 1

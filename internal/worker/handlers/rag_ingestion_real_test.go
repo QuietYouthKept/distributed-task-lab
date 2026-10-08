@@ -19,7 +19,7 @@ func TestRealRAGIngestion(t *testing.T) {
 	h := NewRealRAGIngestion(docDir, artifactDir)
 	payload := map[string]any{
 		"document_id":      "doc-001",
-		"source_path":      "doc.md",
+		"object_key":       "doc.md",
 		"version":          "v1",
 		"chunking_profile": "paragraph",
 	}
@@ -52,9 +52,9 @@ func TestRealRAGIngestion(t *testing.T) {
 	}
 }
 
-func TestRealRAGIngestionRequiresSource(t *testing.T) {
+func TestRealRAGIngestionRequiresObjectKey(t *testing.T) {
 	h := NewRealRAGIngestion(t.TempDir(), t.TempDir())
 	if _, err := h.Ingest(context.Background(), map[string]any{"document_id": "x"}); err == nil {
-		t.Fatal("expected error when source_path is missing")
+		t.Fatal("expected error when object_key is missing")
 	}
 }

@@ -19,6 +19,8 @@ func TestDefaultWorkerIDIsUniquePerLoad(t *testing.T) {
 
 func TestValidateCollectsParseAndSafetyErrors(t *testing.T) {
 	t.Setenv("APP_PROFILE", "production")
+	t.Setenv("API_TOKEN", "")
+	t.Setenv("ADMIN_TOKEN", "")
 	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/tasklab?sslmode=disable")
 	t.Setenv("WORKER_CONCURRENCY", "many")
 	t.Setenv("LEASE_TIMEOUT", "0s")
@@ -52,6 +54,17 @@ func TestValidateProductionAcceptsStrictConfiguration(t *testing.T) {
 	}
 	if cfg.EffectiveChecksum() == "" || strings.Contains(cfg.DatabaseURLWithoutCredentials(), "an-adequately") {
 		t.Fatal("effective configuration leaked credentials or lacked checksum")
+	}
+}
+
+func TestValidateProductionRejectsLocalDatabaseEvenWithTLS(t *testing.T) {
+	t.Setenv("APP_PROFILE", "production")
+	t.Setenv("DATABASE_URL", "postgres://app:an-adequately-long-password@localhost:5432/tasklab?sslmode=require")
+	t.Setenv("API_TOKEN", "api-token")
+	t.Setenv("ADMIN_TOKEN", "admin-token")
+	t.Setenv("RAG_ARTIFACT_DIR", "s3://tasklab-artifacts/index")
+	if err := Load().Validate(); err == nil || !strings.Contains(err.Error(), "local database host") {
+		t.Fatalf("expected local host rejection, got %v", err)
 	}
 }
 

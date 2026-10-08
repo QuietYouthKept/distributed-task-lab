@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/artifacts"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"github.com/fantasticyi/distributed-task-lab/internal/worker"
 )
@@ -39,17 +40,17 @@ func NewRealRAGIngestion(docDir, artifactDir string) *RealRAGIngestion {
 // Ingest runs the pipeline for a payload describing a document to ingest.
 func (h *RealRAGIngestion) Ingest(ctx context.Context, payload map[string]any) (*worker.TaskExecResult, error) {
 	docID := getString(payload, "document_id", "")
-	sourcePath := getString(payload, "source_path", "")
+	objectKey := getString(payload, "object_key", "")
 	version := getString(payload, "version", "v1")
 	profile := getString(payload, "chunking_profile", "paragraph")
 
-	if docID == "" || sourcePath == "" {
-		return nil, worker.NewNonRetryableError(fmt.Errorf("document_id and source_path are required"), domain.ErrorTypeBadPayload)
+	if docID == "" || objectKey == "" {
+		return nil, worker.NewNonRetryableError(fmt.Errorf("document_id and object_key are required"), domain.ErrorTypeBadPayload)
 	}
 
-	fullPath := sourcePath
-	if !filepath.IsAbs(fullPath) {
-		fullPath = filepath.Join(h.DocDir, sourcePath)
+	fullPath, err := artifacts.ResolveLocalObjectKey(h.DocDir, objectKey)
+	if err != nil {
+		return nil, worker.NewNonRetryableError(fmt.Errorf("resolve object key: %w", err), domain.ErrorTypeBadPayload)
 	}
 
 	data, err := os.ReadFile(fullPath)

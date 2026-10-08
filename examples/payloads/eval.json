@@ -4,6 +4,7 @@
     "version": "1",
     "kind": "eval",
     "data": {
+      "execution_mode": "mock",
       "eval_set_id": "eval-001",
       "model_profile": "gpt-4-mock",
       "scorer_profile": "accuracy",

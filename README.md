@@ -53,7 +53,7 @@ make up
 curl -X POST http://localhost:8080/tasks \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $API_TOKEN" \
-  -d '{"type":"rag_ingestion","payload":{"version":"1","kind":"rag_ingestion","data":{"document_id":"doc-1"}}}'
+  -d '{"type":"rag_ingestion","payload":{"version":"1","kind":"rag_ingestion","data":{"execution_mode":"mock","document_id":"doc-1"}}}'
 ```
 
 The bundled Compose deployment fails closed unless distinct `API_TOKEN` and
@@ -61,6 +61,11 @@ The bundled Compose deployment fails closed unless distinct `API_TOKEN` and
 only for deliberate local development. `/live` checks the process and `/ready`
 checks PostgreSQL plus the expected schema version. Worker health is on port
 `9091` by default.
+
+`deployments/docker-compose.yml` is explicitly development-only. In a
+production profile, startup rejects local database hosts, disabled database TLS,
+empty/equal API tokens, and local artifact storage; see the
+[production configuration boundary](deployments/production/README.md).
 
 ## Verification
 
@@ -75,6 +80,17 @@ make loadgen
 make benchmark-matrix
 ASSETLAB_RESULT_DIR=/new/evidence/path DATABASE_URL=... go run ./cmd/assetlab
 ```
+
+Before comparing a change with existing tests or benchmark artifacts, capture a
+baseline with the [evidence collector](evidence/README.md):
+
+```powershell
+pwsh -NoProfile -File scripts/evidence/collect-baseline.ps1
+```
+
+The resulting manifest records the exact commit, environment, raw command logs,
+and exit statuses. A missing test dependency is recorded as unverified rather
+than reported as a pass.
 
 The repository may contain local `Round*` study snapshots. Make/CI intentionally
 target `cmd`, `internal`, and `pkg`, which are the production module surface.

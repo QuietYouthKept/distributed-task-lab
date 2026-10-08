@@ -720,7 +720,7 @@ func (q *PostgresQueue) PauseQueue(ctx context.Context, name string) error {
 		return fmt.Errorf("pause queue: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("pause queue: queue %s not found", name)
+		return fmt.Errorf("pause queue: queue %s: %w", name, domain.ErrQueueNotFound)
 	}
 	return nil
 }
@@ -732,7 +732,7 @@ func (q *PostgresQueue) ResumeQueue(ctx context.Context, name string) error {
 		return fmt.Errorf("resume queue: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("resume queue: queue %s not found", name)
+		return fmt.Errorf("resume queue: queue %s: %w", name, domain.ErrQueueNotFound)
 	}
 	return nil
 }
@@ -834,7 +834,7 @@ func (q *PostgresQueue) Requeue(ctx context.Context, taskID string, reason strin
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("requeue: task %s not in dlq status", taskID)
+		return fmt.Errorf("requeue: task %s not in dlq status: %w", taskID, domain.ErrTaskStateConflict)
 	}
 	if err := q.insertEvent(ctx, tx, taskID, domain.EventRequeued, "", reason, nil); err != nil {
 		return fmt.Errorf("requeue: event: %w", err)
@@ -870,7 +870,7 @@ func (q *PostgresQueue) Cancel(ctx context.Context, taskID string, reason string
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("cancel: task %s not in cancellable status", taskID)
+		return fmt.Errorf("cancel: task %s not in cancellable status: %w", taskID, domain.ErrTaskStateConflict)
 	}
 	if err := q.insertEvent(ctx, tx, taskID, domain.EventCancelled, "", reason, nil); err != nil {
 		return fmt.Errorf("cancel: event: %w", err)

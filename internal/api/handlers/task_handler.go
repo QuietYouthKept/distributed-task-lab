@@ -26,7 +26,7 @@ func NewTaskHandler(svc *application.TaskService, logger *slog.Logger) *TaskHand
 func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	var req application.CreateTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body: " + err.Error()})
+		writeMalformedRequest(w, r, "invalid_json", "request body must be valid JSON")
 		return
 	}
 
@@ -54,7 +54,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.svc.CreateTask(r.Context(), req)
 	if err != nil {
 		h.logger.Error("create task failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeError(w, r, err)
 		return
 	}
 
@@ -66,18 +66,14 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing task id"})
+		writeInvalidRequest(w, r, "missing_task_id", "task id is required")
 		return
 	}
 
 	task, err := h.svc.GetTask(r.Context(), id)
 	if err != nil {
-		if err == domain.ErrTaskNotFound {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "task not found"})
-			return
-		}
 		h.logger.Error("get task failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeError(w, r, err)
 		return
 	}
 
@@ -108,7 +104,7 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	tasks, err := h.svc.ListTasks(r.Context(), filter)
 	if err != nil {
 		h.logger.Error("list tasks failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeError(w, r, err)
 		return
 	}
 
@@ -124,7 +120,7 @@ func (h *TaskHandler) ListDLQ(w http.ResponseWriter, r *http.Request) {
 	tasks, err := h.svc.ListDLQ(r.Context(), filter)
 	if err != nil {
 		h.logger.Error("list dlq failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeError(w, r, err)
 		return
 	}
 
@@ -136,7 +132,7 @@ func (h *TaskHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	counts, err := h.svc.GetStats(r.Context())
 	if err != nil {
 		h.logger.Error("stats query failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeError(w, r, err)
 		return
 	}
 
@@ -153,7 +149,7 @@ func (h *TaskHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 func (h *TaskHandler) Requeue(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing task id"})
+		writeInvalidRequest(w, r, "missing_task_id", "task id is required")
 		return
 	}
 
@@ -167,7 +163,7 @@ func (h *TaskHandler) Requeue(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.svc.Requeue(r.Context(), id, body.Reason); err != nil {
 		h.logger.Error("requeue failed", "task_id", id, "error", err)
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeError(w, r, err)
 		return
 	}
 
@@ -179,7 +175,7 @@ func (h *TaskHandler) Requeue(w http.ResponseWriter, r *http.Request) {
 func (h *TaskHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing task id"})
+		writeInvalidRequest(w, r, "missing_task_id", "task id is required")
 		return
 	}
 
@@ -193,7 +189,7 @@ func (h *TaskHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.svc.Cancel(r.Context(), id, body.Reason); err != nil {
 		h.logger.Error("cancel failed", "task_id", id, "error", err)
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeError(w, r, err)
 		return
 	}
 
@@ -205,14 +201,14 @@ func (h *TaskHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 func (h *TaskHandler) GetTaskEvents(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing task id"})
+		writeInvalidRequest(w, r, "missing_task_id", "task id is required")
 		return
 	}
 
 	events, err := h.svc.GetTaskEvents(r.Context(), id)
 	if err != nil {
 		h.logger.Error("get events failed", "task_id", id, "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeError(w, r, err)
 		return
 	}
 
@@ -223,12 +219,12 @@ func (h *TaskHandler) GetTaskEvents(w http.ResponseWriter, r *http.Request) {
 func (h *TaskHandler) PauseQueue(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing queue name"})
+		writeInvalidRequest(w, r, "missing_queue", "queue name is required")
 		return
 	}
 	if err := h.svc.PauseQueue(r.Context(), name); err != nil {
 		h.logger.Error("pause queue failed", "queue", name, "error", err)
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "paused", "queue": name})
@@ -238,12 +234,12 @@ func (h *TaskHandler) PauseQueue(w http.ResponseWriter, r *http.Request) {
 func (h *TaskHandler) ResumeQueue(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing queue name"})
+		writeInvalidRequest(w, r, "missing_queue", "queue name is required")
 		return
 	}
 	if err := h.svc.ResumeQueue(r.Context(), name); err != nil {
 		h.logger.Error("resume queue failed", "queue", name, "error", err)
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "resumed", "queue": name})
@@ -254,7 +250,7 @@ func (h *TaskHandler) ListQueues(w http.ResponseWriter, r *http.Request) {
 	queues, err := h.svc.ListQueues(r.Context())
 	if err != nil {
 		h.logger.Error("list queues failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, queues)
@@ -264,7 +260,7 @@ func (h *TaskHandler) ListQueues(w http.ResponseWriter, r *http.Request) {
 func (h *TaskHandler) SetQueueConfig(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing queue name"})
+		writeInvalidRequest(w, r, "missing_queue", "queue name is required")
 		return
 	}
 	var body struct {
@@ -286,7 +282,7 @@ func (h *TaskHandler) SetQueueConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.svc.SetQueueConfig(r.Context(), config); err != nil {
 		h.logger.Error("set queue config failed", "queue", name, "error", err)
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "configured", "queue": name})

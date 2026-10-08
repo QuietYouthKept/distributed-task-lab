@@ -44,7 +44,7 @@ func TestServiceLifecycle(t *testing.T) {
 
 	resp, err := svc.CreateTask(ctx, CreateTaskRequest{
 		Type:              domain.TaskTypeRAGIngestion,
-		Payload:           domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"document_id": "doc-1"}},
+		Payload:           domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"execution_mode": "mock", "document_id": "doc-1"}},
 		MaxAttempts:       2,
 		RetryDelaySeconds: 1,
 	})
@@ -122,7 +122,7 @@ func TestServiceIdempotentCreate(t *testing.T) {
 	key := "svc-idem-1"
 	req := CreateTaskRequest{
 		Type:           domain.TaskTypeEval,
-		Payload:        domain.TaskPayloadEnvelope{Version: "1", Kind: "eval", Data: map[string]any{}},
+		Payload:        domain.TaskPayloadEnvelope{Version: "1", Kind: "eval", Data: map[string]any{"execution_mode": "mock", "eval_set_id": "eval-1", "model_profile": "mock-model"}},
 		IdempotencyKey: &key,
 	}
 

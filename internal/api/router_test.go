@@ -60,6 +60,17 @@ func TestSecurityHeadersOnLiveness(t *testing.T) {
 	}
 }
 
+func TestRequestIDIsGeneratedAndInvalidCallerIDIsReplaced(t *testing.T) {
+	h := testRouter(readinessStub{}, RouterConfig{})
+	r := httptest.NewRequest(http.MethodGet, "/live", nil)
+	r.Header.Set("X-Request-ID", "invalid value with spaces")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if got := w.Header().Get("X-Request-ID"); got == "" || got == "invalid value with spaces" {
+		t.Fatalf("X-Request-ID=%q", got)
+	}
+}
+
 func TestRequestBodyLimit(t *testing.T) {
 	h := testRouter(readinessStub{}, RouterConfig{MaxRequestBodyBytes: 32})
 	body := strings.NewReader(`{"payload":"` + strings.Repeat("x", 100) + `"}`)

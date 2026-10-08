@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/api/contract"
 	"github.com/fantasticyi/distributed-task-lab/internal/api/handlers"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -79,8 +81,17 @@ func NewRouterWithConfig(taskHandler *handlers.TaskHandler, metricsHandler *hand
 	h = authMiddleware(h, cfg)
 	h = requestSafetyMiddleware(h, cfg)
 	h = loggingMiddleware(h, logger)
+	h = requestIDMiddleware(h)
 	h = otelhttp.NewHandler(h, "task-lab.http")
 	return h
+}
+
+func requestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := contract.NormalizeRequestID(r.Header.Get("X-Request-ID"))
+		w.Header().Set("X-Request-ID", requestID)
+		next.ServeHTTP(w, r.WithContext(contract.WithRequestID(r.Context(), requestID)))
+	})
 }
 
 func requestSafetyMiddleware(next http.Handler, cfg RouterConfig) http.Handler {
@@ -110,7 +121,7 @@ func authMiddleware(next http.Handler, cfg RouterConfig) http.Handler {
 		}
 		if required != "" && !validBearer(r.Header.Get("Authorization"), required) {
 			w.Header().Set("WWW-Authenticate", "Bearer")
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			contract.WriteError(w, r, domain.NewError(domain.ErrorKindUnauthorized, "unauthorized", "authentication is required", nil))
 			return
 		}
 		next.ServeHTTP(w, r)

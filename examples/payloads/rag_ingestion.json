@@ -4,6 +4,7 @@
     "version": "1",
     "kind": "rag_ingestion",
     "data": {
+      "execution_mode": "mock",
       "document_id": "doc-001",
       "dataset_id": "ds-demo",
       "source_uri": "s3://mock-bucket/docs/research-paper.pdf",

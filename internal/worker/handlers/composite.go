@@ -5,12 +5,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload"
 	"github.com/fantasticyi/distributed-task-lab/internal/effects"
 	"github.com/fantasticyi/distributed-task-lab/internal/worker"
 )
 
-// Composite dispatches rag_ingestion tasks that carry a source_path to the
-// real RAG ingestion pipeline, and everything else to the mock handler.
+// Composite dispatches explicitly-modeled task payloads to their handler.
 type Composite struct {
 	mock   *MockHandler
 	rag    *RealRAGIngestion
@@ -48,16 +49,21 @@ func newEvalBackend(artifactDir string) interface {
 // Handle routes a task to the real RAG pipeline, the strategy replay worker, or
 // the mock handler.
 func (c *Composite) Handle(ctx context.Context, taskType string, payload map[string]any, attempt int) (*worker.TaskExecResult, error) {
-	if taskType == "rag_ingestion" && getString(payload, "source_path", "") != "" {
+	canonicalPayload, err := taskpayload.ValidateData(domain.TaskType(taskType), payload)
+	if err != nil {
+		return nil, worker.NewNonRetryableError(err, domain.ErrorTypeBadPayload)
+	}
+	payload = canonicalPayload
+	if taskType == "rag_ingestion" && getString(payload, "execution_mode", "") == "real" {
 		return c.rag.Ingest(ctx, payload)
 	}
-	if taskType == "strategy_replay" {
+	if taskType == "strategy_replay" && getString(payload, "execution_mode", "") == "replay" {
 		return c.replay.Run(ctx, payload)
 	}
-	if taskType == "eval" && getString(payload, "dataset_version", "") != "" {
+	if taskType == "eval" && getString(payload, "execution_mode", "") == "deterministic" {
 		return c.eval.Run(ctx, payload)
 	}
-	if taskType == "notification" || taskType == "payment" {
+	if (taskType == "notification" || taskType == "payment") && getString(payload, "execution_mode", "") == "effect" {
 		return c.effects.Run(ctx, payload)
 	}
 	return c.mock.Handle(ctx, taskType, payload, attempt)

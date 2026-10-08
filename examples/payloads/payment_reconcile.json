@@ -3,8 +3,9 @@
   "queue": "payments",
   "payload": {
     "version": "1",
-    "kind": "notification",
+    "kind": "payment",
     "data": {
+      "execution_mode": "effect",
       "operation": "payment",
       "operation_id": "invoice-42",
       "target": "customer-7",

@@ -63,7 +63,7 @@ func main() {
 	// Initialize queue.
 	pq := postgres.NewPostgresQueueWithTimeout(db, cfg.DBOperationTimeout)
 
-	// Composite handler: real RAG ingestion for source_path tasks, mock otherwise.
+	// Composite handler: explicit real-RAG object-key tasks or explicit mock workloads.
 	handler := handlers.NewComposite(cfg.DocDir, cfg.ArtifactDir, postgres.NewEffectLedger(db))
 
 	// Create and start the worker pool.

@@ -4,6 +4,7 @@
     "version": "1",
     "kind": "benchmark",
     "data": {
+      "execution_mode": "mock",
       "benchmark_name": "rag-throughput",
       "target_profile": "default",
       "concurrency": 10,

@@ -162,6 +162,7 @@ func (c *Config) Validate() error {
 		bad(c.APIToken == "" || c.AdminToken == "" || c.APIToken != c.AdminToken, "API_TOKEN and ADMIN_TOKEN must be distinct in production")
 		if urlErr == nil {
 			bad(u.Query().Get("sslmode") != "disable", "DATABASE_URL must not use sslmode=disable in production")
+			bad(!isLocalDatabaseHost(u.Hostname()), "DATABASE_URL must not target a local database host in production")
 			if password, set := u.User.Password(); set {
 				bad(len(password) >= 16 && !strings.EqualFold(password, "postgres"), "DATABASE_URL password is too weak for production")
 			} else {
@@ -174,6 +175,11 @@ func (c *Config) Validate() error {
 		return nil
 	}
 	return fmt.Errorf("invalid configuration:\n - %s", strings.Join(errs, "\n - "))
+}
+
+func isLocalDatabaseHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "postgres"
 }
 
 func isLocalArtifactDir(value string) bool {

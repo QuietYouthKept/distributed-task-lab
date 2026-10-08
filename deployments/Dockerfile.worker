@@ -18,7 +18,7 @@ COPY --from=builder --chown=tasklab:tasklab /worker /worker
 
 # Real RAG ingestion reads markdown from RAG_DOC_DIR and writes JSONL artifacts
 # to RAG_ARTIFACT_DIR. Copy the example docs and create a writable artifacts dir
-# so a source_path task works inside the container (not just the mock path).
+# so a controlled object_key task can resolve a development fixture.
 COPY --from=builder --chown=tasklab:tasklab /app/examples/docs /app/examples/docs
 RUN mkdir -p /app/artifacts/index \
     && chown -R tasklab:tasklab /app

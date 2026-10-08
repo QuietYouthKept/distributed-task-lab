@@ -1,4 +1,6 @@
 services:
+  # Development-only topology. Production uses an external TLS database,
+  # platform-injected secrets, and shared object storage.
   postgres:
     image: postgres:16-alpine
     environment:
@@ -25,6 +27,7 @@ services:
     ports:
       - "8080:8080"
     environment:
+      APP_PROFILE: development
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/tasklab?sslmode=disable
       API_PORT: "8080"
       API_TOKEN: ${API_TOKEN:?set API_TOKEN to a deployment secret}
@@ -40,6 +43,7 @@ services:
       args:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     environment:
+      APP_PROFILE: development
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/tasklab?sslmode=disable
       WORKER_CONCURRENCY: "4"
       WORKER_POLL_INTERVAL: "1s"
