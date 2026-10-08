@@ -1,0 +1,62 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "distributed-task-lab API",
+    "version": "1.0.0",
+    "description": "Stable v1 contract for the single-tenant task queue laboratory."
+  },
+  "servers": [{"url": "/"}],
+  "security": [{"bearerAuth": []}],
+  "paths": {
+    "/v1/tasks": {
+      "get": {"operationId": "listTasks", "parameters": [
+        {"name": "status", "in": "query", "schema": {"$ref": "#/components/schemas/TaskStatus"}},
+        {"name": "type", "in": "query", "schema": {"$ref": "#/components/schemas/TaskType"}},
+        {"name": "queue", "in": "query", "schema": {"type": "string", "maxLength": 128}}
+      ], "responses": {"200": {"description": "Tasks"}, "422": {"$ref": "#/components/responses/InvalidArgument"}, "503": {"$ref": "#/components/responses/Unavailable"}}},
+      "post": {"operationId": "createTask", "parameters": [
+        {"name": "Idempotency-Key", "in": "header", "required": false, "schema": {"type": "string", "minLength": 1, "maxLength": 256}}
+      ], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateTaskRequest"}}}},
+      "responses": {"201": {"description": "Created"}, "400": {"$ref": "#/components/responses/MalformedRequest"}, "422": {"$ref": "#/components/responses/InvalidArgument"}, "503": {"$ref": "#/components/responses/Unavailable"}}}
+    },
+    "/v1/tasks/{id}": {"get": {"operationId": "getTask", "parameters": [{"$ref": "#/components/parameters/TaskID"}], "responses": {"200": {"description": "Task"}, "404": {"$ref": "#/components/responses/NotFound"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/v1/tasks/{id}/events": {"get": {"operationId": "getTaskEvents", "parameters": [{"$ref": "#/components/parameters/TaskID"}], "responses": {"200": {"description": "Task events"}, "404": {"$ref": "#/components/responses/NotFound"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/v1/tasks/{id}/cancel": {"post": {"operationId": "cancelTask", "parameters": [{"$ref": "#/components/parameters/TaskID"}], "requestBody": {"$ref": "#/components/requestBodies/OptionalReason"}, "responses": {"200": {"description": "Cancelled"}, "400": {"$ref": "#/components/responses/MalformedRequest"}, "409": {"$ref": "#/components/responses/Conflict"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/v1/tasks/{id}/requeue": {"post": {"operationId": "requeueTask", "parameters": [{"$ref": "#/components/parameters/TaskID"}], "requestBody": {"$ref": "#/components/requestBodies/OptionalReason"}, "responses": {"200": {"description": "Requeued"}, "400": {"$ref": "#/components/responses/MalformedRequest"}, "409": {"$ref": "#/components/responses/Conflict"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/v1/dlq": {"get": {"operationId": "listDLQ", "responses": {"200": {"description": "Dead-letter tasks"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/v1/stats": {"get": {"operationId": "getStats", "responses": {"200": {"description": "Task counts"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/v1/metrics": {"get": {"operationId": "getMetrics", "responses": {"200": {"description": "Prometheus metrics", "content": {"text/plain": {"schema": {"type": "string"}}}}}}},
+    "/v1/queues": {"get": {"operationId": "listQueues", "responses": {"200": {"description": "Queues"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/v1/queues/{name}": {"put": {"operationId": "setQueueConfig", "parameters": [{"$ref": "#/components/parameters/QueueName"}], "requestBody": {"required": false, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/QueueConfigRequest"}}}}, "responses": {"200": {"description": "Configured"}, "400": {"$ref": "#/components/responses/MalformedRequest"}, "422": {"$ref": "#/components/responses/InvalidArgument"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/v1/queues/{name}/pause": {"post": {"operationId": "pauseQueue", "parameters": [{"$ref": "#/components/parameters/QueueName"}], "responses": {"200": {"description": "Paused"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/v1/queues/{name}/resume": {"post": {"operationId": "resumeQueue", "parameters": [{"$ref": "#/components/parameters/QueueName"}], "responses": {"200": {"description": "Resumed"}, "503": {"$ref": "#/components/responses/Unavailable"}}}}
+  },
+  "components": {
+    "securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}},
+    "parameters": {
+      "TaskID": {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "minLength": 1}},
+      "QueueName": {"name": "name", "in": "path", "required": true, "schema": {"type": "string", "minLength": 1, "maxLength": 128}}
+    },
+    "requestBodies": {
+      "OptionalReason": {"required": false, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "properties": {"reason": {"type": "string"}}}}}}
+    },
+    "schemas": {
+      "TaskStatus": {"type": "string", "enum": ["pending", "running", "success", "failed", "dlq"]},
+      "TaskType": {"type": "string", "enum": ["rag_ingestion", "eval", "benchmark", "strategy_replay", "payment", "notification"]},
+      "PayloadEnvelope": {"type": "object", "additionalProperties": false, "required": ["version", "kind", "data"], "properties": {"version": {"type": "string"}, "kind": {"type": "string"}, "data": {"type": "object"}}},
+      "CreateTaskRequest": {"type": "object", "additionalProperties": false, "required": ["type", "payload"], "properties": {
+        "type": {"$ref": "#/components/schemas/TaskType"}, "queue": {"type": "string", "maxLength": 128}, "payload": {"$ref": "#/components/schemas/PayloadEnvelope"}, "priority": {"type": "integer"}, "max_attempts": {"type": "integer", "minimum": 0}, "timeout_seconds": {"type": "integer", "minimum": 0}, "retry_delay_seconds": {"type": "integer", "minimum": 0}, "retry_max_delay_seconds": {"type": "integer", "minimum": 0}, "retry_backoff_multiplier": {"type": "number", "minimum": 0}, "retry_jitter": {"type": "boolean"}, "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 256}
+      }},
+      "QueueConfigRequest": {"type": "object", "additionalProperties": false, "properties": {"max_concurrency": {"type": "integer", "minimum": 0}, "rate_limit_per_second": {"type": "number", "minimum": 0}, "burst": {"type": "integer", "minimum": 0}, "aging_after_seconds": {"type": "integer", "minimum": 0}, "aging_priority_boost": {"type": "integer", "minimum": 0}}},
+      "APIError": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"type": "string"}, "message": {"type": "string"}}},
+      "ErrorResponse": {"type": "object", "additionalProperties": false, "required": ["error", "request_id"], "properties": {"error": {"$ref": "#/components/schemas/APIError"}, "request_id": {"type": "string"}}}
+    },
+    "responses": {
+      "MalformedRequest": {"description": "Malformed JSON or request framing", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "InvalidArgument": {"description": "Valid request with invalid domain values", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "NotFound": {"description": "Resource not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "Conflict": {"description": "State conflict", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "Unavailable": {"description": "Database temporarily unavailable", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
+    }
+  }
+}

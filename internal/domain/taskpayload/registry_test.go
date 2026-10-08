@@ -2,6 +2,7 @@ package taskpayload
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
@@ -15,6 +16,7 @@ func TestValidateProductionTaskPayloads(t *testing.T) {
 	}{
 		{"rag mock", domain.TaskTypeRAGIngestion, map[string]any{"execution_mode": "mock", "document_id": "doc-1", "mock_duration_ms": 10.0}},
 		{"eval deterministic", domain.TaskTypeEval, map[string]any{"execution_mode": "deterministic", "dataset_version": "ds-1", "model_profile": "model-1", "prompt_version": "p-1", "run_id": "run-1", "case_start": 0.0, "case_end": 4.0}},
+		{"eval gateway", domain.TaskTypeEval, map[string]any{"execution_mode": "gateway", "version": "2", "dataset_version": "ds-1", "dataset_uri": "artifact://datasets/ds-1.jsonl", "dataset_sha256": strings.Repeat("a", 64), "model_profile": "model-1", "prompt_version": "p-1", "retriever_version": "r-1", "evaluator_schema_version": "2", "run_id": "run-1", "case_start": 0.0, "case_end": 4.0}},
 		{"benchmark", domain.TaskTypeBenchmark, map[string]any{"execution_mode": "mock", "benchmark_name": "claim-latency", "concurrency": 4.0}},
 		{"strategy replay", domain.TaskTypeStrategyReplay, map[string]any{"execution_mode": "replay", "proposal_id": "p-1", "job_schema_version": "1", "replay_result_schema_version": "1", "simulator_version": "go-v1", "execution_fingerprint": "abc", "strategy_key": "new_user_feed_exploration", "candidate_config": map[string]any{"exploration_ratio": 0.2}}},
 		{"payment effect", domain.TaskTypePayment, map[string]any{"execution_mode": "effect", "operation": "payment", "operation_id": "invoice-1", "target": "customer-1"}},
@@ -43,6 +45,7 @@ func TestValidateRejectsMismatchedAndUnsafePayloads(t *testing.T) {
 		{"unknown field", domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"execution_mode": "mock", "document_id": "doc-1", "typo": true}}},
 		{"implicit mock fallback", domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"document_id": "doc-1"}}},
 		{"wrong type", domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"execution_mode": "mock", "document_id": 42}}},
+		{"gateway URL override", domain.TaskPayloadEnvelope{Version: "1", Kind: "eval", Data: map[string]any{"execution_mode": "gateway", "version": "2", "dataset_version": "ds-1", "dataset_uri": "https://attacker.example/data", "dataset_sha256": strings.Repeat("a", 64), "model_profile": "m", "prompt_version": "p", "retriever_version": "r", "evaluator_schema_version": "2", "run_id": "run", "case_start": 0.0, "case_end": 1.0}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

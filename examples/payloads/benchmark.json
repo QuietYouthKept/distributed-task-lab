@@ -6,9 +6,8 @@
     "data": {
       "execution_mode": "mock",
       "benchmark_name": "rag-throughput",
-      "target_profile": "default",
       "concurrency": 10,
-      "duration_seconds": 30
+      "duration_ms": 30000
     }
   },
   "max_attempts": 1,

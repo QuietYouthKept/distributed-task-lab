@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -19,7 +20,8 @@ type Composite struct {
 	eval   interface {
 		Run(context.Context, map[string]any) (*worker.TaskExecResult, error)
 	}
-	effects *SideEffectHandler
+	evalMode string
+	effects  *SideEffectHandler
 }
 
 // NewComposite creates a composite handler.
@@ -28,22 +30,24 @@ func NewComposite(docDir, artifactDir string, ledgers ...effects.Ledger) *Compos
 	if len(ledgers) > 0 {
 		ledger = ledgers[0]
 	}
+	eval, evalMode := newEvalBackend(artifactDir)
 	return &Composite{
-		mock:    NewMockHandler(),
-		rag:     NewRealRAGIngestion(docDir, artifactDir),
-		replay:  NewStrategyReplay(artifactDir),
-		eval:    newEvalBackend(artifactDir),
-		effects: NewSideEffectHandler(filepath.Join(artifactDir, "receipts"), ledger),
+		mock:     NewMockHandler(),
+		rag:      NewRealRAGIngestion(docDir, artifactDir),
+		replay:   NewStrategyReplay(artifactDir),
+		eval:     eval,
+		evalMode: evalMode,
+		effects:  NewSideEffectHandler(filepath.Join(artifactDir, "receipts"), ledger),
 	}
 }
 
-func newEvalBackend(artifactDir string) interface {
+func newEvalBackend(artifactDir string) (interface {
 	Run(context.Context, map[string]any) (*worker.TaskExecResult, error)
-} {
+}, string) {
 	if os.Getenv("EVAL_BACKEND") == "gateway" {
-		return NewGatewayLLMEvalFromEnv(artifactDir)
+		return NewGatewayLLMEvalFromEnv(artifactDir), "gateway"
 	}
-	return NewLLMEval(artifactDir)
+	return NewLLMEval(artifactDir), "deterministic"
 }
 
 // Handle routes a task to the real RAG pipeline, the strategy replay worker, or
@@ -60,8 +64,14 @@ func (c *Composite) Handle(ctx context.Context, taskType string, payload map[str
 	if taskType == "strategy_replay" && getString(payload, "execution_mode", "") == "replay" {
 		return c.replay.Run(ctx, payload)
 	}
-	if taskType == "eval" && getString(payload, "execution_mode", "") == "deterministic" {
-		return c.eval.Run(ctx, payload)
+	if taskType == "eval" {
+		mode := getString(payload, "execution_mode", "")
+		if mode == "deterministic" || mode == "gateway" {
+			if mode != c.evalMode {
+				return nil, worker.NewNonRetryableError(fmt.Errorf("eval task mode %q does not match worker backend %q", mode, c.evalMode), domain.ErrorTypeBadPayload)
+			}
+			return c.eval.Run(ctx, payload)
+		}
 	}
 	if (taskType == "notification" || taskType == "payment") && getString(payload, "execution_mode", "") == "effect" {
 		return c.effects.Run(ctx, payload)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/application"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
@@ -25,7 +26,7 @@ func NewTaskHandler(svc *application.TaskService, logger *slog.Logger) *TaskHand
 // CreateTask handles POST /tasks.
 func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	var req application.CreateTaskRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeRequest(r, &req); err != nil {
 		writeMalformedRequest(w, r, "invalid_json", "request body must be valid JSON")
 		return
 	}
@@ -36,6 +37,10 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Payload.Data == nil {
 		req.Payload.Data = map[string]any{}
+	}
+	if err := applyIdempotencyKey(r, &req); err != nil {
+		writeError(w, r, err)
+		return
 	}
 	// Trace propagation keys are service-owned. Discard client-supplied values
 	// before injecting the authenticated HTTP span so callers cannot forge a
@@ -90,15 +95,26 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	if statusStr := q.Get("status"); statusStr != "" {
 		st := domain.TaskStatus(statusStr)
-		if domain.ValidTaskStatuses[st] {
-			filter.Status = &st
+		if !domain.ValidTaskStatuses[st] {
+			writeInvalidRequest(w, r, "invalid_filter", "status filter is not supported")
+			return
 		}
+		filter.Status = &st
 	}
 	if typeStr := q.Get("type"); typeStr != "" {
 		tt := domain.TaskType(typeStr)
-		if domain.ValidTaskTypes[tt] {
-			filter.Type = &tt
+		if !domain.ValidTaskTypes[tt] {
+			writeInvalidRequest(w, r, "invalid_filter", "type filter is not supported")
+			return
 		}
+		filter.Type = &tt
+	}
+	if queueName := q.Get("queue"); queueName != "" {
+		if len(queueName) > 128 || strings.TrimSpace(queueName) != queueName {
+			writeInvalidRequest(w, r, "invalid_filter", "queue filter is invalid")
+			return
+		}
+		filter.Queue = &queueName
 	}
 
 	tasks, err := h.svc.ListTasks(r.Context(), filter)
@@ -156,7 +172,10 @@ func (h *TaskHandler) Requeue(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Reason string `json:"reason"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeOptionalRequest(r, &body); err != nil {
+		writeMalformedRequest(w, r, "invalid_json", "request body must be valid JSON")
+		return
+	}
 	if body.Reason == "" {
 		body.Reason = "manual requeue"
 	}
@@ -182,7 +201,10 @@ func (h *TaskHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Reason string `json:"reason"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeOptionalRequest(r, &body); err != nil {
+		writeMalformedRequest(w, r, "invalid_json", "request body must be valid JSON")
+		return
+	}
 	if body.Reason == "" {
 		body.Reason = "manual cancel"
 	}
@@ -270,7 +292,10 @@ func (h *TaskHandler) SetQueueConfig(w http.ResponseWriter, r *http.Request) {
 		AgingAfterSeconds  int     `json:"aging_after_seconds"`
 		AgingPriorityBoost int     `json:"aging_priority_boost"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeOptionalRequest(r, &body); err != nil {
+		writeMalformedRequest(w, r, "invalid_json", "request body must be valid JSON")
+		return
+	}
 
 	config := domain.QueueConfig{
 		Name:               name,
@@ -286,6 +311,26 @@ func (h *TaskHandler) SetQueueConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "configured", "queue": name})
+}
+
+func applyIdempotencyKey(r *http.Request, req *application.CreateTaskRequest) error {
+	values := r.Header.Values("Idempotency-Key")
+	if len(values) == 0 {
+		return nil
+	}
+	if len(values) != 1 {
+		return domain.InvalidArgument("invalid_idempotency_key", "exactly one Idempotency-Key header is allowed", nil)
+	}
+
+	key := values[0]
+	if key == "" || len(key) > 256 || strings.TrimSpace(key) != key {
+		return domain.InvalidArgument("invalid_idempotency_key", "Idempotency-Key must be between 1 and 256 bytes without surrounding whitespace", nil)
+	}
+	if req.IdempotencyKey != nil && *req.IdempotencyKey != key {
+		return domain.InvalidArgument("idempotency_key_mismatch", "Idempotency-Key header and body value must match", nil)
+	}
+	req.IdempotencyKey = &key
+	return nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {

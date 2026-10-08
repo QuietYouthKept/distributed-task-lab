@@ -169,6 +169,11 @@ func (q *PostgresQueue) ListTasks(ctx context.Context, filter domain.TaskFilter)
 		args = append(args, string(*filter.Type))
 		argIdx++
 	}
+	if filter.Queue != nil {
+		query += fmt.Sprintf(" AND queue = $%d", argIdx)
+		args = append(args, *filter.Queue)
+		argIdx++
+	}
 
 	query += " ORDER BY created_at DESC"
 

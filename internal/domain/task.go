@@ -59,6 +59,7 @@ func (t Task) RetryDelayForAttempt(attempt int) time.Duration {
 type TaskFilter struct {
 	Status *TaskStatus
 	Type   *TaskType
+	Queue  *string
 	Limit  int
 	Offset int
 }

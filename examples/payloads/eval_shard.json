@@ -6,6 +6,7 @@
     "version": "1",
     "kind": "eval",
     "data": {
+      "execution_mode": "deterministic",
       "dataset_version": "golden-2026-10",
       "model_profile": "mock-gpt",
       "prompt_version": "v3",

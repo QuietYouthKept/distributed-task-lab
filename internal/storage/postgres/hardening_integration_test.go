@@ -209,11 +209,10 @@ func TestGlobalQueueRateLimitAcrossWorkersAndStableRefresh(t *testing.T) {
 	if len(immediate) != 0 {
 		t.Fatal("same-config refresh reset the shared burst")
 	}
-	time.Sleep(250 * time.Millisecond)
-	after, err := q2.ClaimTasks(ctx, "later-worker", 1, time.Minute)
-	if err != nil || len(after) != 1 {
-		t.Fatalf("refilled claim n=%d err=%v", len(after), err)
-	}
+	// Token refill is calculated from PostgreSQL time. Poll to a finite
+	// deadline instead of assuming the database clock has advanced enough after
+	// a fixed process-local sleep.
+	claimOneEventually(t, q2, "later-worker", 2*time.Second)
 }
 
 func TestLeaseUsesDatabaseClockAuthority(t *testing.T) {

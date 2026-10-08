@@ -57,6 +57,22 @@ func NewRouterWithConfig(taskHandler *handlers.TaskHandler, metricsHandler *hand
 	mux.HandleFunc("POST /queues/{name}/pause", taskHandler.PauseQueue)
 	mux.HandleFunc("POST /queues/{name}/resume", taskHandler.ResumeQueue)
 
+	// /v1 is the stable public contract. The unversioned routes above remain as
+	// a compatibility window for existing local scripts and demos.
+	mux.HandleFunc("POST /v1/tasks", taskHandler.CreateTask)
+	mux.HandleFunc("GET /v1/tasks", taskHandler.ListTasks)
+	mux.HandleFunc("GET /v1/tasks/{id}", taskHandler.GetTask)
+	mux.HandleFunc("GET /v1/dlq", taskHandler.ListDLQ)
+	mux.HandleFunc("GET /v1/stats", taskHandler.GetStats)
+	mux.HandleFunc("GET /v1/metrics", metricsHandler.ServeMetrics)
+	mux.HandleFunc("POST /v1/tasks/{id}/requeue", taskHandler.Requeue)
+	mux.HandleFunc("POST /v1/tasks/{id}/cancel", taskHandler.Cancel)
+	mux.HandleFunc("GET /v1/tasks/{id}/events", taskHandler.GetTaskEvents)
+	mux.HandleFunc("GET /v1/queues", taskHandler.ListQueues)
+	mux.HandleFunc("PUT /v1/queues/{name}", taskHandler.SetQueueConfig)
+	mux.HandleFunc("POST /v1/queues/{name}/pause", taskHandler.PauseQueue)
+	mux.HandleFunc("POST /v1/queues/{name}/resume", taskHandler.ResumeQueue)
+
 	live := func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "live"})
 	}
@@ -132,7 +148,8 @@ func isAdminMutation(r *http.Request) bool {
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		return false
 	}
-	return strings.HasPrefix(r.URL.Path, "/queues/") || strings.HasSuffix(r.URL.Path, "/requeue") || strings.HasSuffix(r.URL.Path, "/cancel")
+	path := strings.TrimPrefix(r.URL.Path, "/v1")
+	return strings.HasPrefix(path, "/queues/") || strings.HasSuffix(path, "/requeue") || strings.HasSuffix(path, "/cancel")
 }
 
 func validBearer(header, token string) bool {

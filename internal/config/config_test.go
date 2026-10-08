@@ -48,12 +48,19 @@ func TestValidateProductionAcceptsStrictConfiguration(t *testing.T) {
 	t.Setenv("API_TOKEN", "api-token")
 	t.Setenv("ADMIN_TOKEN", "admin-token")
 	t.Setenv("RAG_ARTIFACT_DIR", "s3://tasklab-artifacts/index")
+	t.Setenv("EVAL_BACKEND", "gateway")
+	t.Setenv("EVAL_GATEWAY_URL", "https://eval.example")
+	t.Setenv("EVAL_GATEWAY_PROFILE", "production-eval")
+	t.Setenv("EVAL_GATEWAY_API_KEY", "secret-key")
 	cfg := Load()
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() = %v", err)
 	}
 	if cfg.EffectiveChecksum() == "" || strings.Contains(cfg.DatabaseURLWithoutCredentials(), "an-adequately") {
 		t.Fatal("effective configuration leaked credentials or lacked checksum")
+	}
+	if err := cfg.ValidateWorker(); err == nil || !strings.Contains(err.Error(), "shared artifact adapter is not implemented") {
+		t.Fatalf("production worker must fail closed until shared artifacts are implemented, got %v", err)
 	}
 }
 
@@ -65,6 +72,18 @@ func TestValidateProductionRejectsLocalDatabaseEvenWithTLS(t *testing.T) {
 	t.Setenv("RAG_ARTIFACT_DIR", "s3://tasklab-artifacts/index")
 	if err := Load().Validate(); err == nil || !strings.Contains(err.Error(), "local database host") {
 		t.Fatalf("expected local host rejection, got %v", err)
+	}
+}
+
+func TestValidateProductionRejectsDeterministicEvalFallback(t *testing.T) {
+	t.Setenv("APP_PROFILE", "production")
+	t.Setenv("DATABASE_URL", "postgres://app:an-adequately-long-password@db.example:5432/tasklab?sslmode=require")
+	t.Setenv("API_TOKEN", "api-token")
+	t.Setenv("ADMIN_TOKEN", "admin-token")
+	t.Setenv("RAG_ARTIFACT_DIR", "s3://tasklab-artifacts/index")
+	t.Setenv("EVAL_BACKEND", "deterministic")
+	if err := Load().Validate(); err == nil || !strings.Contains(err.Error(), "EVAL_BACKEND must be gateway") {
+		t.Fatalf("expected deterministic fallback rejection, got %v", err)
 	}
 }
 

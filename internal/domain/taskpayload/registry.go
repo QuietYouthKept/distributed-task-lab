@@ -6,12 +6,15 @@ package taskpayload
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 )
 
 const payloadVersion = "1"
+
+var sha256Pattern = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
 
 // Validate validates an envelope and returns a canonical copy of its data.
 func Validate(taskType domain.TaskType, payload domain.TaskPayloadEnvelope) (map[string]any, error) {
@@ -72,10 +75,10 @@ func validateRAG(data map[string]any) (map[string]any, error) {
 }
 
 func validateEval(data map[string]any) (map[string]any, error) {
-	if err := allowOnly(data, "execution_mode", "eval_set_id", "model_profile", "scorer_profile", "sample_limit", "dataset_version", "prompt_version", "run_id", "case_start", "case_end"); err != nil {
+	if err := allowOnly(data, "execution_mode", "eval_set_id", "model_profile", "scorer_profile", "sample_limit", "dataset_version", "prompt_version", "run_id", "case_start", "case_end", "version", "dataset_uri", "dataset_sha256", "retriever_version", "evaluator_schema_version"); err != nil {
 		return nil, err
 	}
-	mode, err := requiredEnum(data, "execution_mode", "mock", "deterministic")
+	mode, err := requiredEnum(data, "execution_mode", "mock", "deterministic", "gateway")
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +109,22 @@ func validateEval(data map[string]any) (map[string]any, error) {
 	}
 	if end <= start {
 		return nil, fmt.Errorf("case_end must be greater than case_start")
+	}
+	if mode == "gateway" {
+		if _, err := requiredEnum(data, "version", "2"); err != nil {
+			return nil, fmt.Errorf("gateway eval requires version 2")
+		}
+		for _, field := range []string{"dataset_uri", "dataset_sha256", "retriever_version", "evaluator_schema_version"} {
+			if _, err := requiredString(data, field, 512); err != nil {
+				return nil, err
+			}
+		}
+		if !strings.HasPrefix(data["dataset_uri"].(string), "artifact://") {
+			return nil, fmt.Errorf("dataset_uri must use the artifact scheme")
+		}
+		if !sha256Pattern.MatchString(data["dataset_sha256"].(string)) {
+			return nil, fmt.Errorf("dataset_sha256 must be 64 hexadecimal characters")
+		}
 	}
 	return data, nil
 }

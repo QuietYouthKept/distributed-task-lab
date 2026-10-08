@@ -81,6 +81,54 @@ func claimOne(t *testing.T, q *PostgresQueue, workerID string) domain.Task {
 	return claimed[0]
 }
 
+// claimOneEventually polls ClaimTasks until PostgreSQL considers a retried task
+// eligible. Eligibility intentionally remains a database-clock decision: the
+// test only supplies a bounded wall-clock deadline so it cannot hang forever.
+func claimOneEventually(t *testing.T, q *PostgresQueue, workerID string, timeout time.Duration) domain.Task {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		claimed, err := q.ClaimTasks(ctx, workerID, 5, 30*time.Second)
+		if err != nil {
+			t.Fatalf("ClaimTasks while polling for eligible task: %v", err)
+		}
+		if len(claimed) == 1 {
+			return claimed[0]
+		}
+		if len(claimed) > 1 {
+			t.Fatalf("expected at most 1 claimed task while polling, got %d", len(claimed))
+		}
+
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timed out after %s waiting for PostgreSQL to make a task claimable", timeout)
+		case <-ticker.C:
+		}
+	}
+}
+
+func databaseNow(t *testing.T, q *PostgresQueue, ctx context.Context) time.Time {
+	t.Helper()
+	var now time.Time
+	if err := q.db.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
+		t.Fatalf("read PostgreSQL clock: %v", err)
+	}
+	return now
+}
+
+func assertBackoff(t *testing.T, nextRunAt, updatedAt time.Time, want time.Duration) {
+	t.Helper()
+	const tolerance = 50 * time.Millisecond
+	if got := nextRunAt.Sub(updatedAt); got < want-tolerance || got > want+tolerance {
+		t.Errorf("backoff = %v, want %v +/- %v", got, want, tolerance)
+	}
+}
+
 func TestEnqueueAndGetTask(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
@@ -169,6 +217,18 @@ func TestListTasks(t *testing.T) {
 		if task.Status != domain.TaskStatusPending {
 			t.Errorf("expected pending, got %s", task.Status)
 		}
+	}
+
+	queueName := "queue-filter-target"
+	queued := newTask("test-list-queue", 3)
+	queued.Queue = queueName
+	enqueue(t, q, queued)
+	tasks, err = q.ListTasks(ctx, domain.TaskFilter{Queue: &queueName, Limit: 10})
+	if err != nil {
+		t.Fatalf("ListTasks by queue: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ID != queued.ID {
+		t.Fatalf("queue filter returned %+v, want only %s", tasks, queued.ID)
 	}
 }
 
@@ -381,28 +441,58 @@ func TestRetryBackoff(t *testing.T) {
 	task.RetryJitter = false
 	enqueue(t, q, task)
 
-	// Attempt 1: fail -> next_run_at should be ~now + 1s.
+	// Attempt 1: fail -> next_run_at is computed from PostgreSQL time + 1s.
 	c1 := claimOne(t, q, "worker-1")
-	q.MarkFailure(ctx, c1.ID, "worker-1", c1.LeaseVersion, domain.TaskFailure{Message: "e", ErrorType: "execution_error", Retryable: true})
-	got1, _ := q.GetTask(ctx, c1.ID)
-	if d := got1.NextRunAt.Sub(got1.UpdatedAt); d < 800*time.Millisecond || d > 1500*time.Millisecond {
-		t.Errorf("attempt 1 backoff ~1s, got %v", d)
+	if err := q.MarkFailure(ctx, c1.ID, "worker-1", c1.LeaseVersion, domain.TaskFailure{Message: "e", ErrorType: "execution_error", Retryable: true}); err != nil {
+		t.Fatalf("MarkFailure attempt 1: %v", err)
+	}
+	got1, err := q.GetTask(ctx, c1.ID)
+	if err != nil {
+		t.Fatalf("GetTask after attempt 1 failure: %v", err)
+	}
+	if got1 == nil {
+		t.Fatal("GetTask after attempt 1 failure returned nil")
+	}
+	if got1.Status != domain.TaskStatusPending || got1.Attempt != 1 || got1.LeaseVersion != 1 {
+		t.Fatalf("after attempt 1 failure status=%q attempt=%d lease_version=%d, want pending/1/1", got1.Status, got1.Attempt, got1.LeaseVersion)
+	}
+	assertBackoff(t, got1.NextRunAt, got1.UpdatedAt, time.Second)
+	if dbNow := databaseNow(t, q, ctx); !dbNow.Before(got1.NextRunAt) {
+		t.Fatalf("retry should still be in the future according to PostgreSQL: db_now=%s next_run_at=%s", dbNow, got1.NextRunAt)
 	}
 
-	// Attempt 2: wait for retry, fail -> next_run_at should be ~now + 2s.
-	time.Sleep(1100 * time.Millisecond)
-	c2 := claimOne(t, q, "worker-1")
+	// A retry must not be claimable before the database clock reaches next_run_at.
+	claimed, err := q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
+	if err != nil {
+		t.Fatalf("ClaimTasks before retry due: %v", err)
+	}
+	if len(claimed) != 0 {
+		t.Fatalf("expected 0 claims before retry due, got %d", len(claimed))
+	}
+
+	// Attempt 2: bounded polling waits for PostgreSQL's eligibility decision;
+	// it is not a fixed sleep that assumes a particular scheduler latency.
+	c2 := claimOneEventually(t, q, "worker-1", 3*time.Second)
 	if c2.Attempt != 2 {
 		t.Errorf("Attempt = %d, want 2", c2.Attempt)
 	}
 	if c2.LeaseVersion != 2 {
 		t.Errorf("LeaseVersion = %d, want 2", c2.LeaseVersion)
 	}
-	q.MarkFailure(ctx, c2.ID, "worker-1", c2.LeaseVersion, domain.TaskFailure{Message: "e", ErrorType: "execution_error", Retryable: true})
-	got2, _ := q.GetTask(ctx, c2.ID)
-	if d := got2.NextRunAt.Sub(got2.UpdatedAt); d < 1500*time.Millisecond || d > 3*time.Second {
-		t.Errorf("attempt 2 backoff ~2s, got %v", d)
+	if err := q.MarkFailure(ctx, c2.ID, "worker-1", c2.LeaseVersion, domain.TaskFailure{Message: "e", ErrorType: "execution_error", Retryable: true}); err != nil {
+		t.Fatalf("MarkFailure attempt 2: %v", err)
 	}
+	got2, err := q.GetTask(ctx, c2.ID)
+	if err != nil {
+		t.Fatalf("GetTask after attempt 2 failure: %v", err)
+	}
+	if got2 == nil {
+		t.Fatal("GetTask after attempt 2 failure returned nil")
+	}
+	if got2.Status != domain.TaskStatusPending || got2.Attempt != 2 || got2.LeaseVersion != 2 {
+		t.Fatalf("after attempt 2 failure status=%q attempt=%d lease_version=%d, want pending/2/2", got2.Status, got2.Attempt, got2.LeaseVersion)
+	}
+	assertBackoff(t, got2.NextRunAt, got2.UpdatedAt, 2*time.Second)
 }
 
 func TestRetryTaskReclaimable(t *testing.T) {
@@ -414,7 +504,22 @@ func TestRetryTaskReclaimable(t *testing.T) {
 	enqueue(t, q, task)
 	c := claimOne(t, q, "worker-1")
 
-	q.MarkFailure(ctx, c.ID, "worker-1", c.LeaseVersion, domain.TaskFailure{Message: "err", ErrorType: "execution_error", Retryable: true})
+	if err := q.MarkFailure(ctx, c.ID, "worker-1", c.LeaseVersion, domain.TaskFailure{Message: "err", ErrorType: "execution_error", Retryable: true}); err != nil {
+		t.Fatalf("MarkFailure: %v", err)
+	}
+	beforeDue, err := q.GetTask(ctx, c.ID)
+	if err != nil {
+		t.Fatalf("GetTask before retry due: %v", err)
+	}
+	if beforeDue == nil {
+		t.Fatal("GetTask before retry due returned nil")
+	}
+	if beforeDue.Status != domain.TaskStatusPending || beforeDue.Attempt != 1 || beforeDue.LeaseVersion != 1 {
+		t.Fatalf("before retry due status=%q attempt=%d lease_version=%d, want pending/1/1", beforeDue.Status, beforeDue.Attempt, beforeDue.LeaseVersion)
+	}
+	if dbNow := databaseNow(t, q, ctx); !dbNow.Before(beforeDue.NextRunAt) {
+		t.Fatalf("retry should still be in the future according to PostgreSQL: db_now=%s next_run_at=%s", dbNow, beforeDue.NextRunAt)
+	}
 
 	// Not claimable yet (next_run_at in the future).
 	claimed, err := q.ClaimTasks(ctx, "worker-2", 5, 30*time.Second)
@@ -425,17 +530,15 @@ func TestRetryTaskReclaimable(t *testing.T) {
 		t.Errorf("expected 0 claims (next_run_at in future), got %d", len(claimed))
 	}
 
-	time.Sleep(1100 * time.Millisecond)
-
-	claimed, err = q.ClaimTasks(ctx, "worker-2", 5, 30*time.Second)
-	if err != nil {
-		t.Fatalf("ClaimTasks after delay: %v", err)
+	claimedAfterDue := claimOneEventually(t, q, "worker-2", 3*time.Second)
+	if claimedAfterDue.Attempt != 2 {
+		t.Errorf("Attempt = %d, want 2", claimedAfterDue.Attempt)
 	}
-	if len(claimed) != 1 {
-		t.Fatalf("expected 1 claimed task after delay, got %d", len(claimed))
+	if claimedAfterDue.LeaseVersion != 2 {
+		t.Errorf("LeaseVersion = %d, want 2", claimedAfterDue.LeaseVersion)
 	}
-	if claimed[0].Attempt != 2 {
-		t.Errorf("Attempt = %d, want 2", claimed[0].Attempt)
+	if claimedAfterDue.ClaimReason != "pending" {
+		t.Errorf("ClaimReason = %q, want pending", claimedAfterDue.ClaimReason)
 	}
 }
 

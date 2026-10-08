@@ -72,13 +72,11 @@ func TestServiceLifecycle(t *testing.T) {
 		t.Errorf("after retry: status = %q, want pending", got.Status)
 	}
 
-	// Attempt 2: fail again -> DLQ (max_attempts exhausted).
-	time.Sleep(1100 * time.Millisecond)
-	claimed2, err := q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
-	if err != nil || len(claimed2) != 1 {
-		t.Fatalf("claim 2: err=%v n=%d", err, len(claimed2))
-	}
-	if err := q.MarkFailure(ctx, resp.ID, "worker-1", claimed2[0].LeaseVersion,
+	// Attempt 2: fail again -> DLQ (max_attempts exhausted). ClaimTasks uses
+	// the PostgreSQL clock for eligibility, so poll with a finite deadline
+	// instead of guessing when database time has crossed next_run_at.
+	claimed2 := claimTaskEventually(t, ctx, q, "worker-1", 3*time.Second)
+	if err := q.MarkFailure(ctx, resp.ID, "worker-1", claimed2.LeaseVersion,
 		domain.TaskFailure{Message: "flaky", ErrorType: "execution_error", Retryable: true}); err != nil {
 		t.Fatalf("MarkFailure 2: %v", err)
 	}
@@ -115,6 +113,38 @@ func TestServiceLifecycle(t *testing.T) {
 	}
 }
 
+func claimTaskEventually(t *testing.T, ctx context.Context, q *postgres.PostgresQueue, workerID string, timeout time.Duration) domain.Task {
+	t.Helper()
+
+	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		claimed, err := q.ClaimTasks(deadlineCtx, workerID, 5, 30*time.Second)
+		if err != nil {
+			if deadlineCtx.Err() != nil {
+				t.Fatalf("claim before bounded deadline: %v", deadlineCtx.Err())
+			}
+			t.Fatalf("claim: %v", err)
+		}
+		if len(claimed) > 0 {
+			if len(claimed) != 1 {
+				t.Fatalf("claim returned %d tasks, want 1", len(claimed))
+			}
+			return claimed[0]
+		}
+
+		select {
+		case <-deadlineCtx.Done():
+			t.Fatalf("task was not claimable before bounded deadline: %v", deadlineCtx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
 func TestServiceIdempotentCreate(t *testing.T) {
 	svc, _ := testService(t)
 	ctx := context.Background()
@@ -144,5 +174,14 @@ func TestServiceValidation(t *testing.T) {
 
 	if _, err := svc.CreateTask(context.Background(), CreateTaskRequest{Type: "bogus"}); err == nil {
 		t.Error("expected error for invalid task type")
+	}
+
+	emptyKey := ""
+	if _, err := svc.CreateTask(context.Background(), CreateTaskRequest{
+		Type:           domain.TaskTypeEval,
+		Payload:        domain.TaskPayloadEnvelope{Version: "1", Kind: "eval", Data: map[string]any{"execution_mode": "mock", "eval_set_id": "eval-1", "model_profile": "model-1"}},
+		IdempotencyKey: &emptyKey,
+	}); err == nil {
+		t.Error("expected error for empty idempotency key")
 	}
 }

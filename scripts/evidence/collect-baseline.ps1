@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$OutputDirectory = "",
+    [string]$RunID = "",
     [switch]$SkipSlowChecks
 )
 
@@ -67,13 +68,19 @@ function Invoke-RecordedCommand(
         exit_code = $exitCode
         started_at_utc = $startedAt.ToString("o")
         finished_at_utc = (Get-Date).ToUniversalTime().ToString("o")
-        stdout = (Resolve-Path -LiteralPath $stdout).Path.Substring($repoRoot.Length + 1).Replace("\\", "/")
-        stderr = (Resolve-Path -LiteralPath $stderr).Path.Substring($repoRoot.Length + 1).Replace("\\", "/")
+        stdout = (Resolve-Path -LiteralPath $stdout).Path.Substring($repoRoot.Length + 1).Replace('\', '/')
+        stderr = (Resolve-Path -LiteralPath $stderr).Path.Substring($repoRoot.Length + 1).Replace('\', '/')
         error = $error
     }
 }
 
 $repoRoot = Get-RepositoryRoot
+
+$gitCommit = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim()
+if ($LASTEXITCODE -ne 0) { $gitCommit = "unavailable" }
+$gitStatus = (& git -C $repoRoot status --porcelain=v1 2>$null)
+if ($LASTEXITCODE -ne 0) { $gitStatus = @("git status unavailable") }
+
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $repoRoot "evidence\\baseline"
 }
@@ -81,13 +88,19 @@ if (-not [System.IO.Path]::IsPathRooted($OutputDirectory)) {
     $OutputDirectory = Join-Path $repoRoot $OutputDirectory
 }
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
-$logDirectory = Join-Path $OutputDirectory "logs"
+if ([string]::IsNullOrWhiteSpace($RunID)) {
+    $shortCommit = $gitCommit.Substring(0, [Math]::Min(12, $gitCommit.Length))
+    $RunID = "baseline-" + (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssfffZ") + "-" + $shortCommit
+}
+if ($RunID -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') {
+    throw "RunID must contain only letters, digits, dot, underscore, or hyphen and be at most 128 characters."
+}
+$runDirectory = Join-Path (Join-Path $OutputDirectory "runs") $RunID
+if (Test-Path -LiteralPath $runDirectory) {
+    throw "Evidence run already exists and will not be overwritten: $runDirectory"
+}
+$logDirectory = Join-Path $runDirectory "logs"
 New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
-
-$gitCommit = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim()
-if ($LASTEXITCODE -ne 0) { $gitCommit = "unavailable" }
-$gitStatus = (& git -C $repoRoot status --porcelain=v1 2>$null)
-if ($LASTEXITCODE -ne 0) { $gitStatus = @("git status unavailable") }
 
 $routes = @(
     Select-String -LiteralPath (Join-Path $repoRoot "internal\\api\\router.go") -Pattern 'mux\.Handle(?:Func)?\("([^"]+)"' |
@@ -108,7 +121,7 @@ $benchmarks = @(
         Sort-Object FullName |
         ForEach-Object {
             [ordered]@{
-                file = $_.FullName.Substring($repoRoot.Length + 1).Replace("\\", "/")
+                file = $_.FullName.Substring($repoRoot.Length + 1).Replace('\', '/')
                 sha256 = Get-Sha256 $_.FullName
                 bytes = $_.Length
             }
@@ -125,7 +138,7 @@ if (-not $SkipSlowChecks) {
 
 $manifest = [ordered]@{
     schema_version = 1
-    baseline_id = "baseline-" + (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ") + "-" + $gitCommit.Substring(0, [Math]::Min(12, $gitCommit.Length))
+    baseline_id = $RunID
     collected_at_utc = (Get-Date).ToUniversalTime().ToString("o")
     repository = [ordered]@{
         commit_sha = $gitCommit
@@ -151,9 +164,40 @@ $manifest = [ordered]@{
     )
 }
 
-$manifestPath = Join-Path $OutputDirectory "manifest.json"
+$manifestPath = Join-Path $runDirectory "manifest.json"
 $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding utf8
 Write-Host "Baseline manifest written to $manifestPath"
+
+$evidenceRoot = Split-Path -Parent $OutputDirectory
+$indexPath = Join-Path $evidenceRoot "index.json"
+$requiredChecks = @("unit", "integration", "race", "failurelab_smoke")
+$records = @(
+    Get-ChildItem -LiteralPath (Join-Path $OutputDirectory "runs") -Filter "manifest.json" -File -Recurse |
+        Sort-Object FullName |
+        ForEach-Object {
+            $runManifest = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
+            $failedChecks = @($runManifest.verification | Where-Object { $_.exit_code -ne 0 }).Count
+            $checkNames = @($runManifest.verification | ForEach-Object { $_.name })
+            $missingChecks = @($requiredChecks | Where-Object { $_ -notin $checkNames }).Count
+            [ordered]@{
+                evidence_id = $runManifest.baseline_id
+                type = "test"
+                status = if ($failedChecks -eq 0 -and $missingChecks -eq 0 -and -not $runManifest.repository.dirty) { "measured_valid" } else { "unverified" }
+                commit_sha = $runManifest.repository.commit_sha
+                repository_dirty = [bool]$runManifest.repository.dirty
+                collected_at_utc = $runManifest.collected_at_utc
+                scenario = ($checkNames -join "+")
+                artifacts = @($_.FullName.Substring($repoRoot.Length + 1).Replace('\', '/'))
+            }
+        }
+)
+$index = [ordered]@{
+    schema_version = 1
+    generated_at_utc = (Get-Date).ToUniversalTime().ToString("o")
+    records = $records
+}
+$index | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $indexPath -Encoding utf8
+Write-Host "Evidence index written to $indexPath"
 
 if (@($checks | Where-Object { $_.exit_code -ne 0 }).Count -gt 0) {
     Write-Error "One or more baseline verification commands failed; inspect $manifestPath."

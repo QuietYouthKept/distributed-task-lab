@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -57,6 +56,9 @@ func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*C
 	if req.MaxAttempts < 0 || req.TimeoutSeconds < 0 || req.RetryDelaySeconds < 0 || req.RetryMaxDelaySeconds < 0 || req.RetryBackoffMultiplier < 0 {
 		return nil, domain.InvalidArgument("invalid_retry_policy", "retry and timeout values must be non-negative", nil)
 	}
+	if req.IdempotencyKey != nil && (*req.IdempotencyKey == "" || len(*req.IdempotencyKey) > 256 || strings.TrimSpace(*req.IdempotencyKey) != *req.IdempotencyKey) {
+		return nil, domain.InvalidArgument("invalid_idempotency_key", "idempotency key must be between 1 and 256 bytes without surrounding whitespace", nil)
+	}
 
 	if req.MaxAttempts <= 0 {
 		req.MaxAttempts = 3
@@ -100,7 +102,7 @@ func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*C
 
 	created, err := s.q.Enqueue(ctx, task)
 	if err != nil {
-		return nil, fmt.Errorf("task service: enqueue: %w", err)
+		return nil, wrapQueueError("task service: enqueue", err)
 	}
 
 	return &CreateTaskResponse{
@@ -113,7 +115,7 @@ func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*C
 func (s *TaskService) GetTask(ctx context.Context, taskID string) (*domain.Task, error) {
 	task, err := s.q.GetTask(ctx, taskID)
 	if err != nil {
-		return nil, fmt.Errorf("task service: get: %w", err)
+		return nil, wrapQueueError("task service: get", err)
 	}
 	if task == nil {
 		return nil, domain.ErrTaskNotFound
@@ -125,7 +127,7 @@ func (s *TaskService) GetTask(ctx context.Context, taskID string) (*domain.Task,
 func (s *TaskService) ListTasks(ctx context.Context, filter domain.TaskFilter) ([]domain.Task, error) {
 	tasks, err := s.q.ListTasks(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("task service: list: %w", err)
+		return nil, wrapQueueError("task service: list", err)
 	}
 	if tasks == nil {
 		tasks = []domain.Task{}
@@ -137,7 +139,7 @@ func (s *TaskService) ListTasks(ctx context.Context, filter domain.TaskFilter) (
 func (s *TaskService) ListDLQ(ctx context.Context, filter domain.TaskFilter) ([]domain.Task, error) {
 	tasks, err := s.q.ListDLQ(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("task service: list dlq: %w", err)
+		return nil, wrapQueueError("task service: list dlq", err)
 	}
 	if tasks == nil {
 		tasks = []domain.Task{}
@@ -148,7 +150,7 @@ func (s *TaskService) ListDLQ(ctx context.Context, filter domain.TaskFilter) ([]
 // Requeue resets a DLQ task back to pending.
 func (s *TaskService) Requeue(ctx context.Context, taskID string, reason string) error {
 	if err := s.q.Requeue(ctx, taskID, reason); err != nil {
-		return fmt.Errorf("task service: requeue: %w", err)
+		return wrapQueueError("task service: requeue", err)
 	}
 	return nil
 }
@@ -156,7 +158,7 @@ func (s *TaskService) Requeue(ctx context.Context, taskID string, reason string)
 // Cancel cancels a pending or running task.
 func (s *TaskService) Cancel(ctx context.Context, taskID string, reason string) error {
 	if err := s.q.Cancel(ctx, taskID, reason); err != nil {
-		return fmt.Errorf("task service: cancel: %w", err)
+		return wrapQueueError("task service: cancel", err)
 	}
 	return nil
 }
@@ -165,7 +167,7 @@ func (s *TaskService) Cancel(ctx context.Context, taskID string, reason string) 
 func (s *TaskService) GetTaskEvents(ctx context.Context, taskID string) ([]domain.TaskEvent, error) {
 	events, err := s.q.GetTaskEvents(ctx, taskID)
 	if err != nil {
-		return nil, fmt.Errorf("task service: events: %w", err)
+		return nil, wrapQueueError("task service: events", err)
 	}
 	return events, nil
 }
@@ -173,7 +175,7 @@ func (s *TaskService) GetTaskEvents(ctx context.Context, taskID string) ([]domai
 // PauseQueue pauses a queue so workers stop claiming its tasks.
 func (s *TaskService) PauseQueue(ctx context.Context, name string) error {
 	if err := s.q.PauseQueue(ctx, name); err != nil {
-		return fmt.Errorf("task service: pause queue: %w", err)
+		return wrapQueueError("task service: pause queue", err)
 	}
 	return nil
 }
@@ -181,7 +183,7 @@ func (s *TaskService) PauseQueue(ctx context.Context, name string) error {
 // ResumeQueue resumes a paused queue.
 func (s *TaskService) ResumeQueue(ctx context.Context, name string) error {
 	if err := s.q.ResumeQueue(ctx, name); err != nil {
-		return fmt.Errorf("task service: resume queue: %w", err)
+		return wrapQueueError("task service: resume queue", err)
 	}
 	return nil
 }
@@ -190,7 +192,7 @@ func (s *TaskService) ResumeQueue(ctx context.Context, name string) error {
 func (s *TaskService) ListQueues(ctx context.Context) ([]domain.QueueConfig, error) {
 	queues, err := s.q.ListQueues(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("task service: list queues: %w", err)
+		return nil, wrapQueueError("task service: list queues", err)
 	}
 	return queues, nil
 }
@@ -207,7 +209,7 @@ func (s *TaskService) SetQueueConfig(ctx context.Context, config domain.QueueCon
 		config.Burst = 1
 	}
 	if err := s.q.SetQueueConfig(ctx, config); err != nil {
-		return fmt.Errorf("task service: set queue config: %w", err)
+		return wrapQueueError("task service: set queue config", err)
 	}
 	return nil
 }
@@ -222,7 +224,7 @@ func (s *TaskService) GetDBPoolStats() domain.DBPoolStats { return s.q.DBStats()
 func (s *TaskService) GetStats(ctx context.Context) (map[domain.TaskStatus]int64, error) {
 	stats, err := s.q.Stats(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("task service: stats: %w", err)
+		return nil, wrapQueueError("task service: stats", err)
 	}
 	if stats == nil {
 		stats = map[domain.TaskStatus]int64{}
@@ -234,7 +236,7 @@ func (s *TaskService) GetStats(ctx context.Context) (map[domain.TaskStatus]int64
 func (s *TaskService) GetQueueDepth(ctx context.Context) (map[string]map[domain.TaskStatus]int64, error) {
 	depth, err := s.q.QueueDepth(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("task service: queue depth: %w", err)
+		return nil, wrapQueueError("task service: queue depth", err)
 	}
 	return depth, nil
 }
@@ -243,7 +245,7 @@ func (s *TaskService) GetQueueDepth(ctx context.Context) (map[string]map[domain.
 func (s *TaskService) GetOldestPendingAge(ctx context.Context) (time.Duration, error) {
 	age, err := s.q.OldestPendingAge(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("task service: oldest pending age: %w", err)
+		return 0, wrapQueueError("task service: oldest pending age", err)
 	}
 	return age, nil
 }

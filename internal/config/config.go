@@ -54,19 +54,30 @@ type Config struct {
 	DocDir      string
 	ArtifactDir string
 
+	// Eval provider selection. Deterministic is development scaffolding;
+	// production requires the explicitly configured gateway backend.
+	EvalBackend        string
+	EvalGatewayURL     string
+	EvalGatewayProfile string
+	EvalGatewayAPIKey  string
+
 	parseErrors []string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
 func Load() *Config {
 	c := &Config{
-		Profile:     getEnv("APP_PROFILE", "development"),
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/tasklab?sslmode=disable"),
-		WorkerID:    getEnv("WORKER_ID", defaultWorkerID()),
-		APIToken:    os.Getenv("API_TOKEN"),
-		AdminToken:  os.Getenv("ADMIN_TOKEN"),
-		DocDir:      getEnv("RAG_DOC_DIR", "examples/docs"),
-		ArtifactDir: getEnv("RAG_ARTIFACT_DIR", "artifacts/index"),
+		Profile:            getEnv("APP_PROFILE", "development"),
+		DatabaseURL:        getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/tasklab?sslmode=disable"),
+		WorkerID:           getEnv("WORKER_ID", defaultWorkerID()),
+		APIToken:           os.Getenv("API_TOKEN"),
+		AdminToken:         os.Getenv("ADMIN_TOKEN"),
+		DocDir:             getEnv("RAG_DOC_DIR", "examples/docs"),
+		ArtifactDir:        getEnv("RAG_ARTIFACT_DIR", "artifacts/index"),
+		EvalBackend:        getEnv("EVAL_BACKEND", "deterministic"),
+		EvalGatewayURL:     os.Getenv("EVAL_GATEWAY_URL"),
+		EvalGatewayProfile: os.Getenv("EVAL_GATEWAY_PROFILE"),
+		EvalGatewayAPIKey:  os.Getenv("EVAL_GATEWAY_API_KEY"),
 	}
 	c.APIPort = c.int("API_PORT", 8080)
 	c.WorkerHealthPort = c.int("WORKER_HEALTH_PORT", 9091)
@@ -153,6 +164,12 @@ func (c *Config) Validate() error {
 	bad(c.DefaultMaxAttempts > 0, "DEFAULT_MAX_ATTEMPTS must be greater than zero")
 	bad(c.DefaultTimeoutSeconds > 0, "DEFAULT_TIMEOUT_SECONDS must be greater than zero")
 	bad(c.DefaultRetryDelaySeconds >= 0 && c.DefaultRetryDelaySeconds < c.DefaultTimeoutSeconds, "DEFAULT_RETRY_DELAY_SECONDS must be non-negative and less than DEFAULT_TIMEOUT_SECONDS")
+	bad(c.EvalBackend == "deterministic" || c.EvalBackend == "gateway", "EVAL_BACKEND must be deterministic or gateway")
+	if c.EvalBackend == "gateway" {
+		gatewayURL, gatewayErr := url.Parse(c.EvalGatewayURL)
+		bad(gatewayErr == nil && gatewayURL.Host != "" && (gatewayURL.Scheme == "http" || gatewayURL.Scheme == "https"), "EVAL_GATEWAY_URL must be an absolute HTTP(S) URL for gateway backend")
+		bad(strings.TrimSpace(c.EvalGatewayProfile) != "", "EVAL_GATEWAY_PROFILE is required for gateway backend")
+	}
 
 	u, urlErr := url.Parse(c.DatabaseURL)
 	bad(urlErr == nil && u.Scheme == "postgres" || urlErr == nil && u.Scheme == "postgresql", "DATABASE_URL must be a PostgreSQL URL")
@@ -170,11 +187,29 @@ func (c *Config) Validate() error {
 			}
 		}
 		bad(!isLocalArtifactDir(c.ArtifactDir), "RAG_ARTIFACT_DIR must reference shared object storage in production, not a local directory")
+		bad(c.EvalBackend == "gateway", "EVAL_BACKEND must be gateway in production")
+		gatewayURL, gatewayErr := url.Parse(c.EvalGatewayURL)
+		bad(gatewayErr == nil && gatewayURL.Scheme == "https" && gatewayURL.Host != "", "EVAL_GATEWAY_URL must use HTTPS in production")
+		bad(strings.TrimSpace(c.EvalGatewayAPIKey) != "", "EVAL_GATEWAY_API_KEY is required in production")
 	}
 	if len(errs) == 0 {
 		return nil
 	}
 	return fmt.Errorf("invalid configuration:\n - %s", strings.Join(errs, "\n - "))
+}
+
+// ValidateWorker adds worker-only deployment checks. The current handlers use
+// filesystem APIs for artifacts, so accepting an s3:// or minio:// URI would
+// silently create a local path instead of using shared object storage.
+// Production workers therefore fail closed until a real adapter is wired in.
+func (c *Config) ValidateWorker() error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	if c.Profile == "production" {
+		return fmt.Errorf("invalid worker configuration: production shared artifact adapter is not implemented; refusing to treat %q as a local filesystem path", c.ArtifactDir)
+	}
+	return nil
 }
 
 func isLocalDatabaseHost(host string) bool {
@@ -191,7 +226,7 @@ func isLocalArtifactDir(value string) bool {
 // correlation with logs and deployments. Tokens and database credentials are
 // intentionally excluded.
 func (c *Config) EffectiveChecksum() string {
-	value := strings.Join([]string{c.Profile, c.DatabaseURLWithoutCredentials(), strconv.Itoa(c.APIPort), strconv.Itoa(c.Concurrency), c.PollInterval.String(), c.LeaseTimeout.String(), c.ArtifactDir}, "|")
+	value := strings.Join([]string{c.Profile, c.DatabaseURLWithoutCredentials(), strconv.Itoa(c.APIPort), strconv.Itoa(c.Concurrency), c.PollInterval.String(), c.LeaseTimeout.String(), c.ArtifactDir, c.EvalBackend, c.EvalGatewayURL, c.EvalGatewayProfile}, "|")
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])
 }

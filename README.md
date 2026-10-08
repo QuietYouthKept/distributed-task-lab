@@ -27,7 +27,8 @@ does not claim end-to-end exactly-once semantics.
 | Graceful drain | stop claims, keep renewals, drain, deadline cancel | worker pool tests and failure lab | cooperative in-flight handlers can ack before exit | `SIGKILL` skips drain; lease recovery applies |
 
 See [guarantees](docs/guarantees.md), [failure model](docs/failure-model.md), and
-[architecture](docs/architecture.md) for precise scope.
+[architecture](docs/architecture.md) for precise scope. The versioned task
+input matrix is documented in [payload contract](docs/payload-contract.md).
 
 ## Architecture
 
@@ -50,9 +51,10 @@ lease expiry, renewal, retry base time, and heartbeat age.
 export API_TOKEN='replace-with-a-development-token'
 export ADMIN_TOKEN='replace-with-a-distinct-admin-token'
 make up
-curl -X POST http://localhost:8080/tasks \
+curl -X POST http://localhost:8080/v1/tasks \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $API_TOKEN" \
+  -H 'Idempotency-Key: quickstart-doc-1' \
   -d '{"type":"rag_ingestion","payload":{"version":"1","kind":"rag_ingestion","data":{"execution_mode":"mock","document_id":"doc-1"}}}'
 ```
 
@@ -61,6 +63,11 @@ The bundled Compose deployment fails closed unless distinct `API_TOKEN` and
 only for deliberate local development. `/live` checks the process and `/ready`
 checks PostgreSQL plus the expected schema version. Worker health is on port
 `9091` by default.
+
+New clients should use the stable `/v1` routes. The original unversioned routes
+remain temporarily available for the bundled demos and are compatibility
+aliases, not a separate contract. The machine-checked interface definition is
+[`api/openapi.json`](api/openapi.json).
 
 `deployments/docker-compose.yml` is explicitly development-only. In a
 production profile, startup rejects local database hosts, disabled database TLS,

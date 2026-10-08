@@ -3,9 +3,10 @@
   "queue": "llm-eval",
   "idempotency_key": "assistgen-v1.2-release:0000-0025",
   "payload": {
-    "version": "2",
-    "kind": "llm_eval",
+    "version": "1",
+    "kind": "eval",
     "data": {
+      "execution_mode": "gateway",
       "version": "2",
       "run_id": "assistgen-v1.2-release",
       "dataset_version": "serviceops-v1.2.0-generation-gold",
