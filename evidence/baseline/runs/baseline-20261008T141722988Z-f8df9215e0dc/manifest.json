@@ -1,0 +1,252 @@
+﻿{
+    "schema_version":  1,
+    "baseline_id":  "baseline-20261008T141722988Z-f8df9215e0dc",
+    "collected_at_utc":  "2026-10-08T14:18:18.6770344Z",
+    "repository":  {
+                       "commit_sha":  "f8df9215e0dc55f7f07580c1672edd99b9c4dcc0",
+                       "dirty":  false,
+                       "dirty_entries":  [
+
+                                         ]
+                   },
+    "environment":  {
+                        "go":  {
+                                   "value":  "go version go1.26.6 windows/amd64",
+                                   "available":  true
+                               },
+                        "docker":  {
+                                       "value":  "28.3.3",
+                                       "available":  true
+                                   },
+                        "postgres_container_image":  {
+                                                         "value":  "postgres@sha256:44c4ee9810eff91f7eab4d822642e01115b1a9eccce4bcbdde7604752d68eac6",
+                                                         "available":  true
+                                                     },
+                        "os":  "Microsoft Windows NT 10.0.26200.0",
+                        "config_source_sha256":  "73785b4044b22a40904e50add5dc2ac14c018caa22355f6bd686ca845ddcbf4e",
+                        "database_url_redacted":  ""
+                    },
+    "api_routes":  [
+                       "POST /tasks",
+                       "GET /tasks",
+                       "GET /tasks/{id}",
+                       "GET /dlq",
+                       "GET /stats",
+                       "GET /metrics",
+                       "POST /tasks/{id}/requeue",
+                       "POST /tasks/{id}/cancel",
+                       "GET /tasks/{id}/events",
+                       "GET /queues",
+                       "PUT /queues/{name}",
+                       "POST /queues/{name}/pause",
+                       "POST /queues/{name}/resume",
+                       "POST /v1/tasks",
+                       "GET /v1/tasks",
+                       "GET /v1/tasks/{id}",
+                       "GET /v1/dlq",
+                       "GET /v1/stats",
+                       "GET /v1/metrics",
+                       "POST /v1/tasks/{id}/requeue",
+                       "POST /v1/tasks/{id}/cancel",
+                       "GET /v1/tasks/{id}/events",
+                       "GET /v1/queues",
+                       "PUT /v1/queues/{name}",
+                       "POST /v1/queues/{name}/pause",
+                       "POST /v1/queues/{name}/resume",
+                       "GET /live",
+                       "GET /health",
+                       "GET /ready"
+                   ],
+    "migrations":  [
+                       {
+                           "file":  "internal/storage/postgres/migrations/001_create_tasks.sql",
+                           "sha256":  "bb669e554deabb1fc9dd49311d019e869a6933e8b8d9cab61771c71c9a6c74c3"
+                       },
+                       {
+                           "file":  "internal/storage/postgres/migrations/002_create_task_events.sql",
+                           "sha256":  "6cc9f10e9bc5769fab674c4b18878d5f51cceda00199e0247be37cda8ea43615"
+                       },
+                       {
+                           "file":  "internal/storage/postgres/migrations/003_create_workers.sql",
+                           "sha256":  "173610e712eb8df046e998c14b05f3fb587115e42c4108c3502e6dff1cab6a34"
+                       },
+                       {
+                           "file":  "internal/storage/postgres/migrations/004_production_hardening.sql",
+                           "sha256":  "2908a19cd0984d76c9a93b2afe75b72de9445718c43b600c022114496fdb3bac"
+                       },
+                       {
+                           "file":  "internal/storage/postgres/migrations/005_queue_governance.sql",
+                           "sha256":  "10de492b8ac7cd4e128bc1c9aa262cc962271177f8eb58adc346e2a9836e66ca"
+                       },
+                       {
+                           "file":  "internal/storage/postgres/migrations/006_queue_rate_limit.sql",
+                           "sha256":  "f689e9d4cba97dcaea3d8779bc79a917fed4112572754edd2bbf1d874815b5be"
+                       },
+                       {
+                           "file":  "internal/storage/postgres/migrations/007_integrity_and_runtime.sql",
+                           "sha256":  "0934e0adc23fa6337eb51f3949780733bd3ac9ee072973c7726b7b6cc3f3b4c3"
+                       },
+                       {
+                           "file":  "internal/storage/postgres/migrations/008_queue_aging.sql",
+                           "sha256":  "e1a64cf17d8be707e9877bce536cfdb25a682c9bd4ab10d04531fde04ec683a2"
+                       },
+                       {
+                           "file":  "internal/storage/postgres/migrations/009_create_effects.sql",
+                           "sha256":  "c8af7b058d12ce7cedc7dcc32024f5eaac009d6e6668c2a5865b5e20ce57f8e1"
+                       }
+                   ],
+    "benchmark_inventory":  [
+                                {
+                                    "file":  "benchmarks/README.md",
+                                    "sha256":  "48c6923065c08766f7ca16a71014b17f4ce188e7f26229b5a73c80cf68034d56",
+                                    "bytes":  720
+                                },
+                                {
+                                    "file":  "benchmarks/workers-16-queues-4-payload-1k/manifest.json",
+                                    "sha256":  "da09638fb87f0aa8a8d0ed6e1090715c83d16c987e442a29d0ca898446896842",
+                                    "bytes":  499
+                                },
+                                {
+                                    "file":  "benchmarks/workers-16-queues-4-payload-1k/postgres-stats.json",
+                                    "sha256":  "1ec6c37ef5204f5fa093830c8b8c1d171c3a27425840cc310e08cb05922ccd81",
+                                    "bytes":  102
+                                },
+                                {
+                                    "file":  "benchmarks/workers-16-queues-4-payload-1k/raw.csv",
+                                    "sha256":  "82b37a409cb120b82e85ae0cb1b3be5f64629ddb8894f0af597a54a702b5ffb1",
+                                    "bytes":  103487
+                                },
+                                {
+                                    "file":  "benchmarks/workers-16-queues-4-payload-1k/report.md",
+                                    "sha256":  "10d0b9ae85261136f0d70870ad9228e1d052cfb4a961e0f6ef8d57484e4ca1f8",
+                                    "bytes":  722
+                                },
+                                {
+                                    "file":  "benchmarks/workers-16-queues-4-payload-1k/summary.json",
+                                    "sha256":  "67d508c04297efb5a84b447cac30e11e23d8b00dda329bec7454b633b3e3bf08",
+                                    "bytes":  680
+                                },
+                                {
+                                    "file":  "benchmarks/workers-1-queues-4-payload-1k/manifest.json",
+                                    "sha256":  "65d1ddbf273fb7a5b8e7fb75689ffb190e289bcd348a6ed9164e65badc9d2114",
+                                    "bytes":  497
+                                },
+                                {
+                                    "file":  "benchmarks/workers-1-queues-4-payload-1k/postgres-stats.json",
+                                    "sha256":  "6f347ff72acada4286a446fbc556d3d1cb57fc9add6dad43ff02ca819b9c9025",
+                                    "bytes":  101
+                                },
+                                {
+                                    "file":  "benchmarks/workers-1-queues-4-payload-1k/raw.csv",
+                                    "sha256":  "10bdadef4d25c6c0ca6df617f27228487870419a097e404bd34f41d9d5ecb586",
+                                    "bytes":  104169
+                                },
+                                {
+                                    "file":  "benchmarks/workers-1-queues-4-payload-1k/report.md",
+                                    "sha256":  "2a54b5cc9376e8cc18e3a684cf1e783d9a8e9e60dccf45f777f891edabd7594b",
+                                    "bytes":  726
+                                },
+                                {
+                                    "file":  "benchmarks/workers-1-queues-4-payload-1k/summary.json",
+                                    "sha256":  "e58ae880e1d488b9c8c6a908bb3d45430d70be3fbac8135bd18f5b08dcbcf015",
+                                    "bytes":  684
+                                },
+                                {
+                                    "file":  "benchmarks/workers-4-queues-4-payload-1k/manifest.json",
+                                    "sha256":  "ba46cd3c0a316d4e03f7f859b1dbe94e43c43fb1138f933ac4ef6efabc1a9bfa",
+                                    "bytes":  497
+                                },
+                                {
+                                    "file":  "benchmarks/workers-4-queues-4-payload-1k/postgres-stats.json",
+                                    "sha256":  "cd0ab96a096331a0593730dc396878e81a976c3ba77ec2c119d42c6bb433ddec",
+                                    "bytes":  101
+                                },
+                                {
+                                    "file":  "benchmarks/workers-4-queues-4-payload-1k/raw.csv",
+                                    "sha256":  "859b902e61f325d5c387b277dfa83b80a31885bdd71aad08b7d13c87ebeb8dc5",
+                                    "bytes":  103286
+                                },
+                                {
+                                    "file":  "benchmarks/workers-4-queues-4-payload-1k/report.md",
+                                    "sha256":  "029375ed4a4a70a3ce3897d683e88e181c1d8a18983629a6138ca11d7becd6b3",
+                                    "bytes":  724
+                                },
+                                {
+                                    "file":  "benchmarks/workers-4-queues-4-payload-1k/summary.json",
+                                    "sha256":  "95e28e45d2140a46e837fc3c23ee77a1538c30f7185c60455f40c1322e7607a4",
+                                    "bytes":  682
+                                },
+                                {
+                                    "file":  "benchmarks/workers-8-queues-4-payload-1k/manifest.json",
+                                    "sha256":  "e91a257aa5c12193573363db7fe8c2d98515caa15ca54f8ec48153177b2a6faf",
+                                    "bytes":  497
+                                },
+                                {
+                                    "file":  "benchmarks/workers-8-queues-4-payload-1k/postgres-stats.json",
+                                    "sha256":  "c07fbff0dd6df6e1b862e3b9264c98576bc05bdbe8de91d85c2909158accd1e4",
+                                    "bytes":  101
+                                },
+                                {
+                                    "file":  "benchmarks/workers-8-queues-4-payload-1k/raw.csv",
+                                    "sha256":  "781f5e765ad93219f7e50c7f02af618a7ec76f01f771edade134a5d7dfafad66",
+                                    "bytes":  102941
+                                },
+                                {
+                                    "file":  "benchmarks/workers-8-queues-4-payload-1k/report.md",
+                                    "sha256":  "286c693e2ad0f116ff6abd3c1f7f027ea07fb218bc9680edc77693a008fed1cf",
+                                    "bytes":  720
+                                },
+                                {
+                                    "file":  "benchmarks/workers-8-queues-4-payload-1k/summary.json",
+                                    "sha256":  "d12655b068d1af5c430d5bd782929428ca477c5958779b1b69337465a898e20a",
+                                    "bytes":  674
+                                }
+                            ],
+    "verification":  [
+                         {
+                             "name":  "unit",
+                             "command":  "go test ./cmd/... ./internal/... ./pkg/... -count=1",
+                             "exit_code":  0,
+                             "started_at_utc":  "2026-10-08T14:17:23.2665322Z",
+                             "finished_at_utc":  "2026-10-08T14:17:40.3787012Z",
+                             "stdout":  "evidence/baseline/runs/baseline-20261008T141722988Z-f8df9215e0dc/logs/unit.stdout.log",
+                             "stderr":  "evidence/baseline/runs/baseline-20261008T141722988Z-f8df9215e0dc/logs/unit.stderr.log",
+                             "error":  null
+                         },
+                         {
+                             "name":  "integration",
+                             "command":  "go test ./internal/storage/postgres -count=1 -v",
+                             "exit_code":  0,
+                             "started_at_utc":  "2026-10-08T14:17:40.3817013Z",
+                             "finished_at_utc":  "2026-10-08T14:17:55.4977596Z",
+                             "stdout":  "evidence/baseline/runs/baseline-20261008T141722988Z-f8df9215e0dc/logs/integration.stdout.log",
+                             "stderr":  "evidence/baseline/runs/baseline-20261008T141722988Z-f8df9215e0dc/logs/integration.stderr.log",
+                             "error":  null
+                         },
+                         {
+                             "name":  "race",
+                             "command":  "go test -race ./cmd/... ./internal/... ./pkg/... -count=1",
+                             "exit_code":  0,
+                             "started_at_utc":  "2026-10-08T14:17:55.4987936Z",
+                             "finished_at_utc":  "2026-10-08T14:18:15.6517823Z",
+                             "stdout":  "evidence/baseline/runs/baseline-20261008T141722988Z-f8df9215e0dc/logs/race.stdout.log",
+                             "stderr":  "evidence/baseline/runs/baseline-20261008T141722988Z-f8df9215e0dc/logs/race.stderr.log",
+                             "error":  null
+                         },
+                         {
+                             "name":  "failurelab_smoke",
+                             "command":  "go run ./cmd/failurelab",
+                             "exit_code":  0,
+                             "started_at_utc":  "2026-10-08T14:18:15.6523710Z",
+                             "finished_at_utc":  "2026-10-08T14:18:18.6770344Z",
+                             "stdout":  "evidence/baseline/runs/baseline-20261008T141722988Z-f8df9215e0dc/logs/failurelab_smoke.stdout.log",
+                             "stderr":  "evidence/baseline/runs/baseline-20261008T141722988Z-f8df9215e0dc/logs/failurelab_smoke.stderr.log",
+                             "error":  null
+                         }
+                     ],
+    "notes":  [
+                  "A non-zero verification exit_code means the baseline is unverified for that check.",
+                  "Benchmark files are inventoried only; this manifest does not promote their values to measured claims.",
+                  "config_source_sha256 fingerprints the configuration implementation, not secret runtime values."
+              ]
+}

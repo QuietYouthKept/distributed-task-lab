@@ -1,0 +1,18 @@
+﻿{
+    "schema_version":  1,
+    "generated_at_utc":  "2026-10-08T14:18:18.9790335Z",
+    "records":  [
+                    {
+                        "evidence_id":  "baseline-20261008T141722988Z-f8df9215e0dc",
+                        "type":  "test",
+                        "status":  "measured_valid",
+                        "commit_sha":  "f8df9215e0dc55f7f07580c1672edd99b9c4dcc0",
+                        "repository_dirty":  false,
+                        "collected_at_utc":  "2026-10-08T14:18:18.6770344Z",
+                        "scenario":  "unit+integration+race+failurelab_smoke",
+                        "artifacts":  [
+                                          "evidence/baseline/runs/baseline-20261008T141722988Z-f8df9215e0dc/manifest.json"
+                                      ]
+                    }
+                ]
+}
