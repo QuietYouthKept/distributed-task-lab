@@ -1,0 +1,165 @@
+﻿{
+    "schema_version":  1,
+    "run_id":  "wave2-20261009T095347192Z-f16c2df5831f",
+    "collected_at_utc":  "2026-10-09T09:57:00.6938435Z",
+    "implementation_commit":  "f16c2df5831f334d17706e3829ecf1fcfda91d11",
+    "worktree_clean_at_start":  true,
+    "worktree_clean_after_excluding_run_artifacts":  true,
+    "environment":  {
+                        "go":  "go version go1.26.6 windows/amd64",
+                        "os":  "Microsoft Windows NT 10.0.26200.0",
+                        "docker_server":  "28.3.3",
+                        "postgres_container":  "postgres:16-alpine",
+                        "postgres_server":  "PostgreSQL 16.15",
+                        "minio_image_id":  "sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3",
+                        "minio_health":  "HTTP 200",
+                        "minio_endpoint_configured":  false,
+                        "minio_required_variables_present":  false
+                    },
+    "configuration_fingerprint_sha256":  "b81bb8c04cc126f31f641b4e340eb6d40749a34c585ca6a8c7d9983991a84428",
+    "configuration_source_sha256":  "86b1b441624d2f259a9c93a30339b0e6a849341ea7e576da1d97b71a8adb8e39",
+    "test_fixture_commit_sha":  "f16c2df5831f334d17706e3829ecf1fcfda91d11",
+    "checks":  [
+                   {
+                       "name":  "unit-integration",
+                       "command":  "go test ./cmd/... ./internal/... ./pkg/... -count=1",
+                       "exit_code":  0,
+                       "status":  "PASS",
+                       "started_at_utc":  "2026-10-09T09:53:47.2156999Z",
+                       "finished_at_utc":  "2026-10-09T09:54:09.4783880Z",
+                       "stdout":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/unit-integration.stdout.log",
+                       "stderr":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/unit-integration.stderr.log",
+                       "stdout_sha256":  "9b7a0ca324ee1fa07648cadd8cf99cbd19831adf5c768e0ade27fa15eea6fec8",
+                       "stdout_bytes":  1940,
+                       "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                       "stderr_bytes":  0
+                   },
+                   {
+                       "name":  "full-race",
+                       "command":  "go test -race ./cmd/... ./internal/... ./pkg/... -count=1",
+                       "exit_code":  1,
+                       "status":  "FAIL",
+                       "started_at_utc":  "2026-10-09T09:54:09.4814495Z",
+                       "finished_at_utc":  "2026-10-09T09:54:36.7852033Z",
+                       "stdout":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/full-race.stdout.log",
+                       "stderr":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/full-race.stderr.log",
+                       "stdout_sha256":  "b4fe749bb4601ffc27799f147a85f9a8d4b6472299ff4598cc26bc071d3fb845",
+                       "stdout_bytes":  24504,
+                       "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                       "stderr_bytes":  0
+                   },
+                   {
+                       "name":  "postgres-race-five",
+                       "command":  "go test -race ./internal/storage/postgres -count=5",
+                       "exit_code":  0,
+                       "status":  "PASS",
+                       "started_at_utc":  "2026-10-09T09:54:36.7857203Z",
+                       "finished_at_utc":  "2026-10-09T09:56:18.7736603Z",
+                       "stdout":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/postgres-race-five.stdout.log",
+                       "stderr":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/postgres-race-five.stderr.log",
+                       "stdout_sha256":  "b6376e059b958ac481b0bf57552fdbafa9de5aa6881ec9e7f5bf78ed45ff383d",
+                       "stdout_bytes":  83,
+                       "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                       "stderr_bytes":  0
+                   },
+                   {
+                       "name":  "retry-backoff-race-twenty",
+                       "command":  "go test -race ./internal/storage/postgres -run ^TestRetryBackoff$ -count=20 -v",
+                       "exit_code":  0,
+                       "status":  "PASS",
+                       "started_at_utc":  "2026-10-09T09:56:18.7741843Z",
+                       "finished_at_utc":  "2026-10-09T09:56:51.0932265Z",
+                       "stdout":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/retry-backoff-race-twenty.stdout.log",
+                       "stderr":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/retry-backoff-race-twenty.stderr.log",
+                       "stdout_sha256":  "3b25850b24815112ef3259e61dcebbb039a68cbbd8e792d205567d05b04d46d0",
+                       "stdout_bytes":  11048,
+                       "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                       "stderr_bytes":  0
+                   },
+                   {
+                       "name":  "failurelab",
+                       "command":  "go run ./cmd/failurelab",
+                       "exit_code":  0,
+                       "status":  "PASS",
+                       "started_at_utc":  "2026-10-09T09:56:51.0932265Z",
+                       "finished_at_utc":  "2026-10-09T09:56:53.1205895Z",
+                       "stdout":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/failurelab.stdout.log",
+                       "stderr":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/failurelab.stderr.log",
+                       "stdout_sha256":  "c781ec1a687b24b30e8b716d2b2487b1e075d761e6b8c97b52afcf6a0618f164",
+                       "stdout_bytes":  2720,
+                       "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                       "stderr_bytes":  0
+                   },
+                   {
+                       "name":  "chaosmatrix",
+                       "command":  "go run ./cmd/chaosmatrix",
+                       "exit_code":  0,
+                       "status":  "PASS",
+                       "started_at_utc":  "2026-10-09T09:56:53.1325401Z",
+                       "finished_at_utc":  "2026-10-09T09:56:59.2077167Z",
+                       "stdout":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/chaosmatrix.stdout.log",
+                       "stderr":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/chaosmatrix.stderr.log",
+                       "stdout_sha256":  "bd0c4f956d81b057b36420cc7498eb2d046c0c7204c9097672abb664f54f5ae3",
+                       "stdout_bytes":  486,
+                       "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                       "stderr_bytes":  0
+                   },
+                   {
+                       "name":  "vet",
+                       "command":  "go vet ./...",
+                       "exit_code":  0,
+                       "status":  "PASS",
+                       "started_at_utc":  "2026-10-09T09:56:59.2077167Z",
+                       "finished_at_utc":  "2026-10-09T09:57:00.2219084Z",
+                       "stdout":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/vet.stdout.log",
+                       "stderr":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/logs/vet.stderr.log",
+                       "stdout_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                       "stdout_bytes":  0,
+                       "stderr_sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                       "stderr_bytes":  0
+                   },
+                   {
+                       "name":  "minio-contract-race",
+                       "command":  "not run: required MinIO environment variables absent",
+                       "exit_code":  null,
+                       "status":  "NOT VERIFIED",
+                       "missing_variable_names":  [
+                                                      "MINIO_ENDPOINT",
+                                                      "MINIO_BUCKET",
+                                                      "MINIO_ACCESS_KEY",
+                                                      "MINIO_SECRET_KEY"
+                                                  ]
+                   }
+               ],
+    "chaos_matrix":  {
+                         "status":  "PASS",
+                         "run_id":  "20261009T095653Z",
+                         "files":  [
+                                       {
+                                           "file":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/artifacts/chaosmatrix/20261009T095653Z/events.jsonl",
+                                           "sha256":  "4524c5bc661880c70b79801e14301d1e0c194f78e2d7b683db761410d2b82eec",
+                                           "bytes":  21592
+                                       },
+                                       {
+                                           "file":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/artifacts/chaosmatrix/20261009T095653Z/manifest.json",
+                                           "sha256":  "0649b53cdd8564d569e9a155bd978b73e35f532eb129f024ccaf5bb2c27fc501",
+                                           "bytes":  321
+                                       },
+                                       {
+                                           "file":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/artifacts/chaosmatrix/20261009T095653Z/report.md",
+                                           "sha256":  "c12dd406e68a6f24286ce8e8e4d3444c9536c96dfef2c5386677ca05463fdd53",
+                                           "bytes":  761
+                                       },
+                                       {
+                                           "file":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/artifacts/chaosmatrix/20261009T095653Z/summary.json",
+                                           "sha256":  "6c86809e7fda556ed621fd8dc5830531b062304ec3c91f2c70035e48c3742120",
+                                           "bytes":  887
+                                       }
+                                   ]
+                     },
+    "result":  "FAIL",
+    "limitations":  [
+                        "This run does not by itself prove dual-worker E2E, external IdP/provider, OTLP receipt, DR, or production readiness.",
+                        "Credential values are never recorded."
+                    ]
+}
