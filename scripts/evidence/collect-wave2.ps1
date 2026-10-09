@@ -13,6 +13,13 @@ function Get-Text([string]$File, [string[]]$Arguments) {
     } catch { return "unavailable" }
 }
 
+function Get-FileSHA256([string]$Path) {
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($Path)
+    try { return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace("-", "").ToLowerInvariant() }
+    finally { $stream.Dispose(); $algorithm.Dispose() }
+}
+
 function Invoke-RecordedCheck([string]$Name, [string]$File, [string[]]$Arguments, [hashtable]$Environment, [string]$LogDir, [string]$WorkingDirectory = $repoRoot) {
     $stdout = Join-Path $LogDir ($Name + ".stdout.log")
     $stderr = Join-Path $LogDir ($Name + ".stderr.log")
@@ -85,7 +92,7 @@ if ($newChaosRuns.Count -eq 1) {
         Copy-Item -LiteralPath $sourceFile.FullName -Destination $targetFile
         $chaosFiles += [ordered]@{
             file = $targetFile.Substring($repoRoot.Length + 1).Replace('\', '/')
-            sha256 = (Get-FileHash -LiteralPath $targetFile -Algorithm SHA256).Hash.ToLowerInvariant()
+            sha256 = Get-FileSHA256 $targetFile
             bytes = (Get-Item -LiteralPath $targetFile).Length
         }
     }
@@ -131,12 +138,12 @@ try { $configFingerprint = ([BitConverter]::ToString($sha.ComputeHash([Text.Enco
 foreach ($check in $checks) {
     if ($check.stdout) {
         $file = Join-Path $repoRoot ($check.stdout.Replace('/', '\'))
-        $check.stdout_sha256 = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+        $check.stdout_sha256 = Get-FileSHA256 $file
         $check.stdout_bytes = (Get-Item -LiteralPath $file).Length
     }
     if ($check.stderr) {
         $file = Join-Path $repoRoot ($check.stderr.Replace('/', '\'))
-        $check.stderr_sha256 = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+        $check.stderr_sha256 = Get-FileSHA256 $file
         $check.stderr_bytes = (Get-Item -LiteralPath $file).Length
     }
 }

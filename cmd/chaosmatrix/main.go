@@ -72,6 +72,11 @@ func main() {
 		for i := 0; i < trials; i++ {
 			started := time.Now()
 			err := runScenario(context.Background(), scenario, q, lab.URL, dir, i)
+			// Keep a failed or interrupted trial from contaminating the next
+			// globally-claiming scenario. This database is isolated to this run.
+			if _, cleanupErr := db.ExecContext(context.Background(), `DELETE FROM tasks WHERE id=$1`, fmt.Sprintf("chaos-%s-%d", scenario, i)); cleanupErr != nil && err == nil {
+				err = fmt.Errorf("clean isolated trial task: %w", cleanupErr)
+			}
 			d := time.Since(started)
 			result := "PASS"
 			if err != nil {
@@ -107,25 +112,36 @@ func runScenario(ctx context.Context, scenario string, q *postgres.PostgresQueue
 		if err := enqueue(ctx, q, id, queue); err != nil {
 			return err
 		}
-		first, err := q.ClaimTasks(ctx, "crashed", 1, 12*time.Millisecond)
-		if err != nil || len(first) != 1 {
-			return fmt.Errorf("first claim: %v", err)
+		pollDB, err := postgres.NewDB(dbURL)
+		if err != nil {
+			return err
 		}
-		time.Sleep(18 * time.Millisecond)
-		second, err := q.ClaimTasks(ctx, "survivor", 1, time.Second)
-		if err != nil || len(second) != 1 {
-			return fmt.Errorf("reclaim: %v", err)
+		defer pollDB.Close()
+		_, err = claimTaskWhenDue(ctx, q, pollDB, id, "crashed", 3*time.Second, 12*time.Millisecond)
+		if err != nil {
+			return fmt.Errorf("first claim: %w", err)
+		}
+		second, err := claimTaskAfterLeaseExpiry(ctx, q, pollDB, id, "survivor", 3*time.Second)
+		if err != nil {
+			return fmt.Errorf("reclaim: %w", err)
 		}
 		return q.MarkSuccess(ctx, id, "survivor", second[0].LeaseVersion, domain.TaskResult{Summary: "recovered"})
 	case "stale_generation":
 		if err := enqueue(ctx, q, id, queue); err != nil {
 			return err
 		}
-		old, _ := q.ClaimTasks(ctx, "same-worker", 1, 12*time.Millisecond)
-		time.Sleep(18 * time.Millisecond)
-		current, _ := q.ClaimTasks(ctx, "same-worker", 1, time.Second)
-		if len(old) != 1 || len(current) != 1 {
-			return errors.New("generation not reclaimed")
+		db, err := postgres.NewDB(dbURL)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		old, err := claimTaskWhenDue(ctx, q, db, id, "same-worker", 3*time.Second, 12*time.Millisecond)
+		if err != nil {
+			return fmt.Errorf("initial generation: %w", err)
+		}
+		current, err := claimTaskAfterLeaseExpiry(ctx, q, db, id, "same-worker", 3*time.Second)
+		if err != nil {
+			return fmt.Errorf("generation not reclaimed: %w", err)
 		}
 		if !errors.Is(q.MarkSuccess(ctx, id, "same-worker", old[0].LeaseVersion, domain.TaskResult{}), domain.ErrTaskNotClaimed) || !errors.Is(q.MarkFailure(ctx, id, "same-worker", old[0].LeaseVersion, domain.TaskFailure{}), domain.ErrTaskNotClaimed) || !errors.Is(q.RenewLease(ctx, id, "same-worker", old[0].LeaseVersion, time.Second), domain.ErrTaskNotClaimed) {
 			return errors.New("stale mutation accepted")
@@ -149,9 +165,14 @@ func runScenario(ctx context.Context, scenario string, q *postgres.PostgresQueue
 		if err := enqueue(ctx, q, id, queue); err != nil {
 			return err
 		}
-		claimed, err := q.ClaimTasks(ctx, "draining", 1, time.Second)
-		if err != nil || len(claimed) != 1 {
-			return fmt.Errorf("claim: %v", err)
+		db, err := postgres.NewDB(dbURL)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		claimed, err := claimTaskWhenDue(ctx, q, db, id, "draining", 3*time.Second, time.Second)
+		if err != nil {
+			return fmt.Errorf("claim: %w", err)
 		}
 		if err := q.RenewLease(ctx, id, "draining", claimed[0].LeaseVersion, time.Second); err != nil {
 			return err
@@ -219,6 +240,71 @@ func claimTaskAfterReconnect(parent context.Context, q *postgres.PostgresQueue, 
 		select {
 		case <-ctx.Done():
 			return nil, timeoutError(ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+func claimTaskWhenDue(parent context.Context, q *postgres.PostgresQueue, db *sql.DB, taskID, workerID string, timeout, leaseTimeout time.Duration) ([]domain.Task, error) {
+	return pollTaskClaim(parent, q, db, taskID, workerID, timeout, leaseTimeout, func(ctx context.Context) (bool, error) {
+		var status string
+		var nextRunAt, databaseNow time.Time
+		err := db.QueryRowContext(ctx, `SELECT status, next_run_at, clock_timestamp() FROM tasks WHERE id=$1`, taskID).Scan(&status, &nextRunAt, &databaseNow)
+		if err != nil {
+			return false, fmt.Errorf("inspect task due time: %w", err)
+		}
+		if status != string(domain.TaskStatusPending) {
+			return false, fmt.Errorf("task %s is not pending: status=%s next_run_at=%s database_now=%s", taskID, status, nextRunAt, databaseNow)
+		}
+		return !nextRunAt.After(databaseNow), nil
+	})
+}
+
+func claimTaskAfterLeaseExpiry(parent context.Context, q *postgres.PostgresQueue, db *sql.DB, taskID, workerID string, timeout time.Duration) ([]domain.Task, error) {
+	return pollTaskClaim(parent, q, db, taskID, workerID, timeout, time.Second, func(ctx context.Context) (bool, error) {
+		var status string
+		var leaseExpiresAt *time.Time
+		var databaseNow time.Time
+		err := db.QueryRowContext(ctx, `SELECT status, lease_expires_at, clock_timestamp() FROM tasks WHERE id=$1`, taskID).Scan(&status, &leaseExpiresAt, &databaseNow)
+		if err != nil {
+			return false, fmt.Errorf("inspect task lease: %w", err)
+		}
+		if status != string(domain.TaskStatusRunning) || leaseExpiresAt == nil {
+			return false, fmt.Errorf("task %s has no active lease: status=%s expires_at=%v", taskID, status, leaseExpiresAt)
+		}
+		return !leaseExpiresAt.After(databaseNow), nil
+	})
+}
+
+func pollTaskClaim(parent context.Context, q *postgres.PostgresQueue, db *sql.DB, taskID, workerID string, timeout, leaseTimeout time.Duration, eligible func(context.Context) (bool, error)) ([]domain.Task, error) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		claimed, err := q.ClaimTasks(ctx, workerID, 1, leaseTimeout)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, fmt.Errorf("claim task %s timed out after %s: %w", taskID, timeout, ctx.Err())
+			}
+			return nil, err
+		}
+		if len(claimed) > 0 {
+			if len(claimed) != 1 || claimed[0].ID != taskID {
+				return nil, fmt.Errorf("expected only task %s to be claimed, got %d task(s), first=%s", taskID, len(claimed), claimed[0].ID)
+			}
+			return claimed, nil
+		}
+		ready, err := eligible(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if ready {
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("task %s did not become claimable within %s: %w", taskID, timeout, ctx.Err())
 		case <-ticker.C:
 		}
 	}
