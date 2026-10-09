@@ -45,7 +45,7 @@ submit-multi: ## Submit 5 tasks to show multi-worker claim
 		echo "=== Task $$i ==="; \
 		$(CURL_API) -X POST http://localhost:8080/tasks \
 			-H "Content-Type: application/json" \
-			-d "{\"type\":\"rag_ingestion\",\"payload\":{\"version\":\"1\",\"kind\":\"rag_ingestion\",\"data\":{\"document_id\":\"doc-multi-$$i\",\"dataset_id\":\"ds-demo\",\"index_name\":\"demo-index\"}},\"max_attempts\":1,\"timeout_seconds\":30,\"retry_delay_seconds\":3}" | jq '{id, status}'; \
+			-d "{\"type\":\"rag_ingestion\",\"payload\":{\"version\":\"1\",\"kind\":\"rag_ingestion\",\"data\":{\"execution_mode\":\"mock\",\"document_id\":\"doc-multi-$$i\",\"dataset_id\":\"ds-demo\",\"index_name\":\"demo-index\"}},\"max_attempts\":1,\"timeout_seconds\":30,\"retry_delay_seconds\":3}" | jq '{id, status}'; \
 	done
 
 list-tasks: ## List all tasks
@@ -104,7 +104,7 @@ demo-claim: up ## Phase 2: submit 5 tasks + watch multi-worker claim
 	@for i in 1 2 3 4 5; do \
 		$(CURL_API) -X POST http://localhost:8080/tasks \
 			-H "Content-Type: application/json" \
-			-d "{\"type\":\"rag_ingestion\",\"payload\":{\"version\":\"1\",\"kind\":\"rag_ingestion\",\"data\":{\"document_id\":\"doc-$$i\",\"dataset_id\":\"ds-demo\",\"index_name\":\"demo-index\"}},\"max_attempts\":1,\"timeout_seconds\":30,\"retry_delay_seconds\":3}" | jq '{id, status}'; \
+			-d "{\"type\":\"rag_ingestion\",\"payload\":{\"version\":\"1\",\"kind\":\"rag_ingestion\",\"data\":{\"execution_mode\":\"mock\",\"document_id\":\"doc-$$i\",\"dataset_id\":\"ds-demo\",\"index_name\":\"demo-index\"}},\"max_attempts\":1,\"timeout_seconds\":30,\"retry_delay_seconds\":3}" | jq '{id, status}'; \
 	done
 	@sleep 3
 	@echo "=== Current tasks ==="
@@ -177,7 +177,7 @@ demo-rate-limit: up ## Queue rate limit: 6 tasks dispatched at 2/s
 	@echo "=== Submitting 6 tasks to the rag_ingestion queue ==="
 	@for i in 1 2 3 4 5 6; do \
 		$(CURL_API) -X POST http://localhost:8080/tasks -H "Content-Type: application/json" \
-			-d "{\"type\":\"rag_ingestion\",\"queue\":\"rag_ingestion\",\"payload\":{\"version\":\"1\",\"kind\":\"rag_ingestion\",\"data\":{\"document_id\":\"doc-rl-$$i\",\"mock_duration_ms\":200}},\"max_attempts\":1,\"timeout_seconds\":30}" | jq '{id, status}'; \
+			-d "{\"type\":\"rag_ingestion\",\"queue\":\"rag_ingestion\",\"payload\":{\"version\":\"1\",\"kind\":\"rag_ingestion\",\"data\":{\"execution_mode\":\"mock\",\"document_id\":\"doc-rl-$$i\",\"mock_duration_ms\":200}},\"max_attempts\":1,\"timeout_seconds\":30}" | jq '{id, status}'; \
 	done
 	@echo "=== Watching dispatch (success count should grow ~2/s) ==="
 	@for i in 1 2 3 4 5; do \
