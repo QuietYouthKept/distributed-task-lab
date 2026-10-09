@@ -36,6 +36,8 @@ func TestOpenAPIContainsEveryStableRoute(t *testing.T) {
 		"/v1/queues/{name}":        {"put"},
 		"/v1/queues/{name}/pause":  {"post"},
 		"/v1/queues/{name}/resume": {"post"},
+		"/v1/effects":              {"get"},
+		"/v1/effects/{id}/resolve": {"post"},
 	}
 	for path, methods := range want {
 		operations, ok := document.Paths[path]
@@ -78,5 +80,18 @@ func TestOpenAPICreateContractIsStrictAndIdempotent(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("POST /v1/tasks must document Idempotency-Key")
+	}
+	list := paths["/v1/tasks"].(map[string]any)["get"].(map[string]any)
+	listParameters := list["parameters"].([]any)
+	for _, expected := range []string{"page_size", "cursor"} {
+		found := false
+		for _, value := range listParameters {
+			if value.(map[string]any)["name"] == expected {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("GET /v1/tasks must document %s", expected)
+		}
 	}
 }

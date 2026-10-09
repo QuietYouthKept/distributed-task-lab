@@ -2,10 +2,12 @@ package application
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload"
 	"github.com/fantasticyi/distributed-task-lab/internal/storage/postgres"
 	"github.com/fantasticyi/distributed-task-lab/internal/testutil"
 )
@@ -183,5 +185,29 @@ func TestServiceValidation(t *testing.T) {
 		IdempotencyKey: &emptyKey,
 	}); err == nil {
 		t.Error("expected error for empty idempotency key")
+	}
+}
+
+func TestDeploymentAdmissionRejectsValidButDisabledModeBeforeEnqueue(t *testing.T) {
+	_, q := testService(t)
+	svc := NewTaskServiceWithAdmission(q, taskpayload.ProductionExecutionPolicy())
+	before, err := q.Stats(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.CreateTask(context.Background(), CreateTaskRequest{
+		Type:    domain.TaskTypeRAGIngestion,
+		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"execution_mode": "mock", "document_id": "must-not-enqueue"}},
+	})
+	var domainErr *domain.Error
+	if !errors.As(err, &domainErr) || domainErr.Code != "task_execution_disabled" {
+		t.Fatalf("error=%v, want task_execution_disabled", err)
+	}
+	after, err := q.Stats(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after[domain.TaskStatusPending] != before[domain.TaskStatusPending] {
+		t.Fatalf("disabled task was enqueued: pending before=%d after=%d", before[domain.TaskStatusPending], after[domain.TaskStatusPending])
 	}
 }

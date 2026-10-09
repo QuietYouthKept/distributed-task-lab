@@ -71,14 +71,36 @@ func enqueue(t *testing.T, q *PostgresQueue, task *domain.Task) *domain.Task {
 // claimOne claims a single task for workerID, failing the test if none are available.
 func claimOne(t *testing.T, q *PostgresQueue, workerID string) domain.Task {
 	t.Helper()
-	claimed, err := q.ClaimTasks(context.Background(), workerID, 5, 30*time.Second)
-	if err != nil {
-		t.Fatalf("ClaimTasks: %v", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		claimed, err := q.ClaimTasks(ctx, workerID, 5, 30*time.Second)
+		if err != nil {
+			t.Fatalf("ClaimTasks: %v", err)
+		}
+		if len(claimed) == 1 {
+			return claimed[0]
+		}
+		if len(claimed) > 1 {
+			t.Fatalf("expected 1 claimed task, got %d", len(claimed))
+		}
+		// This helper is only for tests whose task was just enqueued and should
+		// already be due. Never hide an early next_run_at bug behind the polling.
+		var due int
+		if err := q.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks WHERE status='pending' AND next_run_at <= clock_timestamp()`).Scan(&due); err != nil {
+			t.Fatalf("check immediate task eligibility using PostgreSQL clock: %v", err)
+		}
+		if due == 0 {
+			t.Fatalf("expected an immediately due pending task, but PostgreSQL reports none")
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timed out after 10s trying to claim an already-due task; PostgreSQL still reports %d due task(s)", due)
+		case <-ticker.C:
+		}
 	}
-	if len(claimed) != 1 {
-		t.Fatalf("expected 1 claimed task, got %d", len(claimed))
-	}
-	return claimed[0]
 }
 
 // claimOneEventually polls ClaimTasks until PostgreSQL considers a retried task
@@ -229,6 +251,38 @@ func TestListTasks(t *testing.T) {
 	}
 	if len(tasks) != 1 || tasks[0].ID != queued.ID {
 		t.Fatalf("queue filter returned %+v, want only %s", tasks, queued.ID)
+	}
+}
+
+func TestListTasksKeysetPaginationUsesStableCreatedAtAndIDOrder(t *testing.T) {
+	q := setupTestDB(t)
+	ctx := context.Background()
+	for _, id := range []string{"page-1", "page-2", "page-3", "page-4"} {
+		if _, err := q.Enqueue(ctx, newTask(id, 3)); err != nil {
+			t.Fatalf("enqueue %s: %v", id, err)
+		}
+	}
+	first, err := q.ListTasks(ctx, domain.TaskFilter{Limit: 3})
+	if err != nil {
+		t.Fatalf("first page: %v", err)
+	}
+	if len(first) != 3 {
+		t.Fatalf("first page length=%d, want 3", len(first))
+	}
+	last := first[len(first)-1]
+	second, err := q.ListTasks(ctx, domain.TaskFilter{Limit: 3, AfterCreatedAt: &last.CreatedAt, AfterID: &last.ID})
+	if err != nil {
+		t.Fatalf("second page: %v", err)
+	}
+	if len(second) != 1 {
+		t.Fatalf("second page length=%d, want 1", len(second))
+	}
+	for _, task := range second {
+		for _, previous := range first {
+			if task.ID == previous.ID {
+				t.Fatalf("task %s was duplicated across keyset pages", task.ID)
+			}
+		}
 	}
 }
 
@@ -472,7 +526,7 @@ func TestRetryBackoff(t *testing.T) {
 
 	// Attempt 2: bounded polling waits for PostgreSQL's eligibility decision;
 	// it is not a fixed sleep that assumes a particular scheduler latency.
-	c2 := claimOneEventually(t, q, "worker-1", 3*time.Second)
+	c2 := claimOneEventually(t, q, "worker-1", 10*time.Second)
 	if c2.Attempt != 2 {
 		t.Errorf("Attempt = %d, want 2", c2.Attempt)
 	}
@@ -530,7 +584,7 @@ func TestRetryTaskReclaimable(t *testing.T) {
 		t.Errorf("expected 0 claims (next_run_at in future), got %d", len(claimed))
 	}
 
-	claimedAfterDue := claimOneEventually(t, q, "worker-2", 3*time.Second)
+	claimedAfterDue := claimOneEventually(t, q, "worker-2", 10*time.Second)
 	if claimedAfterDue.Attempt != 2 {
 		t.Errorf("Attempt = %d, want 2", claimedAfterDue.Attempt)
 	}

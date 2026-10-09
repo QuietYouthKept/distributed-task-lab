@@ -1,13 +1,14 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/artifacts"
@@ -30,11 +31,19 @@ type Chunk struct {
 type RealRAGIngestion struct {
 	DocDir      string
 	ArtifactDir string
+	SourceStore artifacts.Store
+	Store       artifacts.Store
+	storeErr    error
 }
 
 // NewRealRAGIngestion creates a real RAG ingestion pipeline.
 func NewRealRAGIngestion(docDir, artifactDir string) *RealRAGIngestion {
-	return &RealRAGIngestion{DocDir: docDir, ArtifactDir: artifactDir}
+	store, err := artifacts.NewLocalStore(artifactDir, "", 64<<20)
+	return &RealRAGIngestion{DocDir: docDir, ArtifactDir: artifactDir, Store: store, storeErr: err}
+}
+
+func NewRealRAGIngestionWithStores(docDir string, sourceStore, artifactStore artifacts.Store) *RealRAGIngestion {
+	return &RealRAGIngestion{DocDir: docDir, SourceStore: sourceStore, Store: artifactStore}
 }
 
 // Ingest runs the pipeline for a payload describing a document to ingest.
@@ -47,35 +56,60 @@ func (h *RealRAGIngestion) Ingest(ctx context.Context, payload map[string]any) (
 	if docID == "" || objectKey == "" {
 		return nil, worker.NewNonRetryableError(fmt.Errorf("document_id and object_key are required"), domain.ErrorTypeBadPayload)
 	}
-
-	fullPath, err := artifacts.ResolveLocalObjectKey(h.DocDir, objectKey)
-	if err != nil {
-		return nil, worker.NewNonRetryableError(fmt.Errorf("resolve object key: %w", err), domain.ErrorTypeBadPayload)
+	if h.storeErr != nil {
+		return nil, fmt.Errorf("initialize artifact store: %w", h.storeErr)
+	}
+	if h.Store == nil {
+		return nil, fmt.Errorf("artifact store is not configured")
 	}
 
-	data, err := os.ReadFile(fullPath)
+	var data []byte
+	var err error
+	if h.SourceStore != nil {
+		data, _, err = h.SourceStore.Get(ctx, objectKey)
+	} else {
+		var fullPath string
+		fullPath, err = artifacts.ResolveLocalObjectKey(h.DocDir, objectKey)
+		if err == nil {
+			data, err = os.ReadFile(fullPath)
+		}
+	}
 	if err != nil {
-		return nil, worker.NewNonRetryableError(fmt.Errorf("read document: %w", err), domain.ErrorTypeBadPayload)
+		return nil, worker.NewNonRetryableError(fmt.Errorf("read document through controlled source reference: %w", err), domain.ErrorTypeBadPayload)
 	}
 
 	sum := sha256.Sum256(data)
 	key := fmt.Sprintf("%s_%s_%s_%s", docID, version, profile, hex.EncodeToString(sum[:8]))
 	artifactName := key + ".jsonl"
-	artifactPath := filepath.Join(h.ArtifactDir, artifactName)
+	artifactKey := "rag/" + artifactName
 
 	chunks := chunkParagraphs(docID, string(data))
-	reused := false
-	if _, err := os.Stat(artifactPath); err == nil {
-		reused = true
-	} else if err := h.writeArtifact(artifactPath, chunks); err != nil {
+	var encoded bytes.Buffer
+	enc := json.NewEncoder(&encoded)
+	for _, chunk := range chunks {
+		if err := enc.Encode(chunk); err != nil {
+			return nil, fmt.Errorf("encode chunks: %w", err)
+		}
+	}
+	_, headErr := h.Store.Head(ctx, artifactKey)
+	reused := headErr == nil
+	if headErr != nil && !errors.Is(headErr, artifacts.ErrNotFound) {
+		return nil, fmt.Errorf("check existing artifact: %w", headErr)
+	}
+	info, err := h.Store.PutIfAbsent(ctx, artifactKey, encoded.Bytes(), "application/x-ndjson")
+	if err != nil {
 		return nil, fmt.Errorf("write artifact: %w", err)
+	}
+	if info.SHA256 == "" || info.Size != int64(encoded.Len()) {
+		return nil, fmt.Errorf("artifact store returned invalid integrity metadata")
 	}
 
 	return &worker.TaskExecResult{
-		Summary: fmt.Sprintf("RAG ingestion for document %s: %d chunks (reused=%t)", docID, len(chunks), reused),
+		Summary: fmt.Sprintf("RAG ingestion for document %s: %d chunks", docID, len(chunks)),
 		Artifacts: map[string]string{
 			"document_id":       docID,
-			"artifact_uri":      artifactPath,
+			"artifact_uri":      "artifact://" + info.Key,
+			"artifact_sha256":   info.SHA256,
 			"chunk_count":       fmt.Sprintf("%d", len(chunks)),
 			"embedding_model":   "deterministic-sha256",
 			"chunking_profile":  profile,
@@ -85,26 +119,6 @@ func (h *RealRAGIngestion) Ingest(ctx context.Context, payload map[string]any) (
 			"generated_chunks": float64(len(chunks)),
 		},
 	}, nil
-}
-
-// writeArtifact writes chunks as newline-delimited JSON.
-func (h *RealRAGIngestion) writeArtifact(path string, chunks []Chunk) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	enc := json.NewEncoder(f)
-	for _, c := range chunks {
-		if err := enc.Encode(c); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // chunkParagraphs splits text into paragraphs and assigns deterministic embeddings.

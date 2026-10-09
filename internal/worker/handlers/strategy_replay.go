@@ -7,11 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
 	"regexp"
 	"time"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/artifacts"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"github.com/fantasticyi/distributed-task-lab/internal/worker"
 )
@@ -31,7 +30,11 @@ const (
 // execution snapshot carried in the payload, so the same snapshot always yields
 // the same result — regardless of which worker executes it, or how many times
 // (at-least-once). No wall-clock timing or randomness influences the result.
-type StrategyReplay struct{ ArtifactDir string }
+type StrategyReplay struct {
+	ArtifactDir string
+	Store       artifacts.Store
+	storeErr    error
+}
 
 // NewStrategyReplay creates a StrategyReplay handler.
 func NewStrategyReplay(artifactDirs ...string) *StrategyReplay {
@@ -39,7 +42,12 @@ func NewStrategyReplay(artifactDirs ...string) *StrategyReplay {
 	if len(artifactDirs) > 0 && artifactDirs[0] != "" {
 		dir = artifactDirs[0]
 	}
-	return &StrategyReplay{ArtifactDir: dir}
+	store, err := artifacts.NewLocalStore(dir, "", 64<<20)
+	return &StrategyReplay{ArtifactDir: dir, Store: store, storeErr: err}
+}
+
+func NewStrategyReplayWithStore(store artifacts.Store) *StrategyReplay {
+	return &StrategyReplay{Store: store}
 }
 
 // Run executes the deterministic replay. A regression is a SUCCESSFUL business
@@ -200,6 +208,12 @@ func (h *StrategyReplay) Run(ctx context.Context, payload map[string]any) (*work
 // retriever/evaluator is wired in. Its artifact shape, provenance checks and
 // idempotent content addressing are production-facing contract behavior.
 func (h *StrategyReplay) runRAG(ctx context.Context, payload, candidate map[string]any, startedAt time.Time) (*worker.TaskExecResult, error) {
+	if h.storeErr != nil {
+		return nil, fmt.Errorf("initialize strategy replay artifact store: %w", h.storeErr)
+	}
+	if h.Store == nil {
+		return nil, fmt.Errorf("strategy replay artifact store is not configured")
+	}
 	caseCount := getInt(payload, "case_count", 0)
 	if caseCount < 100 {
 		return nil, worker.NewNonRetryableError(fmt.Errorf("RAG replay requires case_count >= 100"), domain.ErrorTypeBadPayload)
@@ -278,16 +292,10 @@ func (h *StrategyReplay) runRAG(ctx context.Context, payload, candidate map[stri
 	}
 	sum := sha256.Sum256(reportBytes)
 	reportHash := hex.EncodeToString(sum[:])
-	path := filepath.Join(h.ArtifactDir, "rag-replay", reportHash+".json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, fmt.Errorf("rag strategy replay: create artifact directory: %w", err)
-	}
-	if err := os.WriteFile(path, reportBytes, 0o644); err != nil {
-		return nil, fmt.Errorf("rag strategy replay: write report: %w", err)
-	}
-	absPath, err := filepath.Abs(path)
+	key := "rag-replay/" + reportHash + ".json"
+	info, err := h.Store.PutIfAbsent(ctx, key, reportBytes, "application/json")
 	if err != nil {
-		return nil, fmt.Errorf("rag strategy replay: resolve report path: %w", err)
+		return nil, fmt.Errorf("rag strategy replay: write report: %w", err)
 	}
 
 	result := map[string]any{
@@ -304,7 +312,7 @@ func (h *StrategyReplay) runRAG(ctx context.Context, payload, candidate map[stri
 		"evaluator_schema_version": getString(payload, "evaluator_schema_version", ""), "recall_at_k": round6(recall), "mrr": round6(mrr),
 		"ndcg": round6(ndcg), "answer_point_recall": round6(answerRecall), "unsupported_claim_rate": round6(unsupported),
 		"refusal_accuracy": round6(refusal), "p50_latency_ms": round6(p50), "p95_latency_ms": round6(p95),
-		"average_tokens": round6(tokens), "average_cost_usd": round6(cost), "raw_report_uri": "file://" + filepath.ToSlash(absPath),
+		"average_tokens": round6(tokens), "average_cost_usd": round6(cost), "raw_report_uri": "artifact://" + info.Key,
 		"raw_report_sha256": reportHash,
 	}
 	if failed > 0 {

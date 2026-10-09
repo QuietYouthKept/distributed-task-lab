@@ -12,8 +12,10 @@
       "get": {"operationId": "listTasks", "parameters": [
         {"name": "status", "in": "query", "schema": {"$ref": "#/components/schemas/TaskStatus"}},
         {"name": "type", "in": "query", "schema": {"$ref": "#/components/schemas/TaskType"}},
-        {"name": "queue", "in": "query", "schema": {"type": "string", "maxLength": 128}}
-      ], "responses": {"200": {"description": "Tasks"}, "422": {"$ref": "#/components/responses/InvalidArgument"}, "503": {"$ref": "#/components/responses/Unavailable"}}},
+        {"name": "queue", "in": "query", "schema": {"type": "string", "maxLength": 128}},
+        {"name": "page_size", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50}},
+        {"name": "cursor", "in": "query", "schema": {"type": "string", "maxLength": 2048}}
+      ], "responses": {"200": {"description": "Cursor page with tasks, has_more and an optional next_cursor"}, "422": {"$ref": "#/components/responses/InvalidArgument"}, "503": {"$ref": "#/components/responses/Unavailable"}}},
       "post": {"operationId": "createTask", "parameters": [
         {"name": "Idempotency-Key", "in": "header", "required": false, "schema": {"type": "string", "minLength": 1, "maxLength": 256}}
       ], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateTaskRequest"}}}},
@@ -29,7 +31,9 @@
     "/v1/queues": {"get": {"operationId": "listQueues", "responses": {"200": {"description": "Queues"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
     "/v1/queues/{name}": {"put": {"operationId": "setQueueConfig", "parameters": [{"$ref": "#/components/parameters/QueueName"}], "requestBody": {"required": false, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/QueueConfigRequest"}}}}, "responses": {"200": {"description": "Configured"}, "400": {"$ref": "#/components/responses/MalformedRequest"}, "422": {"$ref": "#/components/responses/InvalidArgument"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
     "/v1/queues/{name}/pause": {"post": {"operationId": "pauseQueue", "parameters": [{"$ref": "#/components/parameters/QueueName"}], "responses": {"200": {"description": "Paused"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/v1/queues/{name}/resume": {"post": {"operationId": "resumeQueue", "parameters": [{"$ref": "#/components/parameters/QueueName"}], "responses": {"200": {"description": "Resumed"}, "503": {"$ref": "#/components/responses/Unavailable"}}}}
+    "/v1/queues/{name}/resume": {"post": {"operationId": "resumeQueue", "parameters": [{"$ref": "#/components/parameters/QueueName"}], "responses": {"200": {"description": "Resumed"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/v1/effects": {"get": {"operationId": "listUnresolvedEffects", "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100}}], "responses": {"200": {"description": "Unresolved effect records for operator reconciliation"}, "401": {"description": "Unauthenticated"}, "403": {"description": "Operator role required"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
+    "/v1/effects/{id}/resolve": {"post": {"operationId": "resolveEffectManually", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["reason"], "properties": {"reason": {"type": "string", "minLength": 1, "maxLength": 1024}}}}}}, "responses": {"200": {"description": "Manually resolved and audited"}, "401": {"description": "Unauthenticated"}, "403": {"description": "Admin role required"}, "409": {"$ref": "#/components/responses/Conflict"}}}}
   },
   "components": {
     "securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}},

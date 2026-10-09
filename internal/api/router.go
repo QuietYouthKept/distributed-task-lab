@@ -5,12 +5,16 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/api/contract"
 	"github.com/fantasticyi/distributed-task-lab/internal/api/handlers"
+	"github.com/fantasticyi/distributed-task-lab/internal/auth"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -18,10 +22,15 @@ import (
 type ReadinessProvider interface{ HealthCheck(context.Context) error }
 
 type RouterConfig struct {
-	APIToken            string
-	AdminToken          string
-	MaxRequestBodyBytes int64
-	RequestTimeout      time.Duration
+	APIToken              string
+	AdminToken            string
+	Authenticator         auth.TokenVerifier
+	RequireAuthentication bool
+	MaxRequestBodyBytes   int64
+	RequestTimeout        time.Duration
+	IngressRatePerSecond  float64
+	IngressBurst          int
+	EffectHandler         *handlers.EffectHandler
 }
 
 func (c RouterConfig) withDefaults() RouterConfig {
@@ -30,6 +39,12 @@ func (c RouterConfig) withDefaults() RouterConfig {
 	}
 	if c.RequestTimeout <= 0 {
 		c.RequestTimeout = 10 * time.Second
+	}
+	if c.IngressRatePerSecond <= 0 {
+		c.IngressRatePerSecond = 100
+	}
+	if c.IngressBurst <= 0 {
+		c.IngressBurst = 200
 	}
 	return c
 }
@@ -72,6 +87,10 @@ func NewRouterWithConfig(taskHandler *handlers.TaskHandler, metricsHandler *hand
 	mux.HandleFunc("PUT /v1/queues/{name}", taskHandler.SetQueueConfig)
 	mux.HandleFunc("POST /v1/queues/{name}/pause", taskHandler.PauseQueue)
 	mux.HandleFunc("POST /v1/queues/{name}/resume", taskHandler.ResumeQueue)
+	if cfg.EffectHandler != nil {
+		mux.HandleFunc("GET /v1/effects", cfg.EffectHandler.List)
+		mux.HandleFunc("POST /v1/effects/{id}/resolve", cfg.EffectHandler.Resolve)
+	}
 
 	live := func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "live"})
@@ -94,12 +113,73 @@ func NewRouterWithConfig(taskHandler *handlers.TaskHandler, metricsHandler *hand
 	})
 
 	var h http.Handler = mux
+	h = newIngressLimiter(cfg.IngressRatePerSecond, cfg.IngressBurst).middleware(h)
 	h = authMiddleware(h, cfg)
 	h = requestSafetyMiddleware(h, cfg)
 	h = loggingMiddleware(h, logger)
 	h = requestIDMiddleware(h)
 	h = otelhttp.NewHandler(h, "task-lab.http")
 	return h
+}
+
+type ingressBucket struct {
+	tokens  float64
+	updated time.Time
+}
+
+type ingressLimiter struct {
+	mu      sync.Mutex
+	rate    float64
+	burst   float64
+	buckets map[string]ingressBucket
+}
+
+func newIngressLimiter(rate float64, burst int) *ingressLimiter {
+	return &ingressLimiter{rate: rate, burst: float64(burst), buckets: make(map[string]ingressBucket)}
+}
+
+func (l *ingressLimiter) middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := auth.PrincipalFromContext(r.Context())
+		if !ok || principal.Subject == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		allowed, retryAfter := l.allow(principal.Subject, time.Now())
+		if !allowed {
+			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+			contract.WriteRateLimitError(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (l *ingressLimiter) allow(subject string, now time.Time) (bool, int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	bucket, exists := l.buckets[subject]
+	if !exists {
+		// Bound memory even when an issuer has a large or compromised set of
+		// authenticated subjects. New principals are rejected while full.
+		if len(l.buckets) >= 10000 {
+			return false, 1
+		}
+		bucket = ingressBucket{tokens: l.burst, updated: now}
+	} else {
+		elapsed := now.Sub(bucket.updated).Seconds()
+		if elapsed > 0 {
+			bucket.tokens = math.Min(l.burst, bucket.tokens+elapsed*l.rate)
+		}
+		bucket.updated = now
+	}
+	if bucket.tokens < 1 {
+		l.buckets[subject] = bucket
+		return false, max(1, int(math.Ceil((1-bucket.tokens)/l.rate)))
+	}
+	bucket.tokens--
+	l.buckets[subject] = bucket
+	return true, 0
 }
 
 func requestIDMiddleware(next http.Handler) http.Handler {
@@ -131,17 +211,88 @@ func authMiddleware(next http.Handler, cfg RouterConfig) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if cfg.Authenticator != nil {
+			raw, ok := bearerToken(r.Header.Get("Authorization"))
+			if !ok {
+				writeUnauthorized(w, r)
+				return
+			}
+			principal, err := cfg.Authenticator.Verify(r.Context(), raw)
+			if err != nil {
+				writeUnauthorized(w, r)
+				return
+			}
+			if !principal.HasRole(requiredRole(r)) {
+				contract.WriteError(w, r, domain.NewError(domain.ErrorKindForbidden, "forbidden", "the authenticated principal is not allowed to perform this operation", nil))
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
+			return
+		}
+		if cfg.RequireAuthentication || isSensitiveEndpoint(r) {
+			writeUnauthorized(w, r)
+			return
+		}
 		required := cfg.APIToken
-		if isAdminMutation(r) && cfg.AdminToken != "" {
-			required = cfg.AdminToken
+		if isAdminMutation(r) {
+			if isSensitiveEndpoint(r) {
+				required = cfg.AdminToken
+				if required == "" {
+					writeUnauthorized(w, r)
+					return
+				}
+			} else if cfg.AdminToken != "" {
+				required = cfg.AdminToken
+			}
 		}
 		if required != "" && !validBearer(r.Header.Get("Authorization"), required) {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			contract.WriteError(w, r, domain.NewError(domain.ErrorKindUnauthorized, "unauthorized", "authentication is required", nil))
+			writeUnauthorized(w, r)
 			return
+		}
+		if required != "" {
+			role := auth.RoleReader
+			subject := "legacy-api-token"
+			if isAdminMutation(r) {
+				role, subject = auth.RoleAdmin, "legacy-admin-token"
+			}
+			r = r.WithContext(auth.WithPrincipal(r.Context(), auth.Principal{Subject: subject, Kind: auth.KindService, Roles: map[auth.Role]struct{}{role: {}}}))
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func requiredRole(r *http.Request) auth.Role {
+	path := strings.TrimPrefix(r.URL.Path, "/v1")
+	if strings.HasPrefix(path, "/effects") && r.Method != http.MethodGet {
+		return auth.RoleAdmin
+	}
+	if path == "/effects" {
+		return auth.RoleOperator
+	}
+	if strings.HasPrefix(path, "/queues/") && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return auth.RoleAdmin
+	}
+	if path == "/stats" || path == "/metrics" || path == "/queues" || path == "/dlq" {
+		return auth.RoleOperator
+	}
+	if path == "/tasks" && r.Method == http.MethodPost || strings.HasSuffix(path, "/requeue") || strings.HasSuffix(path, "/cancel") {
+		return auth.RoleOperator
+	}
+	return auth.RoleReader
+}
+
+func bearerToken(header string) (string, bool) {
+	const prefix = "Bearer "
+	if !strings.HasPrefix(header, prefix) {
+		return "", false
+	}
+	token := strings.TrimSpace(strings.TrimPrefix(header, prefix))
+	return token, token != "" && !strings.ContainsAny(token, " \t\r\n")
+}
+
+func writeUnauthorized(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("WWW-Authenticate", "Bearer")
+	contract.WriteError(w, r, domain.NewError(domain.ErrorKindUnauthorized, "unauthorized", "authentication is required", nil))
 }
 
 func isAdminMutation(r *http.Request) bool {
@@ -149,7 +300,11 @@ func isAdminMutation(r *http.Request) bool {
 		return false
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/v1")
-	return strings.HasPrefix(path, "/queues/") || strings.HasSuffix(path, "/requeue") || strings.HasSuffix(path, "/cancel")
+	return strings.HasPrefix(path, "/queues/") || strings.HasPrefix(path, "/effects/") || strings.HasSuffix(path, "/requeue") || strings.HasSuffix(path, "/cancel")
+}
+
+func isSensitiveEndpoint(r *http.Request) bool {
+	return strings.HasPrefix(strings.TrimPrefix(r.URL.Path, "/v1"), "/effects")
 }
 
 func validBearer(header, token string) bool {

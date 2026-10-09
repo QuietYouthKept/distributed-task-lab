@@ -56,6 +56,16 @@ func TestValidateRejectsMismatchedAndUnsafePayloads(t *testing.T) {
 	}
 }
 
+func TestProductionExecutionPolicyIsExplicitAndFailClosed(t *testing.T) {
+	policy := ProductionExecutionPolicy()
+	if policy.Allows(domain.TaskTypeRAGIngestion, "mock") || policy.Allows(domain.TaskTypeEval, "deterministic") {
+		t.Fatal("production policy must not admit mock or deterministic execution")
+	}
+	if (ExecutionPolicy{}).Allows(domain.TaskTypeRAGIngestion, "real") {
+		t.Fatal("empty configured allowlist must reject every mode")
+	}
+}
+
 func FuzzValidateRAGData(f *testing.F) {
 	f.Add([]byte(`{"execution_mode":"mock","document_id":"doc-1"}`))
 	f.Add([]byte(`{"execution_mode":true,"document_id":1}`))

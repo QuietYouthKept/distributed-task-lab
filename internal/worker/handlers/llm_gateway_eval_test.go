@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/fantasticyi/distributed-task-lab/internal/artifacts"
 )
 
 func gatewayPayload(start, end int) map[string]any {
@@ -40,7 +40,11 @@ func TestGatewayLLMEvalWritesReceiptsAndReusesFinalArtifact(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "passed", "score": 0.9, "input_tokens": 10, "output_tokens": 3, "cost_usd": 0.01})
 	}))
 	defer server.Close()
-	h := &GatewayLLMEval{artifactDir: t.TempDir(), url: server.URL, profile: "test", apiKey: "test-secret", timeout: time.Second, maxCases: 50, maxCost: 1, allowlists: map[string]map[string]bool{}, providerGate: make(chan struct{}, 2), client: server.Client()}
+	store, err := artifacts.NewLocalStore(t.TempDir(), "worker-a", 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &GatewayLLMEval{store: store, url: server.URL, profile: "test", apiKey: "test-secret", timeout: time.Second, maxCases: 50, maxCost: 1, allowlists: map[string]map[string]bool{}, providerGate: make(chan struct{}, 2), client: server.Client()}
 	first, err := h.Run(context.Background(), gatewayPayload(0, 3))
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +52,8 @@ func TestGatewayLLMEvalWritesReceiptsAndReusesFinalArtifact(t *testing.T) {
 	if first.Metrics["passed"] != 3 || first.Metrics["cost_usd"] != 0.03 {
 		t.Fatalf("unexpected metrics %#v", first.Metrics)
 	}
-	second, err := h.Run(context.Background(), gatewayPayload(0, 3))
+	secondWorker := *h
+	second, err := secondWorker.Run(context.Background(), gatewayPayload(0, 3))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +63,8 @@ func TestGatewayLLMEvalWritesReceiptsAndReusesFinalArtifact(t *testing.T) {
 	if gotCalls != 3 {
 		t.Fatalf("gateway calls = %d, want 3 after reuse", gotCalls)
 	}
-	manifest, err := os.ReadFile(second.Artifacts["eval_manifest_uri"])
+	manifestKey := strings.TrimPrefix(second.Artifacts["eval_manifest_uri"], "artifact://")
+	manifest, _, err := h.store.Get(context.Background(), manifestKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +72,7 @@ func TestGatewayLLMEvalWritesReceiptsAndReusesFinalArtifact(t *testing.T) {
 		t.Fatal("gateway API key leaked into artifact")
 	}
 	for _, name := range []string{"manifest.json", "case-results.jsonl", "summary.json", "failures.jsonl"} {
-		if _, err := os.Stat(filepath.Join(filepath.Dir(second.Artifacts["eval_manifest_uri"]), name)); err != nil {
+		if _, err := h.store.Head(context.Background(), strings.TrimSuffix(manifestKey, "/manifest.json")+"/"+name); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}
@@ -92,7 +98,11 @@ func TestGatewayLLMEvalResumesPartialReceipts(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "passed", "input_tokens": 1, "output_tokens": 1, "cost_usd": 0.001})
 	}))
 	defer server.Close()
-	h := &GatewayLLMEval{artifactDir: t.TempDir(), url: server.URL, profile: "test", timeout: time.Second, maxCases: 50, maxCost: 1, allowlists: map[string]map[string]bool{}, providerGate: make(chan struct{}, 1), client: server.Client()}
+	store, err := artifacts.NewLocalStore(t.TempDir(), "", 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &GatewayLLMEval{store: store, url: server.URL, profile: "test", timeout: time.Second, maxCases: 50, maxCost: 1, allowlists: map[string]map[string]bool{}, providerGate: make(chan struct{}, 1), client: server.Client()}
 	if _, err := h.Run(context.Background(), gatewayPayload(0, 3)); err == nil {
 		t.Fatal("expected transient gateway failure")
 	}

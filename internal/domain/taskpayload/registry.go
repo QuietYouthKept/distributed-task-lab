@@ -14,6 +14,23 @@ import (
 
 const payloadVersion = "1"
 
+// ExecutionPolicy is a deployment-time allowlist, evaluated separately from
+// structural payload validation. A non-nil empty policy rejects all work.
+type ExecutionPolicy map[domain.TaskType]map[string]struct{}
+
+func (p ExecutionPolicy) Allows(taskType domain.TaskType, mode string) bool {
+	if p == nil {
+		return true // local development compatibility only
+	}
+	_, ok := p[taskType][mode]
+	return ok
+}
+
+// ProductionExecutionPolicy intentionally remains empty until a handler has a
+// complete verified provider, shared artifact, and recovery path. This is a
+// fail-closed allowlist, not a claim that production execution is available.
+func ProductionExecutionPolicy() ExecutionPolicy { return ExecutionPolicy{} }
+
 var sha256Pattern = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
 
 // Validate validates an envelope and returns a canonical copy of its data.

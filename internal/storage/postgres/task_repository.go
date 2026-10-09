@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/api/contract"
+	"github.com/fantasticyi/distributed-task-lab/internal/auth"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"github.com/fantasticyi/distributed-task-lab/internal/queue"
 	"github.com/lib/pq"
@@ -49,7 +51,7 @@ func (q *PostgresQueue) operationContext(parent context.Context) (context.Contex
 }
 
 // taskColumns is the canonical column list used by every SELECT.
-const taskColumns = "id, type, queue, status, payload, result, priority, max_attempts, attempt, timeout_seconds, retry_delay_seconds, retry_max_delay_seconds, retry_backoff_multiplier, retry_jitter, leased_by, lease_expires_at, lease_version, next_run_at, created_at, updated_at, started_at, finished_at, last_error, dlq_reason, idempotency_key"
+const taskColumns = "id, type, queue, status, payload, result, priority, max_attempts, attempt, timeout_seconds, retry_delay_seconds, retry_max_delay_seconds, retry_backoff_multiplier, retry_jitter, leased_by, lease_expires_at, lease_version, next_run_at, created_at, updated_at, started_at, finished_at, last_error, dlq_reason, idempotency_key, created_by"
 
 // taskColumnsAliased returns taskColumns with each column prefixed by alias.
 func taskColumnsAliased(alias string) string {
@@ -105,20 +107,20 @@ func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain
 			id, type, queue, status, payload, priority,
 			max_attempts, attempt, timeout_seconds, retry_delay_seconds,
 			retry_max_delay_seconds, retry_backoff_multiplier, retry_jitter,
-			next_run_at, created_at, updated_at, idempotency_key
+			next_run_at, created_at, updated_at, idempotency_key, created_by
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10,
 			$11, $12, $13,
-			COALESCE($14::timestamptz, clock_timestamp()), clock_timestamp(), clock_timestamp(), $15
+			COALESCE($14::timestamptz, clock_timestamp()), clock_timestamp(), clock_timestamp(), $15, $16
 		)
-		ON CONFLICT (idempotency_key) DO NOTHING
+		ON CONFLICT DO NOTHING
 		RETURNING id, status, attempt, next_run_at, created_at, updated_at
 	`,
 		task.ID, string(task.Type), task.Queue, string(task.Status), payloadJSON, task.Priority,
 		task.MaxAttempts, task.Attempt, task.TimeoutSeconds, task.RetryDelaySeconds,
 		task.RetryMaxDelaySeconds, task.RetryBackoffMultiplier, task.RetryJitter,
-		nextRunAt, task.IdempotencyKey,
+		nextRunAt, task.IdempotencyKey, task.CreatedBy,
 	).Scan(&insertedID, &task.Status, &task.Attempt, &task.NextRunAt, &task.CreatedAt, &task.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -126,7 +128,14 @@ func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain
 			return nil, fmt.Errorf("enqueue: conflict without idempotency key")
 		}
 		_ = tx.Rollback()
-		return q.getTaskByIdempotencyKey(ctx, *task.IdempotencyKey)
+		existing, lookupErr := q.getTaskByIdempotencyKey(ctx, *task.IdempotencyKey)
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		if existing == nil {
+			return nil, domain.NewError(domain.ErrorKindConflict, "idempotency_key_conflict", "idempotency key is already used by another principal", domain.ErrTaskStateConflict)
+		}
+		return existing, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("enqueue: insert: %w", err)
@@ -143,13 +152,27 @@ func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain
 
 // GetTask retrieves a single task by its ID.
 func (q *PostgresQueue) GetTask(ctx context.Context, taskID string) (*domain.Task, error) {
-	row := q.db.QueryRowContext(ctx, "SELECT "+taskColumns+" FROM tasks WHERE id = $1", taskID)
+	query := "SELECT " + taskColumns + " FROM tasks WHERE id = $1"
+	args := []any{taskID}
+	if owner, scoped := principalOwner(ctx); scoped {
+		query += " AND created_by = $2"
+		args = append(args, owner)
+	}
+	row := q.db.QueryRowContext(ctx, query, args...)
 	return scanTask(row)
 }
 
 // getTaskByIdempotencyKey retrieves a task by its idempotency key.
 func (q *PostgresQueue) getTaskByIdempotencyKey(ctx context.Context, key string) (*domain.Task, error) {
-	row := q.db.QueryRowContext(ctx, "SELECT "+taskColumns+" FROM tasks WHERE idempotency_key = $1", key)
+	query := "SELECT " + taskColumns + " FROM tasks WHERE idempotency_key = $1"
+	args := []any{key}
+	if owner, scoped := principalOwner(ctx); scoped {
+		query += " AND created_by = $2"
+		args = append(args, owner)
+	} else {
+		query += " AND created_by IS NULL"
+	}
+	row := q.db.QueryRowContext(ctx, query, args...)
 	return scanTask(row)
 }
 
@@ -174,8 +197,22 @@ func (q *PostgresQueue) ListTasks(ctx context.Context, filter domain.TaskFilter)
 		args = append(args, *filter.Queue)
 		argIdx++
 	}
+	if filter.CreatedBy != nil {
+		query += fmt.Sprintf(" AND created_by = $%d", argIdx)
+		args = append(args, *filter.CreatedBy)
+		argIdx++
+	} else if owner, scoped := principalOwner(ctx); scoped {
+		query += fmt.Sprintf(" AND created_by = $%d", argIdx)
+		args = append(args, owner)
+		argIdx++
+	}
+	if filter.AfterCreatedAt != nil && filter.AfterID != nil {
+		query += fmt.Sprintf(" AND (created_at < $%d OR (created_at = $%d AND id < $%d))", argIdx, argIdx, argIdx+1)
+		args = append(args, *filter.AfterCreatedAt, *filter.AfterID)
+		argIdx += 2
+	}
 
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY created_at DESC, id DESC"
 
 	if filter.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT $%d", argIdx)
@@ -720,26 +757,42 @@ func (q *PostgresQueue) OldestPendingAge(ctx context.Context) (time.Duration, er
 
 // PauseQueue pauses a queue so workers stop claiming its tasks.
 func (q *PostgresQueue) PauseQueue(ctx context.Context, name string) error {
-	res, err := q.db.ExecContext(ctx, `UPDATE queues SET paused = true, updated_at = clock_timestamp() WHERE name = $1`, name)
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("pause queue: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `UPDATE queues SET paused = true, updated_at = clock_timestamp() WHERE name = $1`, name)
 	if err != nil {
 		return fmt.Errorf("pause queue: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return fmt.Errorf("pause queue: queue %s: %w", name, domain.ErrQueueNotFound)
 	}
-	return nil
+	if err := insertSecurityAudit(ctx, tx, "queue.pause", "queue", name, ""); err != nil {
+		return fmt.Errorf("pause queue: audit: %w", err)
+	}
+	return tx.Commit()
 }
 
 // ResumeQueue resumes a paused queue.
 func (q *PostgresQueue) ResumeQueue(ctx context.Context, name string) error {
-	res, err := q.db.ExecContext(ctx, `UPDATE queues SET paused = false, updated_at = clock_timestamp() WHERE name = $1`, name)
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("resume queue: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `UPDATE queues SET paused = false, updated_at = clock_timestamp() WHERE name = $1`, name)
 	if err != nil {
 		return fmt.Errorf("resume queue: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return fmt.Errorf("resume queue: queue %s: %w", name, domain.ErrQueueNotFound)
 	}
-	return nil
+	if err := insertSecurityAudit(ctx, tx, "queue.resume", "queue", name, ""); err != nil {
+		return fmt.Errorf("resume queue: audit: %w", err)
+	}
+	return tx.Commit()
 }
 
 // ListQueues returns all queues with their governance config.
@@ -775,7 +828,12 @@ func (q *PostgresQueue) SetQueueConfig(ctx context.Context, config domain.QueueC
 	if config.Burst <= 0 {
 		config.Burst = 1
 	}
-	_, err := q.db.ExecContext(ctx, `
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("set queue config: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO queues (name, max_concurrency, rate_limit_per_second, burst, aging_after_seconds, aging_priority_boost, rate_tokens, rate_updated_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, clock_timestamp(), clock_timestamp())
 		ON CONFLICT (name) DO UPDATE
@@ -797,7 +855,10 @@ func (q *PostgresQueue) SetQueueConfig(ctx context.Context, config domain.QueueC
 	if err != nil {
 		return fmt.Errorf("set queue config: %w", err)
 	}
-	return nil
+	if err := insertSecurityAudit(ctx, tx, "queue.configure", "queue", config.Name, ""); err != nil {
+		return fmt.Errorf("set queue config: audit: %w", err)
+	}
+	return tx.Commit()
 }
 
 // insertEvent inserts a task lifecycle event within the given transaction, so
@@ -819,7 +880,7 @@ func (q *PostgresQueue) Requeue(ctx context.Context, taskID string, reason strin
 	}
 	defer tx.Rollback()
 
-	res, err := tx.ExecContext(ctx, `
+	query := `
 		UPDATE tasks
 		SET status = 'pending',
 		    attempt = 0,
@@ -832,8 +893,13 @@ func (q *PostgresQueue) Requeue(ctx context.Context, taskID string, reason strin
 		    lease_version = lease_version + 1,
 		    started_at = NULL,
 		    finished_at = NULL
-		WHERE id = $1 AND status = 'dlq'
-	`, taskID)
+		WHERE id = $1 AND status = 'dlq'`
+	args := []any{taskID}
+	if owner, scoped := principalOwner(ctx); scoped {
+		query += " AND created_by = $2"
+		args = append(args, owner)
+	}
+	res, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("requeue: update: %w", err)
 	}
@@ -843,6 +909,9 @@ func (q *PostgresQueue) Requeue(ctx context.Context, taskID string, reason strin
 	}
 	if err := q.insertEvent(ctx, tx, taskID, domain.EventRequeued, "", reason, nil); err != nil {
 		return fmt.Errorf("requeue: event: %w", err)
+	}
+	if err := insertSecurityAudit(ctx, tx, "task.requeue", "task", taskID, reason); err != nil {
+		return fmt.Errorf("requeue: audit: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("requeue: commit: %w", err)
@@ -858,7 +927,7 @@ func (q *PostgresQueue) Cancel(ctx context.Context, taskID string, reason string
 	}
 	defer tx.Rollback()
 
-	res, err := tx.ExecContext(ctx, `
+	query := `
 		UPDATE tasks
 		SET status = 'failed',
 		    last_error = $1,
@@ -868,8 +937,13 @@ func (q *PostgresQueue) Cancel(ctx context.Context, taskID string, reason string
 		    lease_expires_at = NULL,
 		    lease_version = lease_version + 1
 		WHERE id = $2
-		  AND status IN ('pending', 'running')
-	`, "cancelled: "+reason, taskID)
+		  AND status IN ('pending', 'running')`
+	args := []any{"cancelled: " + reason, taskID}
+	if owner, scoped := principalOwner(ctx); scoped {
+		query += " AND created_by = $3"
+		args = append(args, owner)
+	}
+	res, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("cancel: update: %w", err)
 	}
@@ -880,6 +954,9 @@ func (q *PostgresQueue) Cancel(ctx context.Context, taskID string, reason string
 	if err := q.insertEvent(ctx, tx, taskID, domain.EventCancelled, "", reason, nil); err != nil {
 		return fmt.Errorf("cancel: event: %w", err)
 	}
+	if err := insertSecurityAudit(ctx, tx, "task.cancel", "task", taskID, reason); err != nil {
+		return fmt.Errorf("cancel: audit: %w", err)
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("cancel: commit: %w", err)
 	}
@@ -888,12 +965,17 @@ func (q *PostgresQueue) Cancel(ctx context.Context, taskID string, reason string
 
 // GetTaskEvents retrieves the audit event log for a task.
 func (q *PostgresQueue) GetTaskEvents(ctx context.Context, taskID string) ([]domain.TaskEvent, error) {
-	rows, err := q.db.QueryContext(ctx, `
+	query := `
 		SELECT id, task_id, event_type, COALESCE(worker_id, ''), message, COALESCE(metadata::TEXT, '{}'), created_at
 		FROM task_events
-		WHERE task_id = $1
-		ORDER BY created_at ASC
-	`, taskID)
+		WHERE task_id = $1`
+	args := []any{taskID}
+	if owner, scoped := principalOwner(ctx); scoped {
+		query += ` AND EXISTS (SELECT 1 FROM tasks t WHERE t.id = task_events.task_id AND t.created_by = $2)`
+		args = append(args, owner)
+	}
+	query += ` ORDER BY created_at ASC`
+	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("get task events: query: %w", err)
 	}
@@ -1006,7 +1088,7 @@ func (q *PostgresQueue) DetectStaleWorkers(ctx context.Context, threshold time.D
 	return ids, nil
 }
 
-const latestSchemaVersion int64 = 9
+const latestSchemaVersion int64 = 11
 
 func (q *PostgresQueue) HealthCheck(ctx context.Context) error {
 	var version sql.NullInt64
@@ -1028,6 +1110,40 @@ func (q *PostgresQueue) DBStats() domain.DBPoolStats {
 
 // --- Internal helpers ---
 
+func principalOwner(ctx context.Context) (string, bool) {
+	principal, ok := auth.PrincipalFromContext(ctx)
+	if !ok || principal.IsAdmin() {
+		return "", false
+	}
+	return principal.Subject, true
+}
+
+// insertSecurityAudit is called inside the same transaction as the protected
+// mutation. Missing request identity is an error for authenticated operators;
+// anonymous local-development calls remain compatible and do not create a
+// misleading actor record.
+func insertSecurityAudit(ctx context.Context, tx *sql.Tx, action, resourceType, resourceID, reason string) error {
+	principal, ok := auth.PrincipalFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	requestID := contract.RequestID(ctx)
+	if requestID == "" {
+		return fmt.Errorf("request ID is required for authenticated administrative audit")
+	}
+	if principal.Kind != auth.KindHuman && principal.Kind != auth.KindService {
+		return fmt.Errorf("principal kind is invalid for administrative audit")
+	}
+	_, err := tx.ExecContext(ctx, `
+		INSERT INTO security_audit_events (actor_id, actor_kind, request_id, action, resource_type, resource_id, outcome, reason, context)
+		VALUES ($1, $2, $3, $4, $5, $6, 'success', $7, '{}'::jsonb)
+	`, principal.Subject, string(principal.Kind), requestID, action, resourceType, resourceID, reason)
+	if err != nil {
+		return fmt.Errorf("insert security audit event: %w", err)
+	}
+	return nil
+}
+
 func scanTask(row *sql.Row) (*domain.Task, error) {
 	var t domain.Task
 	var payloadBytes, resultBytes []byte
@@ -1038,7 +1154,7 @@ func scanTask(row *sql.Row) (*domain.Task, error) {
 		&t.RetryMaxDelaySeconds, &t.RetryBackoffMultiplier, &t.RetryJitter,
 		&t.LeasedBy, &t.LeaseExpiresAt, &t.LeaseVersion,
 		&t.NextRunAt, &t.CreatedAt, &t.UpdatedAt, &t.StartedAt, &t.FinishedAt,
-		&t.LastError, &t.DLQReason, &t.IdempotencyKey,
+		&t.LastError, &t.DLQReason, &t.IdempotencyKey, &t.CreatedBy,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -1070,7 +1186,7 @@ func scanTaskFromRows(rows *sql.Rows) (*domain.Task, error) {
 		&t.RetryMaxDelaySeconds, &t.RetryBackoffMultiplier, &t.RetryJitter,
 		&t.LeasedBy, &t.LeaseExpiresAt, &t.LeaseVersion,
 		&t.NextRunAt, &t.CreatedAt, &t.UpdatedAt, &t.StartedAt, &t.FinishedAt,
-		&t.LastError, &t.DLQReason, &t.IdempotencyKey,
+		&t.LastError, &t.DLQReason, &t.IdempotencyKey, &t.CreatedBy,
 	)
 	if err != nil {
 		return nil, err

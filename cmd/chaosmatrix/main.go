@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -173,14 +174,47 @@ func runScenario(ctx context.Context, scenario string, q *postgres.PostgresQueue
 		}
 		defer recovered.Close()
 		fresh := postgres.NewPostgresQueue(recovered)
-		claimed, err := fresh.ClaimTasks(ctx, "after-disconnect", 1, time.Second)
-		if err != nil || len(claimed) != 1 {
-			return fmt.Errorf("reconnect claim: %v", err)
+		claimed, err := claimTaskAfterReconnect(ctx, fresh, recovered, id, "after-disconnect", 3*time.Second)
+		if err != nil {
+			return fmt.Errorf("reconnect claim: %w", err)
 		}
 		return fresh.MarkSuccess(ctx, id, "after-disconnect", claimed[0].LeaseVersion, domain.TaskResult{Summary: "reconnected"})
 	}
 	return errors.New("unknown scenario")
 }
+
+func claimTaskAfterReconnect(parent context.Context, q *postgres.PostgresQueue, db *sql.DB, taskID, workerID string, timeout time.Duration) ([]domain.Task, error) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		claimed, err := q.ClaimTasks(ctx, workerID, 1, time.Second)
+		if err != nil {
+			return nil, err
+		}
+		if len(claimed) > 0 {
+			if len(claimed) != 1 || claimed[0].ID != taskID {
+				return nil, fmt.Errorf("expected only task %s to be claimed, got %d task(s)", taskID, len(claimed))
+			}
+			return claimed, nil
+		}
+		var status string
+		var nextRunAt, databaseNow time.Time
+		if err := db.QueryRowContext(ctx, `SELECT status, next_run_at, clock_timestamp() FROM tasks WHERE id=$1`, taskID).Scan(&status, &nextRunAt, &databaseNow); err != nil {
+			return nil, fmt.Errorf("inspect task after empty reconnect claim: %w", err)
+		}
+		if status != string(domain.TaskStatusPending) || nextRunAt.After(databaseNow) {
+			return nil, fmt.Errorf("task %s is not due after reconnect: status=%s next_run_at=%s database_now=%s", taskID, status, nextRunAt, databaseNow)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("timed out after %s while PostgreSQL still reported task %s due", timeout, taskID)
+		case <-ticker.C:
+		}
+	}
+}
+
 func enqueue(ctx context.Context, q *postgres.PostgresQueue, id, queue string) error {
 	_, err := q.Enqueue(ctx, &domain.Task{ID: id, Type: domain.TaskTypeEval, Queue: queue, Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "eval", Data: map[string]any{}}, MaxAttempts: 3, TimeoutSeconds: 10, RetryBackoffMultiplier: 2})
 	return err
