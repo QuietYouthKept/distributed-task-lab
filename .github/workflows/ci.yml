@@ -92,9 +92,25 @@ jobs:
       - run: go test -race $GO_PACKAGES -count=1
 
   minio-contract:
-    name: MinIO S3 contract (required)
+    name: MinIO contract and worker-process recovery (required)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      REQUIRE_TEST_DATABASE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -131,6 +147,8 @@ jobs:
           exit 1
       - name: Run authenticated S3 contract under the race detector
         run: go test -race ./internal/artifacts -run '^TestMinIOStoreContractAndConcurrentConditionalWrite$' -count=1 -v
+      - name: Run API and independent Worker process recovery under the race detector
+        run: go test -race ./internal/e2e -run '^TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash$' -count=1 -v
 
   external-client:
     name: Public Go client consumer module

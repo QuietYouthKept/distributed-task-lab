@@ -286,16 +286,16 @@ func parseSet(raw string) map[string]struct{} {
 	return result
 }
 
-// ValidateWorker adds worker-only deployment checks. The current handlers use
-// filesystem APIs for artifacts, so accepting an s3:// or minio:// URI would
-// silently create a local path instead of using shared object storage.
-// Production workers therefore fail closed until a real adapter is wired in.
+// ValidateWorker adds worker-only deployment checks. Shared artifact storage
+// is wired for explicitly configured S3 deployments, but no execution type has
+// completed the production acceptance gate. Production workers therefore
+// remain fail-closed until the execution policy is explicitly approved.
 func (c *Config) ValidateWorker() error {
 	if err := c.Validate(); err != nil {
 		return err
 	}
 	if c.Profile == "production" {
-		return fmt.Errorf("invalid worker configuration: production shared artifact adapter is not implemented; refusing to treat %q as a local filesystem path", c.ArtifactDir)
+		return fmt.Errorf("invalid worker configuration: production execution allowlist is empty; refusing to start before a task type passes the production acceptance gate")
 	}
 	return nil
 }

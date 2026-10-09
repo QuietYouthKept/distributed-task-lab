@@ -77,8 +77,8 @@ func TestValidateProductionAcceptsStrictConfiguration(t *testing.T) {
 	if cfg.EffectiveChecksum() == "" || strings.Contains(cfg.DatabaseURLWithoutCredentials(), "an-adequately") {
 		t.Fatal("effective configuration leaked credentials or lacked checksum")
 	}
-	if err := cfg.ValidateWorker(); err == nil || !strings.Contains(err.Error(), "shared artifact adapter is not implemented") {
-		t.Fatalf("production worker must fail closed until shared artifacts are implemented, got %v", err)
+	if err := cfg.ValidateWorker(); err == nil || !strings.Contains(err.Error(), "production execution allowlist is empty") {
+		t.Fatalf("production worker must fail closed until a task type passes acceptance, got %v", err)
 	}
 }
 
