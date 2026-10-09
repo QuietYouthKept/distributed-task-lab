@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -198,6 +199,61 @@ func TestOpenAPIV1RolesAuthErrorsAndRouteSet(t *testing.T) {
 		content, ok := response.Content["application/json"]
 		if !ok || content.Schema.Ref != "#/components/schemas/ErrorResponse" {
 			t.Errorf("common response %s does not use ErrorResponse envelope", name)
+		}
+	}
+}
+
+func TestOpenAPILocalComponentReferencesResolve(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "api", "openapi.json"))
+	if err != nil {
+		t.Fatalf("read OpenAPI contract: %v", err)
+	}
+	var document any
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatalf("parse OpenAPI contract: %v", err)
+	}
+	var refs []string
+	collectOpenAPIRefs(document, &refs)
+	if len(refs) == 0 {
+		t.Fatal("OpenAPI document has no component references; expected shared schemas and responses")
+	}
+	for _, ref := range refs {
+		if !strings.HasPrefix(ref, "#/components/") {
+			t.Errorf("unsupported or external OpenAPI reference %q; contract must be self-contained", ref)
+			continue
+		}
+		value := document
+		for _, rawSegment := range strings.Split(strings.TrimPrefix(ref, "#/"), "/") {
+			segment := strings.NewReplacer("~1", "/", "~0", "~").Replace(rawSegment)
+			object, ok := value.(map[string]any)
+			if !ok {
+				value = nil
+				break
+			}
+			value, ok = object[segment]
+			if !ok {
+				value = nil
+				break
+			}
+		}
+		if value == nil {
+			t.Errorf("OpenAPI reference %q does not resolve", ref)
+		}
+	}
+}
+
+func collectOpenAPIRefs(value any, refs *[]string) {
+	switch typed := value.(type) {
+	case map[string]any:
+		if ref, ok := typed["$ref"].(string); ok {
+			*refs = append(*refs, ref)
+		}
+		for _, child := range typed {
+			collectOpenAPIRefs(child, refs)
+		}
+	case []any:
+		for _, child := range typed {
+			collectOpenAPIRefs(child, refs)
 		}
 	}
 }
