@@ -25,6 +25,7 @@ Date: 2026-10-09 (Asia/Shanghai). Scope is the implementation actually present i
 - `test/external-client/`: independent Go module imports only `pkg/client` and performs create/get/page against a local HTTP contract fixture. `.github/workflows/ci.yml` runs it under Race in a dedicated job.
 - `internal/observability/tracing_test.go`: local OTLP/HTTP receiver decodes the emitted protobuf and verifies `service.name` and the named span; targeted Race ×10 passed. This is a local receiver test, not staging telemetry acceptance.
 - `scripts/evidence/collect-wave2.ps1`: collection now records the external-module and OTLP-receiver gates and can identify the explicitly configured MinIO container. `run-wave2-with-ephemeral-minio.ps1` uses only the already cached pinned image, one-run random credentials, no persistent volume, a bounded health check, and removes only its own named container/temp files. Evidence remains append-only.
+- `internal/storage/postgres/least_privilege_integration_test.go`: migrations run as the owner in a disposable DB; a random role receives narrow application DML/sequence grants, then exercises enqueue/claim/ACK and audited queue pause/resume. Negative assertions reject DDL, TRUNCATE, hard delete, event/audit rewrite, and cluster role creation. Race ×5 passed locally. It is not a production role bootstrap or hosted-DB certification.
 
 ## Not implemented or not verified
 

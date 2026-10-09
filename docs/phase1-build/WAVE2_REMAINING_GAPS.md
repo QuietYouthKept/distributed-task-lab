@@ -11,7 +11,7 @@
 - Required MinIO CI service is configured with a pinned digest and ephemeral credentials; remote Actions has not been run.
 - A separate Go consumer module now verifies the public client surface locally and in CI. Full generated OpenAPI drift enforcement remains outstanding.
 - 100k-row keyset benchmark/EXPLAIN evidence, cross-process API rate-limit behavior, and cursor key rotation are outstanding.
-- A local OTLP/HTTP receiver now decodes and verifies exported spans; a staging collector assertion, secret-redaction tests, alert firing, DB least-privilege tests and backup/restore rehearsal remain outstanding.
+- A local OTLP/HTTP receiver now decodes and verifies exported spans; a staging collector assertion, secret-redaction tests and alert firing remain outstanding. A local PostgreSQL least-privilege integration test now verifies a restricted runtime role, but production/hosted role provisioning remains unverified; backup/restore rehearsal remains outstanding.
 - Standardized E2E dependency lifecycle scripts beyond the environment preflight are incomplete.
 
 ## P2 — operational readiness
