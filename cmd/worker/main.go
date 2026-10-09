@@ -20,7 +20,7 @@ import (
 
 func main() {
 	cfg := config.Load()
-	logger := observability.Logger()
+	logger := observability.Logger(cfg.SensitiveValues()...)
 	if err := cfg.ValidateWorker(); err != nil {
 		logger.Error("invalid startup configuration", "error", err)
 		os.Exit(1)

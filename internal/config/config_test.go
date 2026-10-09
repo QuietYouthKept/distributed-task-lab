@@ -17,6 +17,31 @@ func TestDefaultWorkerIDIsUniquePerLoad(t *testing.T) {
 	}
 }
 
+func TestSensitiveValuesIncludesConfiguredCredentialsForLogRedaction(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:database-secret@db.example:5432/tasks?sslmode=require")
+	t.Setenv("API_TOKEN", "api-token-secret")
+	t.Setenv("ADMIN_TOKEN", "admin-token-secret")
+	t.Setenv("API_CURSOR_SIGNING_KEY", "cursor-signing-secret")
+	t.Setenv("ARTIFACT_S3_ACCESS_KEY", "object-access-secret")
+	t.Setenv("ARTIFACT_S3_SECRET_KEY", "object-secret-value")
+	t.Setenv("EVAL_GATEWAY_API_KEY", "provider-secret-value")
+	values := Load().SensitiveValues()
+	for _, expected := range []string{"database-secret", "api-token-secret", "admin-token-secret", "cursor-signing-secret", "object-access-secret", "object-secret-value", "provider-secret-value"} {
+		if !containsString(values, expected) {
+			t.Fatalf("configured credential of length %d was absent from the redaction set", len(expected))
+		}
+	}
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
+}
+
 func TestValidateCollectsParseAndSafetyErrors(t *testing.T) {
 	t.Setenv("APP_PROFILE", "production")
 	t.Setenv("API_TOKEN", "")

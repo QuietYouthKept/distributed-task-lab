@@ -327,3 +327,22 @@ func (c *Config) DatabaseURLWithoutCredentials() string {
 	u.User = nil
 	return u.String()
 }
+
+// SensitiveValues returns configured credentials for in-process log redaction.
+// Callers must not persist or print the returned values.
+func (c *Config) SensitiveValues() []string {
+	values := []string{c.DatabaseURL, c.APIToken, c.AdminToken, c.CursorSigningKey,
+		c.ArtifactS3AccessKey, c.ArtifactS3SecretKey, c.EvalGatewayAPIKey}
+	if parsed, err := url.Parse(c.DatabaseURL); err == nil && parsed.User != nil {
+		if password, ok := parsed.User.Password(); ok {
+			values = append(values, password)
+		}
+	}
+	filtered := values[:0]
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			filtered = append(filtered, value)
+		}
+	}
+	return filtered
+}
