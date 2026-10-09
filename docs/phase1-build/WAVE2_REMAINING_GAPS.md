@@ -2,7 +2,7 @@
 
 ## P0 — before any production Worker admission
 
-- Development-profile process E2E proves an API-created deterministic Eval task is written to shared MinIO, the owner is killed after Put while ACK is blocked, and the second Worker reclaims after lease expiry and reuses the artifact. Remaining: stale-generation rejection after reclaim, S3/ACK response-loss proxy, conflicting-content recovery, cross-container topology, and production-approved execution types; this is not a production Worker acceptance.
+- Development-profile process E2E proves an API-created deterministic Eval task is written to shared MinIO, the owner is killed after Put while ACK is blocked, the second Worker reclaims at generation 2 and reuses the artifact, and a stale write using generation 1 is rejected. Remaining: S3/ACK response-loss proxy, conflicting-content recovery, cross-container topology, and production-approved execution types; this is not a production Worker acceptance.
 - Gateway receipts need concurrent duplicate-case integration semantics verified against the provider's idempotency behavior; no payment/notification sandbox or reconciliation authority was supplied.
 - Production Worker is intentionally fail-closed. No production task type is approved by the execution allowlist.
 
