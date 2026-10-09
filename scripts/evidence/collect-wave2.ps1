@@ -118,7 +118,7 @@ $dirtyAfter = @(& git status --porcelain=v1)
 $otherDirtyAfter = @($dirtyAfter | Where-Object { $_ -notmatch '^\?\? evidence/phase1/' -and $_ -notmatch '^\s*[A-Z?]{1,2} evidence/phase1/' })
 $failed = @($checks | Where-Object { $_.status -eq "FAIL" }).Count
 $unverified = @($checks | Where-Object { $_.status -eq "NOT VERIFIED" }).Count
-$configHash = (Get-FileHash -LiteralPath (Join-Path $repoRoot "internal\config\config.go") -Algorithm SHA256).Hash.ToLowerInvariant()
+$configHash = Get-FileSHA256 (Join-Path $repoRoot "internal\config\config.go")
 $fingerprintInput = @(
     $commit,
     $configHash,
