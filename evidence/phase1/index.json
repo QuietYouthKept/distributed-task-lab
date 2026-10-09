@@ -1,6 +1,6 @@
 ﻿{
     "schema_version":  1,
-    "updated_at_utc":  "2026-10-09T09:40:39.4993549Z",
+    "updated_at_utc":  "2026-10-09T09:45:25.9556453Z",
     "records":  [
                     {
                         "evidence_id":  "wave2-20261009T093214275Z-0b73ce734dcd",
@@ -13,6 +13,12 @@
                         "status":  "NOT VERIFIED",
                         "implementation_commit":  "e34e272f85c4d2c8699f1aabbb1c91f19dfc1d28",
                         "manifest":  "evidence/phase1/runs/wave2-20261009T093728451Z-e34e272f85c4/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T094212634Z-fcd9bf97ea83",
+                        "status":  "FAIL",
+                        "implementation_commit":  "fcd9bf97ea83c5622bd5b1ddc6984a6b5b14a796",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T094212634Z-fcd9bf97ea83/manifest.json"
                     }
                 ]
 }
