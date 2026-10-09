@@ -34,6 +34,7 @@ pgdata/
 # Project artifacts / scratch
 *.zip
 .reasonix/
+benchmarks/pagination/
 新建 Text Document.txt
 
 # Test / coverage output

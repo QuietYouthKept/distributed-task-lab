@@ -270,12 +270,19 @@ func TestListTasksKeysetPaginationUsesStableCreatedAtAndIDOrder(t *testing.T) {
 			t.Fatalf("enqueue %s: %v", id, err)
 		}
 	}
+	tieTimestamp := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	if _, err := q.db.ExecContext(ctx, `UPDATE tasks SET created_at=$1 WHERE id LIKE 'page-%'`, tieTimestamp); err != nil {
+		t.Fatalf("set deterministic pagination tie timestamp: %v", err)
+	}
 	first, err := q.ListTasks(ctx, domain.TaskFilter{Limit: 3})
 	if err != nil {
 		t.Fatalf("first page: %v", err)
 	}
 	if len(first) != 3 {
 		t.Fatalf("first page length=%d, want 3", len(first))
+	}
+	if got := []string{first[0].ID, first[1].ID, first[2].ID}; got[0] != "page-4" || got[1] != "page-3" || got[2] != "page-2" {
+		t.Fatalf("first page tie ordering=%v, want [page-4 page-3 page-2]", got)
 	}
 	last := first[len(first)-1]
 	second, err := q.ListTasks(ctx, domain.TaskFilter{Limit: 3, AfterCreatedAt: &last.CreatedAt, AfterID: &last.ID})
@@ -284,6 +291,9 @@ func TestListTasksKeysetPaginationUsesStableCreatedAtAndIDOrder(t *testing.T) {
 	}
 	if len(second) != 1 {
 		t.Fatalf("second page length=%d, want 1", len(second))
+	}
+	if second[0].ID != "page-1" {
+		t.Fatalf("second page tie ordering=%q, want page-1", second[0].ID)
 	}
 	for _, task := range second {
 		for _, previous := range first {

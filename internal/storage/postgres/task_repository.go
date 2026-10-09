@@ -207,7 +207,7 @@ func (q *PostgresQueue) ListTasks(ctx context.Context, filter domain.TaskFilter)
 		argIdx++
 	}
 	if filter.AfterCreatedAt != nil && filter.AfterID != nil {
-		query += fmt.Sprintf(" AND (created_at < $%d OR (created_at = $%d AND id < $%d))", argIdx, argIdx, argIdx+1)
+		query += fmt.Sprintf(" AND (created_at, id) < ($%d, $%d)", argIdx, argIdx+1)
 		args = append(args, *filter.AfterCreatedAt, *filter.AfterID)
 		argIdx += 2
 	}

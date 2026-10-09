@@ -73,6 +73,8 @@ $checks += Invoke-RecordedCheck "retry-backoff-race-twenty" "go" @("test", "-rac
 $checks += Invoke-RecordedCheck "failurelab" "go" @("run", "./cmd/failurelab") @{} $logDir
 $existingChaosRuns = @((Get-ChildItem -LiteralPath (Join-Path $repoRoot "benchmarks\chaos") -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }))
 $checks += Invoke-RecordedCheck "chaosmatrix" "go" @("run", "./cmd/chaosmatrix") @{} $logDir
+$existingPaginationRuns = @((Get-ChildItem -LiteralPath (Join-Path $repoRoot "benchmarks\pagination") -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }))
+$checks += Invoke-RecordedCheck "pagination-benchmark-100k" "go" @("run", "./cmd/paginationbench") $requiredDB $logDir
 $checks += Invoke-RecordedCheck "vet" "go" @("vet", "./...") @{} $logDir
 $checks += Invoke-RecordedCheck "external-client-race" "go" @("test", "-race", "./...", "-count=1", "-v") @{} $logDir (Join-Path $repoRoot "test\external-client")
 $checks += Invoke-RecordedCheck "otlp-receiver-race" "go" @("test", "-race", "./internal/observability", "-run", "^TestSetupTracingExportsSpanToOTLPHTTPReceiver$", "-count=1", "-v") @{} $logDir
@@ -106,6 +108,38 @@ if ($newChaosRuns.Count -eq 1) {
     $chaosState = "NOT VERIFIED"
 }
 
+$paginationFiles = @()
+$paginationState = "NOT VERIFIED"
+$paginationRunID = $null
+$newPaginationRuns = @((Get-ChildItem -LiteralPath (Join-Path $repoRoot "benchmarks\pagination") -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notin $existingPaginationRuns } | Sort-Object LastWriteTimeUtc))
+if ($newPaginationRuns.Count -eq 1) {
+    $paginationSource = $newPaginationRuns[0].FullName
+    $paginationRunID = $newPaginationRuns[0].Name
+    $paginationTarget = Join-Path (Join-Path $runRoot "artifacts\paginationbench") $paginationRunID
+    New-Item -ItemType Directory -Path $paginationTarget -Force | Out-Null
+    foreach ($fileName in @("manifest.json", "report.md")) {
+        $sourceFile = Join-Path $paginationSource $fileName
+        if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) { continue }
+        $targetFile = Join-Path $paginationTarget $fileName
+        Copy-Item -LiteralPath $sourceFile -Destination $targetFile
+        $paginationFiles += [ordered]@{
+            file = $targetFile.Substring($repoRoot.Length + 1).Replace('\', '/')
+            sha256 = Get-FileSHA256 $targetFile
+            bytes = (Get-Item -LiteralPath $targetFile).Length
+        }
+    }
+    $paginationManifestPath = Join-Path $paginationTarget "manifest.json"
+    if ((Test-Path -LiteralPath $paginationManifestPath) -and $paginationFiles.Count -eq 2) {
+        $paginationManifest = Get-Content -LiteralPath $paginationManifestPath -Raw | ConvertFrom-Json
+        if ($paginationManifest.result -eq "PASS" -and $paginationManifest.Generator.rows -eq 100000 -and $paginationManifest.keyset_walk.rows_seen -eq 100000 -and $paginationManifest.keyset_walk.duplicates -eq 0 -and $paginationManifest.concurrent_write_check.initial_rows_seen -eq 100000 -and $paginationManifest.concurrent_write_check.concurrent_rows_written -eq 50 -and $paginationManifest.concurrent_write_check.first_concurrent_insert_committed_before_continuation -eq $true -and $paginationManifest.concurrent_write_check.duplicates -eq 0) {
+            $paginationState = "PASS"
+        } else { $paginationState = "FAIL" }
+    } else { $paginationState = "FAIL" }
+} elseif ($newPaginationRuns.Count -gt 1) {
+    $paginationState = "NOT VERIFIED"
+}
+$checks += [ordered]@{ name = "pagination-benchmark-evidence"; command = "100k real PostgreSQL rows, keyset walk, concurrent inserts, EXPLAIN ANALYZE BUFFERS"; exit_code = if ($paginationState -eq "PASS") { 0 } elseif ($paginationState -eq "FAIL") { 1 } else { $null }; status = $paginationState; run_id = $paginationRunID }
+
 $minioRequired = @("MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY")
 $missingMinio = @($minioRequired | Where-Object { -not [Environment]::GetEnvironmentVariable($_, "Process") })
 if ($missingMinio.Count -eq 0) {
@@ -129,6 +163,7 @@ $fingerprintInput = @(
     "go test -race ./internal/storage/postgres -run ^TestRetryBackoff$ -count=20 -v",
     "go run ./cmd/failurelab",
     "go run ./cmd/chaosmatrix",
+    "go run ./cmd/paginationbench",
     "go vet ./...",
     "go test -race ./... -count=1 (test/external-client)",
     "go test -race ./internal/observability -run ^TestSetupTracingExportsSpanToOTLPHTTPReceiver$ -count=1 -v"
@@ -181,6 +216,7 @@ $manifest = [ordered]@{
     test_fixture_commit_sha = $commit
     checks = $checks
     chaos_matrix = [ordered]@{ status = $chaosState; run_id = $chaosRunID; files = $chaosFiles }
+    pagination_benchmark = [ordered]@{ status = $paginationState; run_id = $paginationRunID; files = $paginationFiles }
     result = if ($failed -gt 0) { "FAIL" } elseif ($unverified -gt 0 -or $otherDirtyAfter.Count -gt 0) { "NOT VERIFIED" } else { "PASS" }
     limitations = @("This run does not by itself prove dual-worker E2E, external IdP/provider, OTLP staging receipt, DR, or production readiness.", "Credential values are never recorded.")
 }
