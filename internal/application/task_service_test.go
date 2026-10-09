@@ -57,12 +57,14 @@ func TestServiceLifecycle(t *testing.T) {
 		t.Errorf("status = %q, want pending", resp.Status)
 	}
 
-	// Attempt 1: fail (retryable) -> back to pending.
-	claimed, err := q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
-	if err != nil || len(claimed) != 1 {
-		t.Fatalf("claim 1: err=%v n=%d", err, len(claimed))
+	// Attempt 1: fail (retryable) -> back to pending. PostgreSQL owns due-time
+	// eligibility; a newly inserted row can briefly be ahead of the claim
+	// statement's clock observation, so poll only within a finite test bound.
+	claimed := claimTaskEventually(t, ctx, q, "worker-1", 3*time.Second)
+	if claimed.ID != resp.ID {
+		t.Fatalf("claim 1 returned task %q, want %q", claimed.ID, resp.ID)
 	}
-	if err := q.MarkFailure(ctx, resp.ID, "worker-1", claimed[0].LeaseVersion,
+	if err := q.MarkFailure(ctx, resp.ID, "worker-1", claimed.LeaseVersion,
 		domain.TaskFailure{Message: "flaky", ErrorType: "execution_error", Retryable: true}); err != nil {
 		t.Fatalf("MarkFailure 1: %v", err)
 	}
