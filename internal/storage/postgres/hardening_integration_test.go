@@ -209,10 +209,50 @@ func TestGlobalQueueRateLimitAcrossWorkersAndStableRefresh(t *testing.T) {
 	if len(immediate) != 0 {
 		t.Fatal("same-config refresh reset the shared burst")
 	}
-	// Token refill is calculated from PostgreSQL time. Poll to a finite
-	// deadline instead of assuming the database clock has advanced enough after
-	// a fixed process-local sleep.
-	claimOneEventually(t, q2, "later-worker", 2*time.Second)
+	// Token refill is calculated from PostgreSQL time. Wait for the persisted
+	// bucket plus DB-clock refill to reach one token, then verify the worker can
+	// claim. This avoids repeatedly opening claim transactions just to learn
+	// that PostgreSQL's authoritative clock has not reached the refill boundary.
+	// The 10-second bound is a liveness ceiling for a loaded local PostgreSQL
+	// integration run, not the expected refill delay (one token at 5/s is 200ms).
+	waitForQueueToken(t, q2, cfg.Name, 1, 10*time.Second)
+	refilled, err := q2.ClaimTasks(ctx, "later-worker", 1, time.Minute)
+	if err != nil {
+		t.Fatalf("claim after PostgreSQL reports a refilled queue token: %v", err)
+	}
+	if len(refilled) != 1 {
+		t.Fatalf("claim after PostgreSQL reports a refilled queue token: got %d tasks, want 1", len(refilled))
+	}
+}
+
+func waitForQueueToken(t *testing.T, q *PostgresQueue, queueName string, want float64, timeout time.Duration) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	var databaseTime time.Time
+	var tokens float64
+	for {
+		err := q.db.QueryRowContext(ctx, `
+			SELECT clock_timestamp(),
+			       LEAST(burst::double precision,
+			         rate_tokens + GREATEST(0, EXTRACT(EPOCH FROM (clock_timestamp()-rate_updated_at))) * rate_limit_per_second)
+			FROM queues WHERE name=$1
+		`, queueName).Scan(&databaseTime, &tokens)
+		if err != nil {
+			t.Fatalf("read queue token state using PostgreSQL clock: %v", err)
+		}
+		if tokens >= want {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timed out after %s waiting for PostgreSQL queue token refill: queue=%q tokens=%.6f want=%.6f db_now=%s", timeout, queueName, tokens, want, databaseTime)
+		case <-ticker.C:
+		}
+	}
 }
 
 func TestLeaseUsesDatabaseClockAuthority(t *testing.T) {
