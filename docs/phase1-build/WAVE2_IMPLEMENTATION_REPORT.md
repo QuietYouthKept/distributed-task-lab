@@ -24,7 +24,7 @@ Date: 2026-10-09 (Asia/Shanghai). Scope is the implementation actually present i
 - `pkg/client/client_test.go`: expanded stable API error tests for 404/409/429/5xx and transport failure, while retaining auth, idempotency, context cancellation, URL validation, and cursor checks.
 - `test/external-client/`: independent Go module imports only `pkg/client` and performs create/get/page against a local HTTP contract fixture. `.github/workflows/ci.yml` runs it under Race in a dedicated job.
 - `internal/observability/tracing_test.go`: local OTLP/HTTP receiver decodes the emitted protobuf and verifies `service.name` and the named span; targeted Race ×10 passed. This is a local receiver test, not staging telemetry acceptance.
-- `scripts/evidence/collect-wave2.ps1`: collection now records the external-module and OTLP-receiver gates and can identify the explicitly configured MinIO container. Evidence remains append-only.
+- `scripts/evidence/collect-wave2.ps1`: collection now records the external-module and OTLP-receiver gates and can identify the explicitly configured MinIO container. `run-wave2-with-ephemeral-minio.ps1` uses only the already cached pinned image, one-run random credentials, no persistent volume, a bounded health check, and removes only its own named container/temp files. Evidence remains append-only.
 
 ## Not implemented or not verified
 
