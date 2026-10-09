@@ -1,0 +1,180 @@
+{"Time":"2026-10-09T12:58:59.7388555Z","Scenario":"worker_sigkill","Result":"PASS","Trial":1,"recovery_ms":49.586}
+{"Time":"2026-10-09T12:58:59.7828785Z","Scenario":"worker_sigkill","Result":"PASS","Trial":2,"recovery_ms":42.7173}
+{"Time":"2026-10-09T12:58:59.8257513Z","Scenario":"worker_sigkill","Result":"PASS","Trial":3,"recovery_ms":42.8728}
+{"Time":"2026-10-09T12:58:59.8692184Z","Scenario":"worker_sigkill","Result":"PASS","Trial":4,"recovery_ms":43.4671}
+{"Time":"2026-10-09T12:58:59.9120376Z","Scenario":"worker_sigkill","Result":"PASS","Trial":5,"recovery_ms":42.8192}
+{"Time":"2026-10-09T12:58:59.9551563Z","Scenario":"worker_sigkill","Result":"PASS","Trial":6,"recovery_ms":43.1187}
+{"Time":"2026-10-09T12:58:59.9987313Z","Scenario":"worker_sigkill","Result":"PASS","Trial":7,"recovery_ms":43.575}
+{"Time":"2026-10-09T12:59:00.0416421Z","Scenario":"worker_sigkill","Result":"PASS","Trial":8,"recovery_ms":42.9108}
+{"Time":"2026-10-09T12:59:00.0822002Z","Scenario":"worker_sigkill","Result":"PASS","Trial":9,"recovery_ms":40.5581}
+{"Time":"2026-10-09T12:59:00.1235148Z","Scenario":"worker_sigkill","Result":"PASS","Trial":10,"recovery_ms":40.904}
+{"Time":"2026-10-09T12:59:00.1658594Z","Scenario":"worker_sigkill","Result":"PASS","Trial":11,"recovery_ms":41.7148}
+{"Time":"2026-10-09T12:59:00.2104223Z","Scenario":"worker_sigkill","Result":"PASS","Trial":12,"recovery_ms":43.5579}
+{"Time":"2026-10-09T12:59:00.2528518Z","Scenario":"worker_sigkill","Result":"PASS","Trial":13,"recovery_ms":42.4295}
+{"Time":"2026-10-09T12:59:00.2943818Z","Scenario":"worker_sigkill","Result":"PASS","Trial":14,"recovery_ms":41.53}
+{"Time":"2026-10-09T12:59:00.3358829Z","Scenario":"worker_sigkill","Result":"PASS","Trial":15,"recovery_ms":41.5011}
+{"Time":"2026-10-09T12:59:00.3766324Z","Scenario":"worker_sigkill","Result":"PASS","Trial":16,"recovery_ms":40.7495}
+{"Time":"2026-10-09T12:59:00.4159096Z","Scenario":"worker_sigkill","Result":"PASS","Trial":17,"recovery_ms":39.2772}
+{"Time":"2026-10-09T12:59:00.4584786Z","Scenario":"worker_sigkill","Result":"PASS","Trial":18,"recovery_ms":42.569}
+{"Time":"2026-10-09T12:59:00.5027075Z","Scenario":"worker_sigkill","Result":"PASS","Trial":19,"recovery_ms":44.2289}
+{"Time":"2026-10-09T12:59:00.5446859Z","Scenario":"worker_sigkill","Result":"PASS","Trial":20,"recovery_ms":41.9784}
+{"Time":"2026-10-09T12:59:00.5864538Z","Scenario":"worker_sigkill","Result":"PASS","Trial":21,"recovery_ms":41.7679}
+{"Time":"2026-10-09T12:59:00.628804Z","Scenario":"worker_sigkill","Result":"PASS","Trial":22,"recovery_ms":42.3502}
+{"Time":"2026-10-09T12:59:00.6708836Z","Scenario":"worker_sigkill","Result":"PASS","Trial":23,"recovery_ms":42.0796}
+{"Time":"2026-10-09T12:59:00.7130271Z","Scenario":"worker_sigkill","Result":"PASS","Trial":24,"recovery_ms":41.6853}
+{"Time":"2026-10-09T12:59:00.7546111Z","Scenario":"worker_sigkill","Result":"PASS","Trial":25,"recovery_ms":41.584}
+{"Time":"2026-10-09T12:59:00.7964464Z","Scenario":"worker_sigkill","Result":"PASS","Trial":26,"recovery_ms":41.3943}
+{"Time":"2026-10-09T12:59:00.8383709Z","Scenario":"worker_sigkill","Result":"PASS","Trial":27,"recovery_ms":41.9245}
+{"Time":"2026-10-09T12:59:00.8810799Z","Scenario":"worker_sigkill","Result":"PASS","Trial":28,"recovery_ms":42.709}
+{"Time":"2026-10-09T12:59:00.8881832Z","Scenario":"worker_sigkill","Result":"FAIL: first claim: \u003cnil\u003e","Trial":29,"recovery_ms":6.5909}
+{"Time":"2026-10-09T12:59:00.928963Z","Scenario":"worker_sigkill","Result":"PASS","Trial":30,"recovery_ms":40.7798}
+{"Time":"2026-10-09T12:59:00.9467415Z","Scenario":"sigterm_drain","Result":"PASS","Trial":1,"recovery_ms":17.7785}
+{"Time":"2026-10-09T12:59:00.9613211Z","Scenario":"sigterm_drain","Result":"PASS","Trial":2,"recovery_ms":14.5796}
+{"Time":"2026-10-09T12:59:00.9785801Z","Scenario":"sigterm_drain","Result":"PASS","Trial":3,"recovery_ms":16.4599}
+{"Time":"2026-10-09T12:59:00.9968775Z","Scenario":"sigterm_drain","Result":"PASS","Trial":4,"recovery_ms":18.2974}
+{"Time":"2026-10-09T12:59:01.0130809Z","Scenario":"sigterm_drain","Result":"PASS","Trial":5,"recovery_ms":15.8689}
+{"Time":"2026-10-09T12:59:01.0297616Z","Scenario":"sigterm_drain","Result":"PASS","Trial":6,"recovery_ms":15.7995}
+{"Time":"2026-10-09T12:59:01.0454418Z","Scenario":"sigterm_drain","Result":"PASS","Trial":7,"recovery_ms":15.6802}
+{"Time":"2026-10-09T12:59:01.0624144Z","Scenario":"sigterm_drain","Result":"PASS","Trial":8,"recovery_ms":16.4567}
+{"Time":"2026-10-09T12:59:01.0791508Z","Scenario":"sigterm_drain","Result":"PASS","Trial":9,"recovery_ms":16.7364}
+{"Time":"2026-10-09T12:59:01.0968476Z","Scenario":"sigterm_drain","Result":"PASS","Trial":10,"recovery_ms":17.6968}
+{"Time":"2026-10-09T12:59:01.1129154Z","Scenario":"sigterm_drain","Result":"PASS","Trial":11,"recovery_ms":16.0678}
+{"Time":"2026-10-09T12:59:01.129833Z","Scenario":"sigterm_drain","Result":"PASS","Trial":12,"recovery_ms":16.3931}
+{"Time":"2026-10-09T12:59:01.1467701Z","Scenario":"sigterm_drain","Result":"PASS","Trial":13,"recovery_ms":16.1602}
+{"Time":"2026-10-09T12:59:01.163442Z","Scenario":"sigterm_drain","Result":"PASS","Trial":14,"recovery_ms":16.1527}
+{"Time":"2026-10-09T12:59:01.176503Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-14: task is not claimed by this worker","Trial":15,"recovery_ms":12.5865}
+{"Time":"2026-10-09T12:59:01.1893586Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-15: task is not claimed by this worker","Trial":16,"recovery_ms":12.8556}
+{"Time":"2026-10-09T12:59:01.2019131Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-16: task is not claimed by this worker","Trial":17,"recovery_ms":12.5545}
+{"Time":"2026-10-09T12:59:01.2146089Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-17: task is not claimed by this worker","Trial":18,"recovery_ms":12.6958}
+{"Time":"2026-10-09T12:59:01.2278548Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-18: task is not claimed by this worker","Trial":19,"recovery_ms":13.2459}
+{"Time":"2026-10-09T12:59:01.2396536Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-19: task is not claimed by this worker","Trial":20,"recovery_ms":11.7988}
+{"Time":"2026-10-09T12:59:01.2518933Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-20: task is not claimed by this worker","Trial":21,"recovery_ms":12.2397}
+{"Time":"2026-10-09T12:59:01.2639401Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-21: task is not claimed by this worker","Trial":22,"recovery_ms":12.0468}
+{"Time":"2026-10-09T12:59:01.2759281Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-22: task is not claimed by this worker","Trial":23,"recovery_ms":11.988}
+{"Time":"2026-10-09T12:59:01.2880783Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-23: task is not claimed by this worker","Trial":24,"recovery_ms":12.1502}
+{"Time":"2026-10-09T12:59:01.3006178Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-24: task is not claimed by this worker","Trial":25,"recovery_ms":12.5395}
+{"Time":"2026-10-09T12:59:01.3135678Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-25: task is not claimed by this worker","Trial":26,"recovery_ms":12.95}
+{"Time":"2026-10-09T12:59:01.3257249Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-26: task is not claimed by this worker","Trial":27,"recovery_ms":12.1571}
+{"Time":"2026-10-09T12:59:01.3389833Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-27: task is not claimed by this worker","Trial":28,"recovery_ms":13.2584}
+{"Time":"2026-10-09T12:59:01.3531879Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-28: task is not claimed by this worker","Trial":29,"recovery_ms":14.2046}
+{"Time":"2026-10-09T12:59:01.3654397Z","Scenario":"sigterm_drain","Result":"FAIL: renew lease: task chaos-sigterm_drain-29: task is not claimed by this worker","Trial":30,"recovery_ms":12.2518}
+{"Time":"2026-10-09T12:59:01.4105321Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-0: task is not claimed by this worker","Trial":1,"recovery_ms":45.0924}
+{"Time":"2026-10-09T12:59:01.4566194Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-1: task is not claimed by this worker","Trial":2,"recovery_ms":46.0873}
+{"Time":"2026-10-09T12:59:01.5019539Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-2: task is not claimed by this worker","Trial":3,"recovery_ms":45.3345}
+{"Time":"2026-10-09T12:59:01.5477953Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-3: task is not claimed by this worker","Trial":4,"recovery_ms":45.8414}
+{"Time":"2026-10-09T12:59:01.5945433Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-4: task is not claimed by this worker","Trial":5,"recovery_ms":46.748}
+{"Time":"2026-10-09T12:59:01.6407366Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-5: task is not claimed by this worker","Trial":6,"recovery_ms":46.1933}
+{"Time":"2026-10-09T12:59:01.6862751Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-6: task is not claimed by this worker","Trial":7,"recovery_ms":45.5385}
+{"Time":"2026-10-09T12:59:01.730782Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-7: task is not claimed by this worker","Trial":8,"recovery_ms":44.5069}
+{"Time":"2026-10-09T12:59:01.7757434Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-8: task is not claimed by this worker","Trial":9,"recovery_ms":44.9614}
+{"Time":"2026-10-09T12:59:01.8206587Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-9: task is not claimed by this worker","Trial":10,"recovery_ms":44.9153}
+{"Time":"2026-10-09T12:59:01.8652944Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-10: task is not claimed by this worker","Trial":11,"recovery_ms":44.6357}
+{"Time":"2026-10-09T12:59:01.9099664Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-11: task is not claimed by this worker","Trial":12,"recovery_ms":44.672}
+{"Time":"2026-10-09T12:59:01.9561057Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-12: task is not claimed by this worker","Trial":13,"recovery_ms":46.1393}
+{"Time":"2026-10-09T12:59:02.0022762Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-13: task is not claimed by this worker","Trial":14,"recovery_ms":46.1705}
+{"Time":"2026-10-09T12:59:02.0488344Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-14: task is not claimed by this worker","Trial":15,"recovery_ms":46.0347}
+{"Time":"2026-10-09T12:59:02.0959743Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-15: task is not claimed by this worker","Trial":16,"recovery_ms":46.8152}
+{"Time":"2026-10-09T12:59:02.1447747Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-16: task is not claimed by this worker","Trial":17,"recovery_ms":48.8004}
+{"Time":"2026-10-09T12:59:02.1905773Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-17: task is not claimed by this worker","Trial":18,"recovery_ms":45.8026}
+{"Time":"2026-10-09T12:59:02.2352175Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-18: task is not claimed by this worker","Trial":19,"recovery_ms":44.6402}
+{"Time":"2026-10-09T12:59:02.28965Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-19: task is not claimed by this worker","Trial":20,"recovery_ms":54.4325}
+{"Time":"2026-10-09T12:59:02.347767Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-20: task is not claimed by this worker","Trial":21,"recovery_ms":58.117}
+{"Time":"2026-10-09T12:59:02.4004892Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-21: task is not claimed by this worker","Trial":22,"recovery_ms":52.7222}
+{"Time":"2026-10-09T12:59:02.4512508Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-22: task is not claimed by this worker","Trial":23,"recovery_ms":50.7616}
+{"Time":"2026-10-09T12:59:02.5033516Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-23: task is not claimed by this worker","Trial":24,"recovery_ms":52.1008}
+{"Time":"2026-10-09T12:59:02.556235Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-24: task is not claimed by this worker","Trial":25,"recovery_ms":52.8834}
+{"Time":"2026-10-09T12:59:02.6011445Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-25: task is not claimed by this worker","Trial":26,"recovery_ms":44.9095}
+{"Time":"2026-10-09T12:59:02.6445996Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-26: task is not claimed by this worker","Trial":27,"recovery_ms":43.4551}
+{"Time":"2026-10-09T12:59:02.6884169Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-27: task is not claimed by this worker","Trial":28,"recovery_ms":43.8173}
+{"Time":"2026-10-09T12:59:02.7333706Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-28: task is not claimed by this worker","Trial":29,"recovery_ms":44.9537}
+{"Time":"2026-10-09T12:59:02.7771255Z","Scenario":"stale_generation","Result":"FAIL: mark success: task chaos-stale_generation-29: task is not claimed by this worker","Trial":30,"recovery_ms":43.7549}
+{"Time":"2026-10-09T12:59:02.7830787Z","Scenario":"effect_before_ack","Result":"PASS","Trial":1,"recovery_ms":5.9532}
+{"Time":"2026-10-09T12:59:02.7883945Z","Scenario":"effect_before_ack","Result":"PASS","Trial":2,"recovery_ms":5.3158}
+{"Time":"2026-10-09T12:59:02.7930782Z","Scenario":"effect_before_ack","Result":"PASS","Trial":3,"recovery_ms":4.6837}
+{"Time":"2026-10-09T12:59:02.7978042Z","Scenario":"effect_before_ack","Result":"PASS","Trial":4,"recovery_ms":4.726}
+{"Time":"2026-10-09T12:59:02.8021034Z","Scenario":"effect_before_ack","Result":"PASS","Trial":5,"recovery_ms":4.2992}
+{"Time":"2026-10-09T12:59:02.8057841Z","Scenario":"effect_before_ack","Result":"PASS","Trial":6,"recovery_ms":3.6807}
+{"Time":"2026-10-09T12:59:02.8109938Z","Scenario":"effect_before_ack","Result":"PASS","Trial":7,"recovery_ms":5.2097}
+{"Time":"2026-10-09T12:59:02.8146695Z","Scenario":"effect_before_ack","Result":"PASS","Trial":8,"recovery_ms":3.6757}
+{"Time":"2026-10-09T12:59:02.819501Z","Scenario":"effect_before_ack","Result":"PASS","Trial":9,"recovery_ms":4.8315}
+{"Time":"2026-10-09T12:59:02.8242204Z","Scenario":"effect_before_ack","Result":"PASS","Trial":10,"recovery_ms":4.7194}
+{"Time":"2026-10-09T12:59:02.8289232Z","Scenario":"effect_before_ack","Result":"PASS","Trial":11,"recovery_ms":4.7028}
+{"Time":"2026-10-09T12:59:02.8336304Z","Scenario":"effect_before_ack","Result":"PASS","Trial":12,"recovery_ms":4.7072}
+{"Time":"2026-10-09T12:59:02.8377994Z","Scenario":"effect_before_ack","Result":"PASS","Trial":13,"recovery_ms":4.169}
+{"Time":"2026-10-09T12:59:02.8417407Z","Scenario":"effect_before_ack","Result":"PASS","Trial":14,"recovery_ms":3.9413}
+{"Time":"2026-10-09T12:59:02.84578Z","Scenario":"effect_before_ack","Result":"PASS","Trial":15,"recovery_ms":4.0393}
+{"Time":"2026-10-09T12:59:02.8504043Z","Scenario":"effect_before_ack","Result":"PASS","Trial":16,"recovery_ms":4.6243}
+{"Time":"2026-10-09T12:59:02.8550783Z","Scenario":"effect_before_ack","Result":"PASS","Trial":17,"recovery_ms":4.674}
+{"Time":"2026-10-09T12:59:02.8597569Z","Scenario":"effect_before_ack","Result":"PASS","Trial":18,"recovery_ms":4.6786}
+{"Time":"2026-10-09T12:59:02.8640262Z","Scenario":"effect_before_ack","Result":"PASS","Trial":19,"recovery_ms":4.2693}
+{"Time":"2026-10-09T12:59:02.8687339Z","Scenario":"effect_before_ack","Result":"PASS","Trial":20,"recovery_ms":4.7077}
+{"Time":"2026-10-09T12:59:02.8728482Z","Scenario":"effect_before_ack","Result":"PASS","Trial":21,"recovery_ms":4.1143}
+{"Time":"2026-10-09T12:59:02.8769552Z","Scenario":"effect_before_ack","Result":"PASS","Trial":22,"recovery_ms":4.107}
+{"Time":"2026-10-09T12:59:02.8806356Z","Scenario":"effect_before_ack","Result":"PASS","Trial":23,"recovery_ms":3.6804}
+{"Time":"2026-10-09T12:59:02.8851518Z","Scenario":"effect_before_ack","Result":"PASS","Trial":24,"recovery_ms":4.5162}
+{"Time":"2026-10-09T12:59:02.8891239Z","Scenario":"effect_before_ack","Result":"PASS","Trial":25,"recovery_ms":3.9721}
+{"Time":"2026-10-09T12:59:02.8941327Z","Scenario":"effect_before_ack","Result":"PASS","Trial":26,"recovery_ms":5.0088}
+{"Time":"2026-10-09T12:59:02.8976629Z","Scenario":"effect_before_ack","Result":"PASS","Trial":27,"recovery_ms":3.5302}
+{"Time":"2026-10-09T12:59:02.9031096Z","Scenario":"effect_before_ack","Result":"PASS","Trial":28,"recovery_ms":5.4467}
+{"Time":"2026-10-09T12:59:02.9094798Z","Scenario":"effect_before_ack","Result":"PASS","Trial":29,"recovery_ms":6.3702}
+{"Time":"2026-10-09T12:59:02.9139338Z","Scenario":"effect_before_ack","Result":"PASS","Trial":30,"recovery_ms":4.454}
+{"Time":"2026-10-09T12:59:02.9185456Z","Scenario":"provider_response_lost","Result":"PASS","Trial":1,"recovery_ms":4.6118}
+{"Time":"2026-10-09T12:59:02.9249258Z","Scenario":"provider_response_lost","Result":"PASS","Trial":2,"recovery_ms":6.3802}
+{"Time":"2026-10-09T12:59:02.9289886Z","Scenario":"provider_response_lost","Result":"PASS","Trial":3,"recovery_ms":4.0628}
+{"Time":"2026-10-09T12:59:02.9332402Z","Scenario":"provider_response_lost","Result":"PASS","Trial":4,"recovery_ms":4.2516}
+{"Time":"2026-10-09T12:59:02.9374714Z","Scenario":"provider_response_lost","Result":"PASS","Trial":5,"recovery_ms":4.2312}
+{"Time":"2026-10-09T12:59:02.9417638Z","Scenario":"provider_response_lost","Result":"PASS","Trial":6,"recovery_ms":4.2924}
+{"Time":"2026-10-09T12:59:02.9459218Z","Scenario":"provider_response_lost","Result":"PASS","Trial":7,"recovery_ms":3.6365}
+{"Time":"2026-10-09T12:59:02.9506357Z","Scenario":"provider_response_lost","Result":"PASS","Trial":8,"recovery_ms":4.7139}
+{"Time":"2026-10-09T12:59:02.9560052Z","Scenario":"provider_response_lost","Result":"PASS","Trial":9,"recovery_ms":5.3695}
+{"Time":"2026-10-09T12:59:02.959636Z","Scenario":"provider_response_lost","Result":"PASS","Trial":10,"recovery_ms":3.6308}
+{"Time":"2026-10-09T12:59:02.9644077Z","Scenario":"provider_response_lost","Result":"PASS","Trial":11,"recovery_ms":4.7717}
+{"Time":"2026-10-09T12:59:02.9697806Z","Scenario":"provider_response_lost","Result":"PASS","Trial":12,"recovery_ms":5.3729}
+{"Time":"2026-10-09T12:59:02.9739174Z","Scenario":"provider_response_lost","Result":"PASS","Trial":13,"recovery_ms":4.1368}
+{"Time":"2026-10-09T12:59:02.9792615Z","Scenario":"provider_response_lost","Result":"PASS","Trial":14,"recovery_ms":5.3441}
+{"Time":"2026-10-09T12:59:02.9839459Z","Scenario":"provider_response_lost","Result":"PASS","Trial":15,"recovery_ms":4.6844}
+{"Time":"2026-10-09T12:59:02.9886457Z","Scenario":"provider_response_lost","Result":"PASS","Trial":16,"recovery_ms":4.6998}
+{"Time":"2026-10-09T12:59:02.9925146Z","Scenario":"provider_response_lost","Result":"PASS","Trial":17,"recovery_ms":3.8689}
+{"Time":"2026-10-09T12:59:02.9971477Z","Scenario":"provider_response_lost","Result":"PASS","Trial":18,"recovery_ms":4.6331}
+{"Time":"2026-10-09T12:59:03.0011917Z","Scenario":"provider_response_lost","Result":"PASS","Trial":19,"recovery_ms":4.044}
+{"Time":"2026-10-09T12:59:03.005463Z","Scenario":"provider_response_lost","Result":"PASS","Trial":20,"recovery_ms":4.2713}
+{"Time":"2026-10-09T12:59:03.0101325Z","Scenario":"provider_response_lost","Result":"PASS","Trial":21,"recovery_ms":4.6695}
+{"Time":"2026-10-09T12:59:03.0154554Z","Scenario":"provider_response_lost","Result":"PASS","Trial":22,"recovery_ms":5.3229}
+{"Time":"2026-10-09T12:59:03.0204298Z","Scenario":"provider_response_lost","Result":"PASS","Trial":23,"recovery_ms":4.9744}
+{"Time":"2026-10-09T12:59:03.0251903Z","Scenario":"provider_response_lost","Result":"PASS","Trial":24,"recovery_ms":4.7605}
+{"Time":"2026-10-09T12:59:03.0305378Z","Scenario":"provider_response_lost","Result":"PASS","Trial":25,"recovery_ms":5.3475}
+{"Time":"2026-10-09T12:59:03.0347289Z","Scenario":"provider_response_lost","Result":"PASS","Trial":26,"recovery_ms":4.1911}
+{"Time":"2026-10-09T12:59:03.0397424Z","Scenario":"provider_response_lost","Result":"PASS","Trial":27,"recovery_ms":5.0135}
+{"Time":"2026-10-09T12:59:03.0443387Z","Scenario":"provider_response_lost","Result":"PASS","Trial":28,"recovery_ms":4.5963}
+{"Time":"2026-10-09T12:59:03.0506627Z","Scenario":"provider_response_lost","Result":"PASS","Trial":29,"recovery_ms":6.324}
+{"Time":"2026-10-09T12:59:03.0548745Z","Scenario":"provider_response_lost","Result":"PASS","Trial":30,"recovery_ms":4.2118}
+{"Time":"2026-10-09T12:59:03.1050394Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-0 to be claimed, got 1 task(s)","Trial":1,"recovery_ms":50.1649}
+{"Time":"2026-10-09T12:59:03.1425872Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-1 to be claimed, got 1 task(s)","Trial":2,"recovery_ms":37.5478}
+{"Time":"2026-10-09T12:59:03.1825139Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-2 to be claimed, got 1 task(s)","Trial":3,"recovery_ms":39.9267}
+{"Time":"2026-10-09T12:59:03.2215116Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-3 to be claimed, got 1 task(s)","Trial":4,"recovery_ms":38.9977}
+{"Time":"2026-10-09T12:59:03.2597119Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-4 to be claimed, got 1 task(s)","Trial":5,"recovery_ms":38.2003}
+{"Time":"2026-10-09T12:59:03.2978794Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-5 to be claimed, got 1 task(s)","Trial":6,"recovery_ms":38.1675}
+{"Time":"2026-10-09T12:59:03.3359866Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-6 to be claimed, got 1 task(s)","Trial":7,"recovery_ms":38.1072}
+{"Time":"2026-10-09T12:59:03.374631Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-7 to be claimed, got 1 task(s)","Trial":8,"recovery_ms":38.6444}
+{"Time":"2026-10-09T12:59:03.4123692Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-8 to be claimed, got 1 task(s)","Trial":9,"recovery_ms":37.7382}
+{"Time":"2026-10-09T12:59:03.4505823Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-9 to be claimed, got 1 task(s)","Trial":10,"recovery_ms":38.2131}
+{"Time":"2026-10-09T12:59:03.4885127Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-10 to be claimed, got 1 task(s)","Trial":11,"recovery_ms":37.9304}
+{"Time":"2026-10-09T12:59:03.5269353Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-11 to be claimed, got 1 task(s)","Trial":12,"recovery_ms":38.4226}
+{"Time":"2026-10-09T12:59:03.5648545Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-12 to be claimed, got 1 task(s)","Trial":13,"recovery_ms":37.9192}
+{"Time":"2026-10-09T12:59:03.60486Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-13 to be claimed, got 1 task(s)","Trial":14,"recovery_ms":40.0055}
+{"Time":"2026-10-09T12:59:03.6452348Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-14 to be claimed, got 1 task(s)","Trial":15,"recovery_ms":40.3748}
+{"Time":"2026-10-09T12:59:03.684045Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-15 to be claimed, got 1 task(s)","Trial":16,"recovery_ms":38.8102}
+{"Time":"2026-10-09T12:59:03.723662Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-16 to be claimed, got 1 task(s)","Trial":17,"recovery_ms":39.617}
+{"Time":"2026-10-09T12:59:03.7633659Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-17 to be claimed, got 1 task(s)","Trial":18,"recovery_ms":39.7039}
+{"Time":"2026-10-09T12:59:03.8012242Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-18 to be claimed, got 1 task(s)","Trial":19,"recovery_ms":37.8583}
+{"Time":"2026-10-09T12:59:03.8394265Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-19 to be claimed, got 1 task(s)","Trial":20,"recovery_ms":38.2023}
+{"Time":"2026-10-09T12:59:03.8792091Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-20 to be claimed, got 1 task(s)","Trial":21,"recovery_ms":39.7826}
+{"Time":"2026-10-09T12:59:03.9159257Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-21 to be claimed, got 1 task(s)","Trial":22,"recovery_ms":36.7166}
+{"Time":"2026-10-09T12:59:03.9522993Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-22 to be claimed, got 1 task(s)","Trial":23,"recovery_ms":36.3736}
+{"Time":"2026-10-09T12:59:03.9918477Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-23 to be claimed, got 1 task(s)","Trial":24,"recovery_ms":39.5484}
+{"Time":"2026-10-09T12:59:04.0361389Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-24 to be claimed, got 1 task(s)","Trial":25,"recovery_ms":44.2912}
+{"Time":"2026-10-09T12:59:04.0865649Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-25 to be claimed, got 1 task(s)","Trial":26,"recovery_ms":50.426}
+{"Time":"2026-10-09T12:59:04.1451825Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-26 to be claimed, got 1 task(s)","Trial":27,"recovery_ms":58.6176}
+{"Time":"2026-10-09T12:59:04.1980565Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-27 to be claimed, got 1 task(s)","Trial":28,"recovery_ms":52.874}
+{"Time":"2026-10-09T12:59:04.2487587Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-28 to be claimed, got 1 task(s)","Trial":29,"recovery_ms":50.7022}
+{"Time":"2026-10-09T12:59:04.2981063Z","Scenario":"postgres_short_disconnect","Result":"FAIL: reconnect claim: expected only task chaos-postgres_short_disconnect-29 to be claimed, got 1 task(s)","Trial":30,"recovery_ms":49.3476}
