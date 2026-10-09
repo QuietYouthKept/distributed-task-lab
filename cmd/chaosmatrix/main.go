@@ -188,9 +188,17 @@ func claimTaskAfterReconnect(parent context.Context, q *postgres.PostgresQueue, 
 	defer cancel()
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
+	var status string
+	var nextRunAt, databaseNow time.Time
+	timeoutError := func(cause error) error {
+		return fmt.Errorf("timed out after %s waiting for PostgreSQL to make task %s due: status=%s next_run_at=%s database_now=%s: %w", timeout, taskID, status, nextRunAt, databaseNow, cause)
+	}
 	for {
 		claimed, err := q.ClaimTasks(ctx, workerID, 1, time.Second)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, timeoutError(ctx.Err())
+			}
 			return nil, err
 		}
 		if len(claimed) > 0 {
@@ -199,17 +207,18 @@ func claimTaskAfterReconnect(parent context.Context, q *postgres.PostgresQueue, 
 			}
 			return claimed, nil
 		}
-		var status string
-		var nextRunAt, databaseNow time.Time
 		if err := db.QueryRowContext(ctx, `SELECT status, next_run_at, clock_timestamp() FROM tasks WHERE id=$1`, taskID).Scan(&status, &nextRunAt, &databaseNow); err != nil {
+			if ctx.Err() != nil {
+				return nil, timeoutError(ctx.Err())
+			}
 			return nil, fmt.Errorf("inspect task after empty reconnect claim: %w", err)
 		}
-		if status != string(domain.TaskStatusPending) || nextRunAt.After(databaseNow) {
+		if status != string(domain.TaskStatusPending) {
 			return nil, fmt.Errorf("task %s is not due after reconnect: status=%s next_run_at=%s database_now=%s", taskID, status, nextRunAt, databaseNow)
 		}
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("timed out after %s while PostgreSQL still reported task %s due", timeout, taskID)
+			return nil, timeoutError(ctx.Err())
 		case <-ticker.C:
 		}
 	}
