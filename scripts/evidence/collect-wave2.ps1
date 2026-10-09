@@ -145,9 +145,16 @@ $missingMinio = @($minioRequired | Where-Object { -not [Environment]::GetEnviron
 if ($missingMinio.Count -eq 0) {
     $checks += Invoke-RecordedCheck "minio-contract-race" "go" @("test", "-race", "./internal/artifacts", "-run", "^TestMinIOStoreContractAndConcurrentConditionalWrite$", "-count=1", "-v") @{ REQUIRE_MINIO = "1" } $logDir
     $checks += Invoke-RecordedCheck "api-two-worker-artifact-recovery-race" "go" @("test", "-race", "./internal/e2e", "-run", "^TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash$", "-count=1", "-v") @{ REQUIRE_TEST_DATABASE = "1"; REQUIRE_MINIO = "1" } $logDir
+    $backupContainer = [Environment]::GetEnvironmentVariable("PG_BACKUP_CONTAINER", "Process")
+    if ($backupContainer) {
+        $checks += Invoke-RecordedCheck "postgres-backup-restore-drill-race" "go" @("test", "-race", "./internal/storage/postgres", "-run", "^TestDatabaseBackupRestoreDrill$", "-count=1", "-v") @{ REQUIRE_TEST_DATABASE = "1"; REQUIRE_MINIO = "1"; RUN_BACKUP_RESTORE_DRILL = "1"; PG_BACKUP_CONTAINER = $backupContainer } $logDir
+    } else {
+        $checks += [ordered]@{ name = "postgres-backup-restore-drill-race"; command = "not run: PG_BACKUP_CONTAINER is not configured"; exit_code = $null; status = "NOT VERIFIED" }
+    }
 } else {
     $checks += [ordered]@{ name = "minio-contract-race"; command = "not run: required MinIO environment variables absent"; exit_code = $null; status = "NOT VERIFIED"; missing_variable_names = $missingMinio }
     $checks += [ordered]@{ name = "api-two-worker-artifact-recovery-race"; command = "not run: required PostgreSQL and MinIO environment variables absent"; exit_code = $null; status = "NOT VERIFIED"; missing_variable_names = $missingMinio }
+    $checks += [ordered]@{ name = "postgres-backup-restore-drill-race"; command = "not run: required PostgreSQL and MinIO environment variables absent"; exit_code = $null; status = "NOT VERIFIED"; missing_variable_names = $missingMinio }
 }
 
 $dirtyAfter = @(& git status --porcelain=v1)
@@ -169,7 +176,8 @@ $fingerprintInput = @(
     "go vet ./...",
     "go test -race ./... -count=1 (test/external-client)",
     "go test -race ./internal/observability -run ^TestSetupTracingExportsSpanToOTLPHTTPReceiver$ -count=1 -v",
-    "go test -race ./internal/e2e -run ^TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash$ -count=1 -v"
+    "go test -race ./internal/e2e -run ^TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash$ -count=1 -v",
+    "go test -race ./internal/storage/postgres -run ^TestDatabaseBackupRestoreDrill$ -count=1 -v"
 ) -join "`n"
 $sha = [System.Security.Cryptography.SHA256]::Create()
 try { $configFingerprint = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($fingerprintInput)))).Replace("-", "").ToLowerInvariant() } finally { $sha.Dispose() }

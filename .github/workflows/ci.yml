@@ -149,6 +149,11 @@ jobs:
         run: go test -race ./internal/artifacts -run '^TestMinIOStoreContractAndConcurrentConditionalWrite$' -count=1 -v
       - name: Run API and independent Worker process recovery under the race detector
         run: go test -race ./internal/e2e -run '^TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash$' -count=1 -v
+      - name: Run isolated PostgreSQL backup/restore drill under the race detector
+        env:
+          PG_BACKUP_CONTAINER: ${{ job.services.postgres.id }}
+          RUN_BACKUP_RESTORE_DRILL: "1"
+        run: go test -race ./internal/storage/postgres -run '^TestDatabaseBackupRestoreDrill$' -count=1 -v
 
   external-client:
     name: Public Go client consumer module

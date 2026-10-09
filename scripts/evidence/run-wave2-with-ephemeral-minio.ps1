@@ -23,7 +23,7 @@ New-Item -ItemType Directory -Path $temporaryDirectory | Out-Null
 $environmentFile = Join-Path $temporaryDirectory "minio.env"
 $collectorOutput = Join-Path $temporaryDirectory "collector.stdout.log"
 $createdContainer = $false
-$names = @("MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_CONTAINER", "REQUIRE_TEST_DATABASE", "TEST_DATABASE_URL")
+$names = @("MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_CONTAINER", "REQUIRE_TEST_DATABASE", "TEST_DATABASE_URL", "PG_BACKUP_CONTAINER")
 $previous = @{}
 foreach ($name in $names) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, "Process") }
 
@@ -54,6 +54,9 @@ try {
     [Environment]::SetEnvironmentVariable("MINIO_CONTAINER", $containerName, "Process")
     if (-not [Environment]::GetEnvironmentVariable("TEST_DATABASE_URL", "Process")) {
         [Environment]::SetEnvironmentVariable("TEST_DATABASE_URL", "postgres://postgres:postgres@127.0.0.1:5433/postgres?sslmode=disable", "Process")
+    }
+    if (-not [Environment]::GetEnvironmentVariable("PG_BACKUP_CONTAINER", "Process")) {
+        [Environment]::SetEnvironmentVariable("PG_BACKUP_CONTAINER", "tasklab-test-postgres", "Process")
     }
 
     $powershell = (Get-Command powershell.exe -ErrorAction Stop).Source
