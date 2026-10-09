@@ -174,6 +174,9 @@ func TestGlobalQueueRateLimitAcrossWorkersAndStableRefresh(t *testing.T) {
 		task.Queue = cfg.Name
 		enqueue(t, q1, task)
 	}
+	if _, err := q1.db.ExecContext(ctx, `UPDATE tasks SET next_run_at=clock_timestamp()-interval '1 millisecond' WHERE queue=$1 AND status='pending'`, cfg.Name); err != nil {
+		t.Fatalf("make rate-limit fixtures due using PostgreSQL time: %v", err)
+	}
 	start := make(chan struct{})
 	results := make(chan int, 2)
 	var wg sync.WaitGroup

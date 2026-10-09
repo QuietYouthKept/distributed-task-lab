@@ -113,7 +113,7 @@ func TestDatabaseBackupRestoreDrill(t *testing.T) {
 		t.Fatalf("complete source task: %v", err)
 	}
 	if err := NewEffectLedger(sourceDB).RecordIntent(ctx, effects.Intent{
-		EffectID: "effect-" + uuid.NewString(), TaskID: task.ID, OperationKey: "restore-check",
+		EffectID: uuid.NewString(), TaskID: task.ID, OperationKey: "restore-check",
 		Kind: "notification", Policy: effects.PolicyIdempotent, RequestHash: strings.Repeat("a", 64),
 		Generation: claimed[0].LeaseVersion, Attempt: claimed[0].Attempt,
 	}); err != nil {
