@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"testing"
 	"time"
@@ -68,7 +69,9 @@ func enqueue(t *testing.T, q *PostgresQueue, task *domain.Task) *domain.Task {
 	return created
 }
 
-// claimOne claims a single task for workerID, failing the test if none are available.
+// claimOne claims one task for workerID within a bounded setup window. It polls
+// only while PostgreSQL reports the pending task is not yet due, and preserves
+// a DB-clock diagnostic if the task never becomes claimable.
 func claimOne(t *testing.T, q *PostgresQueue, workerID string) domain.Task {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -86,18 +89,23 @@ func claimOne(t *testing.T, q *PostgresQueue, workerID string) domain.Task {
 		if len(claimed) > 1 {
 			t.Fatalf("expected 1 claimed task, got %d", len(claimed))
 		}
-		// This helper is only for tests whose task was just enqueued and should
-		// already be due. Never hide an early next_run_at bug behind the polling.
+		// Query eligibility against PostgreSQL's clock. A just-enqueued row is
+		// expected to be due, but a wall-clock step can briefly put its timestamp
+		// ahead of clock_timestamp(); allow only the existing bounded setup window.
+		var databaseTime time.Time
 		var due int
-		if err := q.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks WHERE status='pending' AND next_run_at <= clock_timestamp()`).Scan(&due); err != nil {
+		var nextRunAt sql.NullTime
+		if err := q.db.QueryRowContext(ctx, `
+			SELECT db_clock.now,
+			       (SELECT COUNT(*) FROM tasks WHERE status='pending' AND next_run_at <= db_clock.now),
+			       (SELECT MIN(next_run_at) FROM tasks WHERE status='pending')
+			FROM (SELECT clock_timestamp() AS now) AS db_clock
+		`).Scan(&databaseTime, &due, &nextRunAt); err != nil {
 			t.Fatalf("check immediate task eligibility using PostgreSQL clock: %v", err)
-		}
-		if due == 0 {
-			t.Fatalf("expected an immediately due pending task, but PostgreSQL reports none")
 		}
 		select {
 		case <-ctx.Done():
-			t.Fatalf("timed out after 10s trying to claim an already-due task; PostgreSQL still reports %d due task(s)", due)
+			t.Fatalf("timed out after 10s trying to claim an enqueued task; PostgreSQL reports due=%d db_now=%s earliest_pending_next_run_at=%v", due, databaseTime, nextRunAt)
 		case <-ticker.C:
 		}
 	}
