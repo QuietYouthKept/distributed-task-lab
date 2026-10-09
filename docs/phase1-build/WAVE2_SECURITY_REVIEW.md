@@ -13,4 +13,4 @@
 
 ## Release/security decision
 
-No evidence supports enabling a production Worker. Require two-worker fencing/recovery, deployed least-privilege DB provisioning, real IdP trust, telemetry redaction, provider recovery, and an operator-reviewed deployment/security posture before revisiting the gate. Local MinIO adapter and local OTLP receiver contracts do not substitute for those production checks.
+No evidence supports enabling a production Worker. A development-profile API/two-Worker deterministic-Eval recovery path is now verified, but stale-generation-after-reclaim, production-approved execution types, deployed least-privilege DB provisioning, real IdP trust, staging telemetry redaction, provider recovery, and operator-reviewed deployment/security posture remain required before revisiting the gate. Local MinIO adapter and local OTLP receiver contracts do not substitute for those production checks.
