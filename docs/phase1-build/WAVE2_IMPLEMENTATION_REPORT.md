@@ -19,8 +19,7 @@ Date: 2026-10-09 (Asia/Shanghai). Scope is the implementation actually present i
 
 - Side Effect still uses a local simulated provider receipt. It is not a real payment/notification provider and is deliberately not promoted to production.
 - Worker production startup is still rejected by `Config.ValidateWorker`; no production mode has been unlocked.
-- No dual-container API + two-worker E2E, worker crash-after-object-put scenario, MinIO response-loss proxy, or real MinIO test was executed in this continuation. The MinIO endpoints answered health checks, but the Codex process did not inherit the required credential variables.
-- The follow-up MinIO contract was run against a fresh, temporary container from the pinned local MinIO image digest with random one-run credentials and passed under Race. The container used no persistent volume and was auto-removed. This proves the adapter contract only; it is not dual-worker E2E or an AWS/production S3 claim. GitHub Actions has not been remotely run.
+- No dual-container API + two-worker E2E, worker crash-after-object-put scenario, or MinIO response-loss proxy was executed in this continuation. The MinIO adapter contract did pass under Race against a fresh temporary container from the pinned local image digest with random one-run credentials. The container used no persistent volume and was auto-removed. This proves the adapter contract only; it is not dual-worker E2E or an AWS/production S3 claim. GitHub Actions has not been remotely run.
 - No database least-privilege runtime role, external IdP, provider sandbox, 100k-page benchmark, remote CI run, OTLP receiver test, or backup/restore rehearsal was added here.
 - No schema migration was added in this continuation; migrations 010 and 011 from the existing worktree remain in scope and were exercised by PostgreSQL tests.
 
