@@ -5,10 +5,11 @@ Updated: 2026-10-10 (Asia/Shanghai)
 ## Recovery point
 
 - Branch: `codex/phase1-production-hardening`.
-- Latest pushed commit at start of Wave 3 work: `ac46b6bf2411aa68af671897f6ebdb2e0786e323` (CI follow-up fix).
+- Latest pushed implementation commit: `9b360f5952bb745fcbd25dfcb32c7c9bbe20f1bf` (provider outcome contract and reconciliation tests).
 - PR #1 remains OPEN and Draft.
 - CI Run `37962333979`: PASS, including actual source-built MinIO image, S3 contract, API/two-Worker recovery, PostgreSQL backup/restore, PostgreSQL integration, full Race, and public Go Client module.
 - Security Run `37962334001`: govulncheck, CodeQL, and Secret Scan PASS; Scorecard was conditionally SKIPPED.
+- CI Run `37963245838` at `9b360f5`: all five jobs PASS. Security Run `37963245883`: govulncheck, CodeQL, Secret Scan PASS; Scorecard was conditionally SKIPPED.
 - Prior failed runs `37956337334`, `37956336466`, and `37960805439` remain unchanged.
 - Wave 2 Evidence `wave2-20261009T153618132Z-a292ec7a996b` stays bound to implementation `a292ec7a996bc39214ab413c420eacd9268a7298`; it does not validate new code.
 
@@ -19,19 +20,19 @@ Updated: 2026-10-10 (Asia/Shanghai)
 - `test/external-client/go.mod` now targets the root module's Go 1.26.9 toolchain.
 - Began Wave 3 package B: added provider-independent HTTP Provider port and contract client with outcomes that distinguish not-sent, confirmed rejection/success, explicit retryable rejection, and unknown. Added HTTP contract/fault tests and made the side-effect handler surface errors when persisting Unknown to the Effect Ledger fails.
 - Production Worker allowlist remains empty/fail-closed. The new HTTP contract is not wired into production handler selection.
+- Clean local Evidence `wave3-20261010T171000Z-9b360f5952bb`: 14/14 PASS, exact implementation `9b360f5952bb745fcbd25dfcb32c7c9bbe20f1bf`, clean start and clean after excluding the run artifacts. PostgreSQL 16.15, Docker 28.3.3, Go 1.26.9, temporary source-built MinIO image; all command-log hashes and benchmark/chaos artifact hashes are in the manifest.
+- A first Evidence-wrapper preflight did not start tests because Git Bash `curl` lacked the local proxy and the license fetch was reset. The `NOT VERIFIED` preflight and observed log are preserved separately; retry through `127.0.0.1:7892` completed 14/14.
 
 ## Current uncommitted work
 
-- Provider contract implementation and tests under `internal/effects/`.
-- Side-effect ledger error propagation under `internal/worker/handlers/`.
-- ADR-0005 and Wave 3 reporting documents are being prepared.
-- Targeted Race tests for the new provider and side-effect paths have passed 10 consecutive runs; broader clean-commit validation and Evidence are pending.
+- Evidence run `wave3-20261010T171000Z-9b360f5952bb`, its index row, and its companion preflight-failure record are present as new, not-yet-committed artifacts.
+- Provider source/tests and ADR/reporting docs are in implementation commit `9b360f5`; targeted provider/handler Race tests passed ×10, then the clean full suite passed 14/14.
+- No source changes remain uncommitted; the pending changes are Evidence and docs reflecting the just-completed run.
 
 ## Remaining work and next commands
 
-1. Finish Wave 3 documents and review Provider port semantics; run `go test -race ./internal/effects ./internal/worker/handlers -count=10`.
-2. Create a scoped Wave 3 implementation commit, then run full required unit/Race/PostgreSQL/Failure Lab/Chaos/Vet gates against that exact clean commit and append a separate Evidence record.
-3. Continue independent packages: cross-container ArtifactStore crash/response-loss E2E; API cursor rotation/OpenAPI coverage and shared-rate-limit ADR; trace/alerts/backup operational verification; image/SBOM/release readiness.
-4. Preserve Production Fail-Closed. External IdP, real Provider/Sandbox, cloud S3/DR, production RPO/RTO, and SLO/on-call remain unverified.
+1. Verify hashes/status of `wave3-20261010T171000Z-9b360f5952bb`, commit the append-only Evidence + current Wave 3 doc updates, then push.
+2. Continue independent packages: cross-container ArtifactStore crash/response-loss E2E; API cursor rotation/OpenAPI coverage and shared-rate-limit ADR; full trace/alerts/backup operations; image/SBOM/release readiness.
+3. Preserve Production Fail-Closed. External IdP, real Provider/Sandbox, cloud S3/DR, production RPO/RTO, and SLO/on-call remain unverified.
 
-Latest resumable command after checking status: `git status -sb; git rev-parse HEAD; go test -race ./internal/effects ./internal/worker/handlers -count=10`.
+Latest resumable command after checking status: `git status -sb; git rev-parse HEAD; Get-Content evidence/phase1/runs/wave3-20261010T171000Z-9b360f5952bb/manifest.json`.
