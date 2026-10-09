@@ -79,6 +79,41 @@ $dirtyAfter = @(& git status --porcelain=v1)
 $otherDirtyAfter = @($dirtyAfter | Where-Object { $_ -notmatch '^\?\? evidence/phase1/' -and $_ -notmatch '^\s*[A-Z?]{1,2} evidence/phase1/' })
 $failed = @($checks | Where-Object { $_.status -eq "FAIL" }).Count
 $unverified = @($checks | Where-Object { $_.status -eq "NOT VERIFIED" }).Count
+$configHash = (Get-FileHash -LiteralPath (Join-Path $repoRoot "internal\config\config.go") -Algorithm SHA256).Hash.ToLowerInvariant()
+$fingerprintInput = @(
+    $commit,
+    $configHash,
+    "REQUIRE_TEST_DATABASE=1",
+    "go test ./cmd/... ./internal/... ./pkg/... -count=1",
+    "go test -race ./cmd/... ./internal/... ./pkg/... -count=1",
+    "go test -race ./internal/storage/postgres -count=5",
+    "go test -race ./internal/storage/postgres -run ^TestRetryBackoff$ -count=20 -v",
+    "go run ./cmd/failurelab",
+    "go run ./cmd/chaosmatrix",
+    "go vet ./..."
+) -join "`n"
+$sha = [System.Security.Cryptography.SHA256]::Create()
+try { $configFingerprint = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($fingerprintInput)))).Replace("-", "").ToLowerInvariant() } finally { $sha.Dispose() }
+foreach ($check in $checks) {
+    if ($check.stdout) {
+        $file = Join-Path $repoRoot ($check.stdout.Replace('/', '\'))
+        $check.stdout_sha256 = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+        $check.stdout_bytes = (Get-Item -LiteralPath $file).Length
+    }
+    if ($check.stderr) {
+        $file = Join-Path $repoRoot ($check.stderr.Replace('/', '\'))
+        $check.stderr_sha256 = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+        $check.stderr_bytes = (Get-Item -LiteralPath $file).Length
+    }
+}
+$minioImageID = Get-Text "docker" @("inspect", "tasklab-wave2-minio", "--format", "{{.Image}}")
+$minioHealth = "NOT VERIFIED"
+try {
+    $healthEndpoint = [Environment]::GetEnvironmentVariable("MINIO_ENDPOINT", "Process")
+    if (-not $healthEndpoint) { $healthEndpoint = "http://127.0.0.1:19000" }
+    $healthResponse = Invoke-WebRequest -Uri ($healthEndpoint.TrimEnd('/') + "/minio/health/live") -TimeoutSec 3 -UseBasicParsing
+    $minioHealth = "HTTP " + $healthResponse.StatusCode
+} catch { $minioHealth = "unreachable" }
 $manifest = [ordered]@{
     schema_version = 1
     run_id = $RunID
@@ -91,9 +126,15 @@ $manifest = [ordered]@{
         os = [System.Environment]::OSVersion.VersionString
         docker_server = Get-Text "docker" @("info", "--format", "{{.ServerVersion}}")
         postgres_container = Get-Text "docker" @("inspect", "tasklab-test-postgres", "--format", "{{.Config.Image}}")
+        postgres_server = Get-Text "docker" @("exec", "tasklab-test-postgres", "pg_config", "--version")
+        minio_image_id = $minioImageID
+        minio_health = $minioHealth
         minio_endpoint_configured = [bool]([Environment]::GetEnvironmentVariable("MINIO_ENDPOINT", "Process"))
         minio_required_variables_present = ($missingMinio.Count -eq 0)
     }
+    configuration_fingerprint_sha256 = $configFingerprint
+    configuration_source_sha256 = $configHash
+    test_fixture_commit_sha = $commit
     checks = $checks
     result = if ($failed -gt 0) { "FAIL" } elseif ($unverified -gt 0 -or $otherDirtyAfter.Count -gt 0) { "NOT VERIFIED" } else { "PASS" }
     limitations = @("This run does not by itself prove dual-worker E2E, external IdP/provider, OTLP receipt, DR, or production readiness.", "Credential values are never recorded.")
