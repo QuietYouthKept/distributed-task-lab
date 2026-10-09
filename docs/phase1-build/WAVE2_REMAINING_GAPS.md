@@ -2,7 +2,7 @@
 
 ## P0 — before any production Worker admission
 
-- Two independent Worker processes consuming API-created PostgreSQL tasks and shared input/output artifacts; kill-after-put-before-ACK, lease expiry, reclaim, stale-generation rejection, response-loss and content-conflict scenarios.
+- Development-profile process E2E now proves an API-created deterministic Eval task is written to shared MinIO, the owner is killed after Put while ACK is blocked, and the second Worker reclaims after lease expiry and reuses the artifact. Remaining: stale-generation rejection after reclaim, S3/ACK response-loss proxy, conflicting-content recovery, cross-container topology, and production-approved execution types; this is not a production Worker acceptance.
 - Gateway receipts need concurrent duplicate-case integration semantics verified against the provider's idempotency behavior; no payment/notification sandbox or reconciliation authority was supplied.
 - Production Worker is intentionally fail-closed. No production task type is approved by the execution allowlist.
 

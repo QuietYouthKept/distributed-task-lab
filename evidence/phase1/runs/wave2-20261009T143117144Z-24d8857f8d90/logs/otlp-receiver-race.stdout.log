@@ -1,0 +1,4 @@
+=== RUN   TestSetupTracingExportsSpanToOTLPHTTPReceiver
+--- PASS: TestSetupTracingExportsSpanToOTLPHTTPReceiver (0.01s)
+PASS
+ok  	github.com/fantasticyi/distributed-task-lab/internal/observability	2.189s
