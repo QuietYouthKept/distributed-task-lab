@@ -4,7 +4,6 @@ param([string]$RunID = "")
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $containerName = "tasklab-wave2-evidence-minio"
-$image = "minio/minio@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3"
 $endpoint = "http://127.0.0.1:19002"
 $bucket = "tasklab-wave2-evidence"
 $portInUse = Test-NetConnection 127.0.0.1 -Port 19002 -InformationLevel Quiet
@@ -12,10 +11,9 @@ if ($portInUse) { throw "Port 19002 is already in use; refusing to alter an exis
 if (@(& docker ps -a --filter "name=^$containerName$" --format "{{.Names}}") -contains $containerName) {
     throw "Container name $containerName already exists; refusing to alter it."
 }
-$imageID = & docker image inspect $image --format "{{.Id}}"
-if ($LASTEXITCODE -ne 0 -or -not $imageID) { throw "Pinned MinIO image is not available locally; this script does not pull images." }
 
 $random = [guid]::NewGuid().ToString("N")
+$image = "tasklab-minio-ci:wave2-$random-1"
 $accessKey = $random
 $secretKey = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
 $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) ("tasklab-evidence-" + [guid]::NewGuid().ToString("N"))
@@ -23,11 +21,31 @@ New-Item -ItemType Directory -Path $temporaryDirectory | Out-Null
 $environmentFile = Join-Path $temporaryDirectory "minio.env"
 $collectorOutput = Join-Path $temporaryDirectory "collector.stdout.log"
 $createdContainer = $false
-$names = @("MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_CONTAINER", "REQUIRE_TEST_DATABASE", "TEST_DATABASE_URL", "PG_BACKUP_CONTAINER")
+$createdImage = $false
+$names = @("MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_CONTAINER", "REQUIRE_TEST_DATABASE", "TEST_DATABASE_URL", "PG_BACKUP_CONTAINER", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_WORKSPACE", "GITHUB_ENV")
 $previous = @{}
 foreach ($name in $names) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, "Process") }
 
 try {
+    $gitPath = (Get-Command git -ErrorAction Stop).Source
+    $gitRoot = Split-Path (Split-Path $gitPath -Parent) -Parent
+    $gitBash = Join-Path $gitRoot "bin\bash.exe"
+    if (-not (Test-Path -LiteralPath $gitBash)) { throw "Git Bash was not found at $gitBash; install Git for Windows to build pinned MinIO from source." }
+    [Environment]::SetEnvironmentVariable("GITHUB_RUN_ID", "wave2-$random", "Process")
+    [Environment]::SetEnvironmentVariable("GITHUB_RUN_ATTEMPT", "1", "Process")
+    [Environment]::SetEnvironmentVariable("GITHUB_WORKSPACE", $repoRoot, "Process")
+    [Environment]::SetEnvironmentVariable("GITHUB_ENV", $null, "Process")
+    & docker image inspect $image --format "{{.Id}}" *> $null
+    if ($LASTEXITCODE -eq 0) { throw "Temporary MinIO image tag $image already exists; refusing to overwrite it." }
+    Push-Location $repoRoot
+    try {
+        & $gitBash (Join-Path $repoRoot "scripts\evidence\build-minio-ci-image.sh")
+        if ($LASTEXITCODE -ne 0) { throw "Pinned MinIO source build failed with exit code $LASTEXITCODE." }
+    } finally { Pop-Location }
+    $imageID = & docker image inspect $image --format "{{.Id}}"
+    if ($LASTEXITCODE -ne 0 -or -not $imageID) { throw "Source-built MinIO image was not created." }
+    $createdImage = $true
+
     Set-Content -LiteralPath $environmentFile -Value @(
         "MINIO_ROOT_USER=$accessKey",
         "MINIO_ROOT_PASSWORD=$secretKey"
@@ -73,6 +91,7 @@ try {
         if ($runningContainer) { & docker stop $containerName | Out-Null }
     }
     foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $previous[$name], "Process") }
+    if ($createdImage) { & docker image rm $image | Out-Null }
     if (Test-Path -LiteralPath $collectorOutput) { Remove-Item -LiteralPath $collectorOutput -Force }
     if (Test-Path -LiteralPath $environmentFile) { Remove-Item -LiteralPath $environmentFile -Force }
     if (Test-Path -LiteralPath $temporaryDirectory) { Remove-Item -LiteralPath $temporaryDirectory -Force -ErrorAction SilentlyContinue }

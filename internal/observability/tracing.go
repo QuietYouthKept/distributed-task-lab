@@ -2,6 +2,8 @@ package observability
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -22,7 +24,12 @@ func SetupTracing(ctx context.Context, serviceName string) (func(context.Context
 	}
 	opts := []otlptracehttp.Option{}
 	if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); endpoint != "" {
-		opts = append(opts, otlptracehttp.WithEndpointURL(endpoint))
+		baseURL, err := url.Parse(endpoint)
+		if err != nil || baseURL.Scheme == "" || baseURL.Host == "" {
+			return nil, fmt.Errorf("invalid OTEL_EXPORTER_OTLP_ENDPOINT")
+		}
+		baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/v1/traces"
+		opts = append(opts, otlptracehttp.WithEndpointURL(baseURL.String()))
 	}
 	exporter, err := otlptracehttp.New(ctx, opts...)
 	if err != nil {

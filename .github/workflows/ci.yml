@@ -117,26 +117,35 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Start pinned MinIO with ephemeral credentials
+      - name: Build source-pinned MinIO CI image
+        run: bash scripts/evidence/build-minio-ci-image.sh
+      - name: Start MinIO with ephemeral credentials
         shell: bash
         run: |
           set -euo pipefail
-          image='minio/minio@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3'
-          container="tasklab-minio-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          image="$MINIO_CI_IMAGE"
+          container="tasklab-minio-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           credentials_file="$(mktemp)"
           trap 'rm -f "$credentials_file"' EXIT
+          umask 077
           access_key="$(openssl rand -hex 16)"
           secret_key="$(openssl rand -hex 32)"
+          echo "::add-mask::$access_key"
+          echo "::add-mask::$secret_key"
           printf 'MINIO_ROOT_USER=%s\nMINIO_ROOT_PASSWORD=%s\n' "$access_key" "$secret_key" > "$credentials_file"
-          docker run --detach --rm --name "$container" --env-file "$credentials_file" \
-            --publish 9000:9000 --publish 9001:9001 "$image" \
+          {
+            echo "MINIO_CONTAINER_NAME=$container"
+            echo "MINIO_ENDPOINT=http://127.0.0.1:9000"
+            echo "MINIO_BUCKET=tasklab-ci-contract"
+            echo "MINIO_ACCESS_KEY=$access_key"
+            echo "MINIO_SECRET_KEY=$secret_key"
+            echo 'REQUIRE_MINIO=1'
+          } >> "$GITHUB_ENV"
+          docker run --detach --name "$container" --env-file "$credentials_file" \
+            --publish 127.0.0.1:9000:9000 --publish 127.0.0.1:9001:9001 \
+            --tmpfs /data:rw,noexec,nosuid,size=512m "$image" \
             server /data --console-address ':9001'
           rm -f "$credentials_file"
-          echo "MINIO_ENDPOINT=http://127.0.0.1:9000" >> "$GITHUB_ENV"
-          echo "MINIO_BUCKET=tasklab-ci-contract" >> "$GITHUB_ENV"
-          echo "MINIO_ACCESS_KEY=$access_key" >> "$GITHUB_ENV"
-          echo "MINIO_SECRET_KEY=$secret_key" >> "$GITHUB_ENV"
-          echo 'REQUIRE_MINIO=1' >> "$GITHUB_ENV"
           for attempt in {1..60}; do
             if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then
               exit 0
@@ -154,6 +163,34 @@ jobs:
           PG_BACKUP_CONTAINER: ${{ job.services.postgres.id }}
           RUN_BACKUP_RESTORE_DRILL: "1"
         run: go test -race ./internal/storage/postgres -run '^TestDatabaseBackupRestoreDrill$' -count=1 -v
+      - name: Collect MinIO logs on failure (redacted)
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="${MINIO_CONTAINER_NAME:-}"
+          if [[ -z "$container" ]]; then
+            echo 'MinIO container was not started; no container logs available.'
+            exit 0
+          fi
+          if docker container inspect "$container" >/dev/null 2>&1; then
+            docker logs "$container" 2>&1 | sed \
+              -e "s/${MINIO_ACCESS_KEY:-__NO_ACCESS_KEY__}/[REDACTED]/g" \
+              -e "s/${MINIO_SECRET_KEY:-__NO_SECRET_KEY__}/[REDACTED]/g"
+          else
+            echo 'MinIO container is no longer present; no container logs available.'
+          fi
+      - name: Remove this job's MinIO container and image
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${MINIO_CONTAINER_NAME:-}" ]]; then
+            docker rm --force "$MINIO_CONTAINER_NAME" >/dev/null 2>&1 || true
+          fi
+          if [[ -n "${MINIO_CI_IMAGE:-}" ]]; then
+            docker image rm "$MINIO_CI_IMAGE" >/dev/null 2>&1 || true
+          fi
 
   external-client:
     name: Public Go client consumer module
