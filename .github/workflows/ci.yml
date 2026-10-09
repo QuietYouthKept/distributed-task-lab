@@ -88,3 +88,44 @@ jobs:
           go-version-file: go.mod
           cache: true
       - run: go test -race $GO_PACKAGES -count=1
+
+  minio-contract:
+    name: MinIO S3 contract (required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Start pinned MinIO with ephemeral credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='minio/minio@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3'
+          container="tasklab-minio-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          credentials_file="$(mktemp)"
+          trap 'rm -f "$credentials_file"' EXIT
+          access_key="$(openssl rand -hex 16)"
+          secret_key="$(openssl rand -hex 32)"
+          printf 'MINIO_ROOT_USER=%s\nMINIO_ROOT_PASSWORD=%s\n' "$access_key" "$secret_key" > "$credentials_file"
+          docker run --detach --rm --name "$container" --env-file "$credentials_file" \
+            --publish 9000:9000 --publish 9001:9001 "$image" \
+            server /data --console-address ':9001'
+          rm -f "$credentials_file"
+          echo "MINIO_ENDPOINT=http://127.0.0.1:9000" >> "$GITHUB_ENV"
+          echo "MINIO_BUCKET=tasklab-ci-contract" >> "$GITHUB_ENV"
+          echo "MINIO_ACCESS_KEY=$access_key" >> "$GITHUB_ENV"
+          echo "MINIO_SECRET_KEY=$secret_key" >> "$GITHUB_ENV"
+          echo 'REQUIRE_MINIO=1' >> "$GITHUB_ENV"
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'MinIO failed to become healthy within 60 seconds' >&2
+          exit 1
+      - name: Run authenticated S3 contract under the race detector
+        run: go test -race ./internal/artifacts -run '^TestMinIOStoreContractAndConcurrentConditionalWrite$' -count=1 -v
