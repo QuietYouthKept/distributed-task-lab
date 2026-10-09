@@ -14,6 +14,7 @@ Date: 2026-10-09 (Asia/Shanghai). Scope is the implementation actually present i
 - The only fix for the later PostgreSQL Race failure was test-only: `claimOne` now has a bounded 10-second polling window and queries `clock_timestamp()` plus the earliest pending `next_run_at`; production scheduling code was not changed.
 - `scripts/dev/check-env.ps1`: Windows PowerShell preflight reports dependency status without printing credential values.
 - Follow-up CI/S3 hardening: `.github/workflows/ci.yml` now has a required MinIO contract job pinned to the locally verified image digest; credentials are generated per CI run and are never committed. `internal/artifacts/minio_integration_test.go` no longer falls back to `minioadmin`, and now checks concurrent conflicting writers, missing objects, cancellation, invalid credentials and concurrent identical writers.
+- Stable API contract hardening: `api/openapi.json` now declares the required reader/operator/admin role per `/v1` operation, Bearer authentication, 401/403/429 error responses and `Retry-After` for throttling. `TestOpenAPIV1RolesAuthErrorsAndRouteSet` checks exact path/method coverage, unique operation IDs, auth scheme, least required roles and common error envelopes; CI runs this gate explicitly.
 
 ## Not implemented or not verified
 

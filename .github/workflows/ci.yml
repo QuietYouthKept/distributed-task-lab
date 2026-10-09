@@ -27,6 +27,8 @@ jobs:
         run: go vet $GO_PACKAGES
       - name: Unit and local-safe tests
         run: go test $GO_PACKAGES -count=1 -coverprofile=coverage.out
+      - name: Stable v1 OpenAPI contract
+        run: go test ./internal/api -run '^TestOpenAPI' -count=1
       - name: Build
         run: go build $GO_PACKAGES
       - uses: actions/upload-artifact@v4
