@@ -6,9 +6,11 @@ set -euo pipefail
 readonly MINIO_MODULE_VERSION='v0.0.0-20251015172955-9e49d5e7a648'
 readonly MINIO_MODULE_SUM='h1:6TdolSCLSs2nwm8i0PpWDqf9iX2Ty9WQK8wmr7dCnUM='
 readonly MINIO_MOD_SUM='h1:yCWDkwWO9IWpGsT4mreDDN/B/QVmK2zC666uInRAcqE='
+readonly MINIO_LICENSE_SHA256='0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0'
 readonly MINIO_SOURCE_COMMIT='9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a'
 readonly MINIO_SOURCE_TAG='RELEASE.2025-10-15T17-29-55Z'
 readonly MINIO_REPOSITORY='github.com/minio/minio'
+readonly MINIO_LICENSE_URL="https://raw.githubusercontent.com/minio/minio/${MINIO_SOURCE_COMMIT}/LICENSE"
 
 runner_temp="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 build_root="$(mktemp -d "${runner_temp%/}/tasklab-minio-build.XXXXXX")"
@@ -20,31 +22,58 @@ export CGO_ENABLED=0
 export GOOS=linux
 export GOARCH=amd64
 export GOTOOLCHAIN=go1.26.9
-module_info="$(go mod download -json "${MINIO_REPOSITORY}@${MINIO_MODULE_VERSION}")"
+if ! module_info="$(go mod download -json "${MINIO_REPOSITORY}@${MINIO_MODULE_VERSION}" 2>&1)"; then
+  printf 'Failed to download pinned MinIO module metadata/source:\n%s\n' "$module_info" >&2
+  exit 1
+fi
 module_dir="$(printf '%s\n' "$module_info" | sed -n 's/^[[:space:]]*"Dir": "\(.*\)",$/\1/p')"
 module_sum="$(printf '%s\n' "$module_info" | sed -n 's/^[[:space:]]*"Sum": "\(.*\)",$/\1/p')"
-mod_sum="$(printf '%s\n' "$module_info" | sed -n 's/^[[:space:]]*"GoModSum": "\(.*\)"$/\1/p')"
-test -n "$module_dir"
-test "$module_sum" = "$MINIO_MODULE_SUM"
-test "$mod_sum" = "$MINIO_MOD_SUM"
+mod_sum="$(printf '%s\n' "$module_info" | sed -n 's/^[[:space:]]*"GoModSum": "\(.*\)",\{0,1\}$/\1/p')"
+if [[ -z "$module_dir" ]]; then
+  echo 'Pinned MinIO module download did not return a module directory.' >&2
+  printf '%s\n' "$module_info" >&2
+  exit 1
+fi
+if [[ "$module_sum" != "$MINIO_MODULE_SUM" ]]; then
+  printf 'Pinned MinIO module checksum mismatch: expected %s, got %s\n' "$MINIO_MODULE_SUM" "${module_sum:-<empty>}" >&2
+  exit 1
+fi
+if [[ "$mod_sum" != "$MINIO_MOD_SUM" ]]; then
+  printf 'Pinned MinIO go.mod checksum mismatch: expected %s, got %s\n' "$MINIO_MOD_SUM" "${mod_sum:-<empty>}" >&2
+  exit 1
+fi
 if command -v cygpath >/dev/null 2>&1; then
   module_dir="$(cygpath --unix "$module_dir")"
 fi
-test -f "$module_dir/LICENSE"
+license_file="$build_root/context/LICENSE"
+if ! curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+  "$MINIO_LICENSE_URL" --output "$license_file"; then
+  printf 'Failed to fetch the upstream MinIO license at pinned commit %s.\n' "$MINIO_SOURCE_COMMIT" >&2
+  exit 1
+fi
+license_sum="$(sha256sum "$license_file" | cut -d ' ' -f 1)"
+if [[ "$license_sum" != "$MINIO_LICENSE_SHA256" ]]; then
+  printf 'Pinned MinIO LICENSE checksum mismatch: expected %s, got %s\n' "$MINIO_LICENSE_SHA256" "$license_sum" >&2
+  exit 1
+fi
 minio_binary="$GOBIN/minio"
 (
   cd "$module_dir"
   go build -trimpath -buildvcs=false -o "$minio_binary" .
 )
-test -f "$minio_binary"
+if [[ ! -f "$minio_binary" ]]; then
+  echo 'MinIO source build completed without producing the expected binary.' >&2
+  exit 1
+fi
 cp "$minio_binary" "$build_root/context/minio"
-cp "$module_dir/LICENSE" "$build_root/context/LICENSE"
 
 echo "MinIO upstream source tag: $MINIO_SOURCE_TAG"
 echo "MinIO upstream commit: $MINIO_SOURCE_COMMIT"
 echo "MinIO Go module version: $MINIO_MODULE_VERSION"
 echo "MinIO Go module checksum: $module_sum"
 echo "MinIO go.mod checksum: $mod_sum"
+echo "MinIO upstream LICENSE URL: $MINIO_LICENSE_URL"
+echo "MinIO upstream LICENSE SHA256: $license_sum"
 echo "License: AGPL-3.0 (upstream LICENSE included in image)"
 go version
 go version -m "$minio_binary" | sed -n \

@@ -58,3 +58,19 @@ Job 保留随机临时 MinIO root credentials，以权限受限临时文件传�
 - Govulncheck `./...`：0 项可达漏洞；保留上述 1 项不可达且无修复版本的模块 Advisory。
 
 GitHub Actions 远程复验尚未发生。需将本地修复 Commit 推送到 PR 分支后再检查新的 CI 与 Security Run；旧失败 Run 必须继续保留作为基线证据。
+
+## 2026-10-10 远程复验跟进（Run 37960805439）
+
+此前修复已推送到 `360014b85f42e897f3e3bf17e0dc2ec84f961831`。该 SHA 的 Security Run 通过；CI Run 保留失败，失败项为 MinIO 源码构建及独立 Go Client 模块，其他质量、PostgreSQL Integration、全仓 Race 检查通过。
+
+### 两项失败与修复
+
+- MinIO Job 的退出原因不是 Registry 拒绝，也不是源码依赖网络错误。`go mod download -json` 的 `GoModSum` 字段后带逗号，而解析表达式只接受行尾引号，解析结果为空后 `test` 直接退出且没有诊断。这解释了该步骤不到一秒退出、没有构建日志。脚本现在允许可选尾逗号，并对下载失败、模块目录缺失、两项 checksum 不匹配及许可证获取失败输出明确且不含凭据的诊断。
+- 为避免依赖 Go Module zip 是否包含许可证文件，构建脚本从与模块一致的不可变 MinIO commit 获取官方许可证，并校验固定 SHA-256 `0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0` 后纳入临时镜像。上游固定源：[MinIO LICENSE at commit `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a`](https://raw.githubusercontent.com/minio/minio/9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a/LICENSE)。
+- Public Go client Job 的独立模块 `test/external-client/go.mod` 仍声明 Go 1.25.0，但 replace 的根模块要求 Go 1.26.9；已将该模块的 Go 版本同步至 1.26.9，无生产 API/运行逻辑变更。
+
+### 本地跟进验证与状态
+
+- `go -C test/external-client test -race ./... -count=1 -v`：PASS，Exit 0（Go 自动切换到 1.26.9）。
+- 在全新 `golang:1.26.9-bookworm` 容器中执行修复后的 Linux 构建脚本：源码及 go.mod checksums、许可证 SHA-256 均匹配，MinIO 上游源码编译成功，输出二进制 SHA-256 为 `5d0789d5af3cc685a4aad5379176fa2755a821fa3d52050ef93293bd6691828a`。该复现 stub 了最后的 Docker CLI build/inspect 调用，因此真实 Docker 镜像层构建与 MinIO 启动仍待远程 Actions 验证。
+- Run `37960805439` 和关联 Security Run 均保留原样；此次本地修复尚未形成新 Evidence，不继承 Wave 2 的 14/14 结果。远程修复状态待新 Commit 推送与 Actions 重跑确认。
