@@ -128,14 +128,15 @@ type ingressBucket struct {
 }
 
 type ingressLimiter struct {
-	mu      sync.Mutex
-	rate    float64
-	burst   float64
-	buckets map[string]ingressBucket
+	mu         sync.Mutex
+	rate       float64
+	burst      float64
+	maxBuckets int
+	buckets    map[string]ingressBucket
 }
 
 func newIngressLimiter(rate float64, burst int) *ingressLimiter {
-	return &ingressLimiter{rate: rate, burst: float64(burst), buckets: make(map[string]ingressBucket)}
+	return &ingressLimiter{rate: rate, burst: float64(burst), maxBuckets: 10000, buckets: make(map[string]ingressBucket)}
 }
 
 func (l *ingressLimiter) middleware(next http.Handler) http.Handler {
@@ -161,8 +162,18 @@ func (l *ingressLimiter) allow(subject string, now time.Time) (bool, int) {
 	bucket, exists := l.buckets[subject]
 	if !exists {
 		// Bound memory even when an issuer has a large or compromised set of
-		// authenticated subjects. New principals are rejected while full.
-		if len(l.buckets) >= 10000 {
+		// authenticated subjects. Reclaim only buckets whose tokens would
+		// already have fully refilled, so an idle principal does not receive
+		// more burst capacity than the normal token-bucket policy allows.
+		if len(l.buckets) >= l.maxBuckets {
+			for key, inactive := range l.buckets {
+				elapsed := now.Sub(inactive.updated).Seconds()
+				if elapsed > 0 && inactive.tokens+elapsed*l.rate >= l.burst {
+					delete(l.buckets, key)
+				}
+			}
+		}
+		if len(l.buckets) >= l.maxBuckets {
 			return false, 1
 		}
 		bucket = ingressBucket{tokens: l.burst, updated: now}

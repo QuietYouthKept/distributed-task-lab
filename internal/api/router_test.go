@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/api/handlers"
 	"github.com/fantasticyi/distributed-task-lab/internal/auth"
@@ -137,6 +138,29 @@ func TestIngressRateLimitIsBoundToVerifiedPrincipal(t *testing.T) {
 	other.ServeHTTP(w, r)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("different principal should have an independent bucket; status=%d", w.Code)
+	}
+}
+
+func TestIngressLimiterReclaimsOnlyFullyRefilledIdleBuckets(t *testing.T) {
+	limiter := newIngressLimiter(1, 1)
+	limiter.maxBuckets = 1
+	start := time.Unix(100, 0)
+	if allowed, _ := limiter.allow("idle-principal", start); !allowed {
+		t.Fatal("first request should consume the initial token")
+	}
+
+	if allowed, _ := limiter.allow("new-principal", start.Add(time.Second-time.Nanosecond)); allowed {
+		t.Fatal("a bucket must not be evicted before its token has fully refilled")
+	}
+	if len(limiter.buckets) != 1 {
+		t.Fatalf("bucket count after premature request = %d, want 1", len(limiter.buckets))
+	}
+
+	if allowed, retryAfter := limiter.allow("new-principal", start.Add(time.Second)); !allowed {
+		t.Fatalf("fully refilled idle bucket should be reclaimable; retry_after=%d", retryAfter)
+	}
+	if len(limiter.buckets) != 1 {
+		t.Fatalf("bucket count after reclamation = %d, want 1", len(limiter.buckets))
 	}
 }
 

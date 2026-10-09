@@ -33,3 +33,9 @@ The 100,000-row keyset traversal completed 201 pages with zero duplicates; local
 ## Other packages
 
 Packages A, C, D and the remaining parts of E are not yet accepted. In particular, the dual-Worker recovery is still an independent host-process test, not API/Worker containers; response-loss via an S3 network proxy, conflicting-content process recovery, cursor rotation, cluster rate-limit semantics, full trace/alert firing, SBOM/image scan and release smoke remain unverified. Their exact gaps and next actions are in `WAVE3_REMAINING_GAPS.md`; no production/staging claims are inferred from these local results.
+
+## Package C — local rate-limit lifecycle and policy proposal (in progress)
+
+Review confirmed that `internal/api/router.go` kept a hard-bounded map of 10,000 verified Principal buckets but never evicted any. Once filled, even inactive identities remained permanently unable to obtain a bucket until process restart. The current change reclaims only a bucket whose available tokens would already have reached the configured burst under normal refill. `TestIngressLimiterReclaimsOnlyFullyRefilledIdleBuckets` checks both just-before-refill rejection and exact-refill reclamation; `go test -race ./internal/api -run '^TestIngress' -count=100` passes.
+
+This does not make quotas cluster-wide. `docs/adr/ADR-0006-shared-ingress-limits-and-cursor-key-rotation.md` records the current local-guard boundary and a proposed decision framework for PostgreSQL/Redis/gateway quotas, outage policy, cursor TTL, key IDs and bounded rotation overlap. No cursor format or production setting has changed. Shared limits and cursor rotation remain NOT IMPLEMENTED/NOT VERIFIED pending owner decisions and integration evidence.

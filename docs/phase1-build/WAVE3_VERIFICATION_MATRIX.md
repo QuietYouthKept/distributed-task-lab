@@ -16,9 +16,10 @@
 | Provider + side-effect full suite | Included in full unit/integration and full Race at `9b360f5` | PASS | Local targeted Race ×10 also passed before commit. Contract only, no real provider. |
 | Wave 3 remote CI | GitHub CI Run `37963245838` at `9b360f5` | PASS, all 5 jobs | Includes MinIO real image/test path; this is remote CI, not staging. |
 | Wave 3 security CI | GitHub Security Run `37963245883` at `9b360f5` | PASS: govulncheck, CodeQL, Secret Scan; Scorecard SKIP | Scorecard skip is an expected PR-event condition. |
+| Local ingress bucket lifecycle | `go test -race ./internal/api -run '^TestIngress' -count=100` | PASS | Working-tree verification of capacity recovery only; process-local overload guard semantics are preserved. Clean commit/Evidence run is pending. |
 | Cross-container ArtifactStore crash/recovery and Put response loss | Compose topology and fault injection | NOT VERIFIED | Existing remote CI recovery is independent host processes, not API/Worker containers or response-loss proxy. |
 | Real Provider/Sandbox | Provider-specific contract and reconciliation | NOT VERIFIED | No selected provider, credentials, sandbox, or reconciliation authority. |
-| Cross-instance rate limit / cursor key rotation | shared state and rotation policy | NOT VERIFIED | Must not change production semantics without ADR/config approval. |
+| Cross-instance rate limit / cursor key rotation | ADR-0006 proposal; no shared implementation/key-ring behavior | NOT IMPLEMENTED / NOT VERIFIED | Must not change production semantics without owner-approved outage/quota/TTL/overlap policy. |
 | Full distributed trace / alert firing | Collector and operational alert | NOT VERIFIED | Existing local OTLP receiver does not verify API-to-worker continuity or production alert closure. |
 | SBOM / image vulnerability scan / release smoke | supply-chain and deployment evidence | NOT VERIFIED | Existing CI CodeQL/govulncheck do not substitute for container image scanning/SBOM. |
 

@@ -18,6 +18,7 @@
 - Complete OpenAPI request/response schema drift checks beyond route, auth, errors and local reference validity.
 - Cursor HMAC rotation needs key IDs, bounded old-key acceptance windows, TTL and compatibility decision. Do not enable indefinite historical key acceptance or change production defaults before an owner-approved ADR.
 - Current ingress rate limiting is per process. Decide global quota semantics, shared store, partition behavior, Retry-After and whether local overload protection remains layered; no shared implementation is yet enabled.
+- Process-local limiter bucket reclamation now removes only inactive buckets whose tokens would already have fully refilled, preventing the 10,000-subject capacity from staying saturated until restart. This does not verify cross-instance fairness or outage policy.
 - Production IdP/JWKS operations, production role mapping, and external issuer rotation remain unverified (`EXTERNAL_IDP_NOT_VERIFIED`).
 
 ## P1 — observability and operations
