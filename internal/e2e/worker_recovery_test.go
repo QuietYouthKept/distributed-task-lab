@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -153,9 +154,10 @@ func TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash(t *testing.T) {
 	tx, owner := lockClaimedTask(t, ctx, db, created.ID, 30*time.Second)
 	defer func() { _ = tx.Rollback() }()
 	claimed := getTask(t, ctx, apiURL, created.ID)
-	if claimed.Status != domain.TaskStatusRunning || claimed.LeasedBy == nil || *claimed.LeasedBy != owner {
+	if claimed.Status != domain.TaskStatusRunning || claimed.LeasedBy == nil || *claimed.LeasedBy != owner || claimed.LeaseVersion < 1 {
 		t.Fatalf("API task state does not match claimed owner: status=%s owner=%v expected=%s", claimed.Status, claimed.LeasedBy, owner)
 	}
+	originalLeaseVersion := claimed.LeaseVersion
 
 	identity := fmt.Sprintf("e2e-dataset-v1|deterministic-local|e2e-prompt-v1|%s|0|%d", runID, cases)
 	fingerprint := sha256.Sum256([]byte(identity))
@@ -198,7 +200,11 @@ func TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash(t *testing.T) {
 	if stored.RunID != runID || stored.Fingerprint != hex.EncodeToString(fingerprint[:]) || stored.CaseEnd != cases {
 		t.Fatalf("recovered artifact identity mismatch: run_id=%q case_end=%d", stored.RunID, stored.CaseEnd)
 	}
-	t.Logf("PASS: API-created task recovered by the surviving worker after owner %s was killed after shared Put and before ACK; attempt=%d lease_version=%d", owner, completed.Attempt, completed.LeaseVersion)
+	staleErr := postgres.NewPostgresQueue(db).MarkSuccess(ctx, created.ID, owner, originalLeaseVersion, domain.TaskResult{Summary: "stale owner must be fenced"})
+	if !errors.Is(staleErr, domain.ErrTaskNotClaimed) {
+		t.Fatalf("stale owner generation write returned %v, want ErrTaskNotClaimed", staleErr)
+	}
+	t.Logf("PASS: API-created task recovered by the surviving worker after owner %s was killed after shared Put and before ACK; attempt=%d lease_version=%d; stale generation %d rejected", owner, completed.Attempt, completed.LeaseVersion, originalLeaseVersion)
 }
 
 func buildBinary(t *testing.T, root, directory, name, packagePath string) string {
