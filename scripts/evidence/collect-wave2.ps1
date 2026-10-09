@@ -64,8 +64,38 @@ $checks += Invoke-RecordedCheck "full-race" "go" @("test", "-race", "./cmd/...",
 $checks += Invoke-RecordedCheck "postgres-race-five" "go" @("test", "-race", "./internal/storage/postgres", "-count=5") $requiredDB $logDir
 $checks += Invoke-RecordedCheck "retry-backoff-race-twenty" "go" @("test", "-race", "./internal/storage/postgres", "-run", "^TestRetryBackoff$", "-count=20", "-v") $requiredDB $logDir
 $checks += Invoke-RecordedCheck "failurelab" "go" @("run", "./cmd/failurelab") @{} $logDir
+$existingChaosRuns = @((Get-ChildItem -LiteralPath (Join-Path $repoRoot "benchmarks\chaos") -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }))
 $checks += Invoke-RecordedCheck "chaosmatrix" "go" @("run", "./cmd/chaosmatrix") @{} $logDir
 $checks += Invoke-RecordedCheck "vet" "go" @("vet", "./...") @{} $logDir
+
+$chaosSource = $null
+$chaosFiles = @()
+$chaosState = "NOT VERIFIED"
+$chaosRunID = $null
+$newChaosRuns = @((Get-ChildItem -LiteralPath (Join-Path $repoRoot "benchmarks\chaos") -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notin $existingChaosRuns } | Sort-Object LastWriteTimeUtc))
+if ($newChaosRuns.Count -eq 1) {
+    $chaosSource = $newChaosRuns[0].FullName
+    $chaosRunID = $newChaosRuns[0].Name
+    $chaosTarget = Join-Path (Join-Path $runRoot "artifacts\chaosmatrix") $chaosRunID
+    New-Item -ItemType Directory -Path $chaosTarget -Force | Out-Null
+    foreach ($sourceFile in Get-ChildItem -LiteralPath $chaosSource -File) {
+        $targetFile = Join-Path $chaosTarget $sourceFile.Name
+        Copy-Item -LiteralPath $sourceFile.FullName -Destination $targetFile
+        $chaosFiles += [ordered]@{
+            file = $targetFile.Substring($repoRoot.Length + 1).Replace('\', '/')
+            sha256 = (Get-FileHash -LiteralPath $targetFile -Algorithm SHA256).Hash.ToLowerInvariant()
+            bytes = (Get-Item -LiteralPath $targetFile).Length
+        }
+    }
+    $chaosSummaryPath = Join-Path $chaosTarget "summary.json"
+    if (Test-Path -LiteralPath $chaosSummaryPath) {
+        $chaosSummary = Get-Content -LiteralPath $chaosSummaryPath -Raw | ConvertFrom-Json
+        $chaosScenarios = @($chaosSummary.PSObject.Properties | ForEach-Object { $_.Value })
+        if ($chaosScenarios.Count -gt 0 -and @($chaosScenarios | Where-Object { $_.Failed -ne 0 -or $_.Passed -ne $_.Trials }).Count -eq 0) { $chaosState = "PASS" } else { $chaosState = "FAIL" }
+    } else { $chaosState = "FAIL" }
+} elseif ($newChaosRuns.Count -gt 1) {
+    $chaosState = "NOT VERIFIED"
+}
 
 $minioRequired = @("MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY")
 $missingMinio = @($minioRequired | Where-Object { -not [Environment]::GetEnvironmentVariable($_, "Process") })
@@ -136,6 +166,7 @@ $manifest = [ordered]@{
     configuration_source_sha256 = $configHash
     test_fixture_commit_sha = $commit
     checks = $checks
+    chaos_matrix = [ordered]@{ status = $chaosState; run_id = $chaosRunID; files = $chaosFiles }
     result = if ($failed -gt 0) { "FAIL" } elseif ($unverified -gt 0 -or $otherDirtyAfter.Count -gt 0) { "NOT VERIFIED" } else { "PASS" }
     limitations = @("This run does not by itself prove dual-worker E2E, external IdP/provider, OTLP receipt, DR, or production readiness.", "Credential values are never recorded.")
 }
