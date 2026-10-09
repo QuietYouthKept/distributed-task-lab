@@ -11,6 +11,7 @@ Date: 2026-10-09 (Asia/Shanghai). Scope is the implementation actually present i
 - `internal/worker/handlers/strategy_replay.go`: RAG replay's raw report is stored through Store and emits a logical `artifact://` reference.
 - `internal/worker/handlers/composite.go`, `cmd/worker/main.go`: deterministic Eval, Gateway Eval, RAG and Replay receive a common Store when S3 is explicitly selected. Startup verifies the bucket. Production admission remains fail-closed.
 - Tests cover Store logical keys with prefixes, shared Store reuse across handler instances, Gateway per-case receipt recovery, and rejection of an Eval object whose bytes do not match its immutable execution identity.
+- The only fix for the later PostgreSQL Race failure was test-only: `claimOne` now has a bounded 10-second polling window and queries `clock_timestamp()` plus the earliest pending `next_run_at`; production scheduling code was not changed.
 - `scripts/dev/check-env.ps1`: Windows PowerShell preflight reports dependency status without printing credential values.
 
 ## Not implemented or not verified

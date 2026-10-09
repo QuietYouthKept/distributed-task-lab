@@ -20,5 +20,6 @@ Environment observed: Windows AMD64, Go 1.26.6, Docker Linux Engine; PostgreSQL 
 | OTLP remote trace / backup restore / remote CI | NOT VERIFIED | Not run | No external receiver or recovery drill evidence. |
 | `git diff --check` | PASS | Run after code changes | Final check will be repeated before commit. |
 | Clean-commit Evidence run | NOT VERIFIED | `evidence/phase1/runs/wave2-20261009T093214275Z-0b73ce734dcd/manifest.json` and 14 raw stdout/stderr logs | Commit `0b73ce7`; 7 executed commands Exit 0; MinIO contract not run due missing env. Evidence Commit `85cf764`. |
+| Later clean-commit regression run | FAIL | `evidence/phase1/runs/wave2-20261009T094212634Z-fcd9bf97ea83/manifest.json` | `TestMarkFailureWrongWorker` exposed an instantaneous DB-clock assumption in `claimOne`; the original run and raw logs/artifacts are preserved. Test-only bounded DB-clock fix is `583e019`; PostgreSQL Race ×5, RetryBackoff ×20, full unit and full Race passed after the fix. |
 
 Historical Chaos failures and Phase 0 evidence are immutable and are not replaced by the current run.
