@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -52,6 +53,11 @@ func TestGatewayLLMEvalWritesReceiptsAndReusesFinalArtifact(t *testing.T) {
 	if first.Metrics["passed"] != 3 || first.Metrics["cost_usd"] != 0.03 {
 		t.Fatalf("unexpected metrics %#v", first.Metrics)
 	}
+	manifestKey := strings.TrimPrefix(first.Artifacts["eval_manifest_uri"], "artifact://")
+	firstManifest, _, err := store.Get(context.Background(), manifestKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	secondWorker := *h
 	second, err := secondWorker.Run(context.Background(), gatewayPayload(0, 3))
 	if err != nil {
@@ -63,10 +69,13 @@ func TestGatewayLLMEvalWritesReceiptsAndReusesFinalArtifact(t *testing.T) {
 	if gotCalls != 3 {
 		t.Fatalf("gateway calls = %d, want 3 after reuse", gotCalls)
 	}
-	manifestKey := strings.TrimPrefix(second.Artifacts["eval_manifest_uri"], "artifact://")
-	manifest, _, err := h.store.Get(context.Background(), manifestKey)
+	secondManifestKey := strings.TrimPrefix(second.Artifacts["eval_manifest_uri"], "artifact://")
+	manifest, _, err := h.store.Get(context.Background(), secondManifestKey)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if manifestKey != secondManifestKey || !bytes.Equal(firstManifest, manifest) {
+		t.Fatal("replaying persisted receipts changed the immutable manifest")
 	}
 	if strings.Contains(string(manifest), "test-secret") {
 		t.Fatal("gateway API key leaked into artifact")

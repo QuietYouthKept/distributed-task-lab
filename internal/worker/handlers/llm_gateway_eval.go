@@ -211,7 +211,7 @@ func putJSONArtifact(ctx context.Context, store artifacts.Store, key string, val
 }
 func currentCost(receipts map[int]evalCaseReceipt) float64 {
 	total := 0.0
-	for _, r := range receipts {
+	for _, r := range orderedReceipts(receipts) {
 		total += r.CostUSD
 	}
 	return total

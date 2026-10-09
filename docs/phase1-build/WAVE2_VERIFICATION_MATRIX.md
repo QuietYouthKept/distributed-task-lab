@@ -35,5 +35,7 @@ Environment observed: Windows AMD64, Go 1.26.6, Docker Linux Engine; PostgreSQL 
 | Chaos Matrix after correction | PASS | `REQUIRE_TEST_DATABASE=1 go run ./cmd/chaosmatrix`; `benchmarks/chaos/20261009T115558Z` | Exit 0; 6 scenarios × 30/30 locally. Recovery percentiles are local harness measurements, not production SLOs. |
 | Vet/format/whitespace after correction | PASS | `go vet ./...`; `gofmt -l cmd internal pkg`; `git diff --check` | Exit 0; gofmt produced no paths. |
 | Latest clean-start Evidence | NOT VERIFIED | `evidence/phase1/runs/wave2-20261009T115734795Z-568c45d5ad66/manifest.json` | Implementation `568c45d`; seven executed commands Exit 0; MinIO contract not run because required variables were absent. Log/artifact hashes verified; Evidence Commit `34e2570`. |
+| Latest API-contract Evidence attempt | FAIL | `evidence/phase1/runs/wave2-20261009T121704030Z-8d389ea2900b/manifest.json` | Full Race found float aggregation order could change a gateway manifest on persisted-receipt replay; other seven commands passed, including real MinIO. Failure preserved in Evidence Commit `1c73c3d`. |
+| Gateway manifest determinism regression | PASS | `go test -race ./internal/worker/handlers -run '^TestGatewayLLMEvalWritesReceiptsAndReusesFinalArtifact$' -count=20 -v` | 20/20 after sorting receipts before float aggregation and asserting identical immutable manifest bytes. Full required suite and new clean Evidence pending. |
 
 Historical Chaos failures and Phase 0 evidence are immutable and are not replaced by the current run.

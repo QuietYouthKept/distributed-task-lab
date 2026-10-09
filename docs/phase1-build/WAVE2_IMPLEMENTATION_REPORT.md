@@ -15,6 +15,7 @@ Date: 2026-10-09 (Asia/Shanghai). Scope is the implementation actually present i
 - `scripts/dev/check-env.ps1`: Windows PowerShell preflight reports dependency status without printing credential values.
 - Follow-up CI/S3 hardening: `.github/workflows/ci.yml` now has a required MinIO contract job pinned to the locally verified image digest; credentials are generated per CI run and are never committed. `internal/artifacts/minio_integration_test.go` no longer falls back to `minioadmin`, and now checks concurrent conflicting writers, missing objects, cancellation, invalid credentials and concurrent identical writers.
 - Stable API contract hardening: `api/openapi.json` now declares the required reader/operator/admin role per `/v1` operation, Bearer authentication, 401/403/429 error responses and `Retry-After` for throttling. `TestOpenAPIV1RolesAuthErrorsAndRouteSet` checks exact path/method coverage, unique operation IDs, auth scheme, least required roles and common error envelopes; CI runs this gate explicitly.
+- Gateway eval determinism: receipt summaries and cost caps now aggregate case-ID-sorted receipts, so Go map iteration cannot change float rounding or immutable output bytes. The replay test compares the first and subsequent manifest byte-for-byte. The issue was first observed in full Race Evidence run `wave2-20261009T121704030Z-8d389ea2900b`; fix verification so far is targeted Race ×20 only.
 
 ## Not implemented or not verified
 
