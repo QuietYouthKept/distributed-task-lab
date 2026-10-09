@@ -2,7 +2,7 @@
 
 ## P0 — before any production Worker admission
 
-- Development-profile process E2E now proves an API-created deterministic Eval task is written to shared MinIO, the owner is killed after Put while ACK is blocked, and the second Worker reclaims after lease expiry and reuses the artifact. Remaining: stale-generation rejection after reclaim, S3/ACK response-loss proxy, conflicting-content recovery, cross-container topology, and production-approved execution types; this is not a production Worker acceptance.
+- Development-profile process E2E proves an API-created deterministic Eval task is written to shared MinIO, the owner is killed after Put while ACK is blocked, and the second Worker reclaims after lease expiry and reuses the artifact. Remaining: stale-generation rejection after reclaim, S3/ACK response-loss proxy, conflicting-content recovery, cross-container topology, and production-approved execution types; this is not a production Worker acceptance.
 - Gateway receipts need concurrent duplicate-case integration semantics verified against the provider's idempotency behavior; no payment/notification sandbox or reconciliation authority was supplied.
 - Production Worker is intentionally fail-closed. No production task type is approved by the execution allowlist.
 
@@ -11,7 +11,7 @@
 - Required MinIO CI service is configured with a pinned digest and ephemeral credentials; remote Actions has not been run.
 - A separate Go consumer module now verifies the public client surface locally and in CI. Full generated OpenAPI drift enforcement remains outstanding.
 - Cross-process API rate-limit behavior and cursor key rotation are outstanding. A real PostgreSQL 100k-row keyset benchmark now exists; its unfiltered middle-cursor plan uses a bounded index range, while the owner-filtered cursor plan still removes about 9.5k candidate rows on the recorded fixture. Reassess that plan against representative owner distributions before making latency/SLO claims.
-- A local OTLP/HTTP receiver now decodes and verifies exported spans; a staging collector assertion and alert firing remain outstanding. Basic structured-log redaction for configured credentials/common credential forms is tested locally, but staging log-sink verification and arbitrary unregistered/opaque secret handling remain unverified. A local PostgreSQL least-privilege integration test now verifies a restricted runtime role, but production/hosted role provisioning remains unverified; backup/restore rehearsal remains outstanding.
+- A local OTLP/HTTP receiver now decodes and verifies exported spans; a staging collector assertion and alert firing remain outstanding. Basic structured-log redaction for configured credentials/common credential forms is tested locally, but staging log-sink verification and arbitrary unregistered/opaque secret handling remain unverified. A local PostgreSQL least-privilege integration test verifies a restricted runtime role, but production/hosted role provisioning remains unverified. A local custom-format PostgreSQL dump/restore rehearsal against disposable databases and a temporary MinIO artifact store passed; production backup automation, encrypted offsite retention, scheduled restore cadence, and measured RPO/RTO remain outstanding.
 - Standardized E2E dependency lifecycle scripts beyond the environment preflight are incomplete.
 
 ## P2 — operational readiness
@@ -22,5 +22,5 @@
 
 ## Execution-context notes
 
-- Earlier collector runs without MinIO variables remain immutable as NOT VERIFIED. A later clean run used newly generated one-run credentials against a temporary pinned MinIO container and passed the authenticated adapter contract; this still does not verify dual-worker E2E or production S3.
+- Earlier collector runs without MinIO variables remain immutable as NOT VERIFIED. The latest clean run used newly generated one-run credentials against a temporary pinned MinIO container and passed the authenticated adapter contract, API/two-Worker crash recovery, and database-restore/artifact-reference check. This verifies the local development path only, not production S3 or cloud disaster recovery.
 - Existing PostgreSQL/MinIO and unrelated strategyops containers are shared environment resources. Do not stop, reconfigure, or remove them as part of this work.
