@@ -11,11 +11,11 @@ The code currently has local OIDC/JWKS and PostgreSQL authorization/audit tests.
 | Component | Current status |
 |---|---|
 | PostgreSQL | Real PostgreSQL 16 integration and Race tests pass on host port 5433. |
-| MinIO | Two endpoints health-checked (Windows 9000 and Docker 19000); authenticated contract was not run because credentials were absent from the execution process. |
+| MinIO | Authenticated adapter contract passed under Race against a temporary pinned-image container with one-run random credentials (Evidence `wave2-20261009T123051207Z-0e8f75573f67`); not a dual-worker run or production-vendor/TLS validation. |
 | API | Real code and local contract tests; not launched as a container for Wave 2 E2E. |
 | Worker A / B | Handler-level shared Store tests use independent handler instances; no two independent worker processes were run. |
 | Network | `tasklab-wave2-net` exists; no new resources or unrelated containers were altered. |
-| Trace | Existing instrumentation is not proof of a received OTLP trace; no external receiver assertion was performed. |
+| Trace | A local OTLP/HTTP receiver test decodes exported protobuf and verifies service/span identity under Race. No staging collector or full API-to-worker trace was verified. |
 
 ## Failure chain not yet demonstrated
 

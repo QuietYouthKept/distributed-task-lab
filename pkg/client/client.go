@@ -10,8 +10,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-
-	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 )
 
 const maxResponseBytes = 1 << 20
@@ -91,11 +89,11 @@ func (c *Client) CreateTaskContext(ctx context.Context, req CreateTaskRequest) (
 	return &result, nil
 }
 
-func (c *Client) GetTask(id string) (*domain.Task, error) {
+func (c *Client) GetTask(id string) (*Task, error) {
 	return c.GetTaskContext(context.Background(), id)
 }
 
-func (c *Client) GetTaskContext(ctx context.Context, id string) (*domain.Task, error) {
+func (c *Client) GetTaskContext(ctx context.Context, id string) (*Task, error) {
 	if id == "" {
 		return nil, fmt.Errorf("client: task id is required")
 	}
@@ -108,18 +106,18 @@ func (c *Client) GetTaskContext(ctx context.Context, id string) (*domain.Task, e
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeAPIError(resp)
 	}
-	var task domain.Task
+	var task Task
 	if err := decodeBounded(resp.Body, &task); err != nil {
 		return nil, fmt.Errorf("client: decode task: %w", err)
 	}
 	return &task, nil
 }
 
-func (c *Client) ListTasks(status *domain.TaskStatus) ([]domain.Task, error) {
+func (c *Client) ListTasks(status *TaskStatus) ([]Task, error) {
 	return c.ListTasksContext(context.Background(), status)
 }
 
-func (c *Client) ListTasksContext(ctx context.Context, status *domain.TaskStatus) ([]domain.Task, error) {
+func (c *Client) ListTasksContext(ctx context.Context, status *TaskStatus) ([]Task, error) {
 	page, err := c.ListTasksPageContext(ctx, TaskPageOptions{Status: status, PageSize: 100})
 	if err != nil {
 		return nil, err
@@ -230,31 +228,31 @@ func decodeAPIError(resp *http.Response) error {
 
 // CreateTaskRequest is the request body for creating a task.
 type CreateTaskRequest struct {
-	Type              domain.TaskType            `json:"type"`
-	Payload           domain.TaskPayloadEnvelope `json:"payload"`
-	Priority          int                        `json:"priority,omitempty"`
-	MaxAttempts       int                        `json:"max_attempts,omitempty"`
-	TimeoutSeconds    int                        `json:"timeout_seconds,omitempty"`
-	RetryDelaySeconds int                        `json:"retry_delay_seconds,omitempty"`
-	IdempotencyKey    *string                    `json:"idempotency_key,omitempty"`
+	Type              TaskType            `json:"type"`
+	Payload           TaskPayloadEnvelope `json:"payload"`
+	Priority          int                 `json:"priority,omitempty"`
+	MaxAttempts       int                 `json:"max_attempts,omitempty"`
+	TimeoutSeconds    int                 `json:"timeout_seconds,omitempty"`
+	RetryDelaySeconds int                 `json:"retry_delay_seconds,omitempty"`
+	IdempotencyKey    *string             `json:"idempotency_key,omitempty"`
 }
 
 // CreateTaskResponse is the response from creating a task.
 type CreateTaskResponse struct {
-	ID     string            `json:"id"`
-	Status domain.TaskStatus `json:"status"`
+	ID     string     `json:"id"`
+	Status TaskStatus `json:"status"`
 }
 
 type TaskPageOptions struct {
-	Status   *domain.TaskStatus
-	Type     *domain.TaskType
+	Status   *TaskStatus
+	Type     *TaskType
 	Queue    string
 	PageSize int
 	Cursor   string
 }
 
 type TaskPage struct {
-	Tasks      []domain.Task `json:"tasks"`
-	NextCursor string        `json:"next_cursor"`
-	HasMore    bool          `json:"has_more"`
+	Tasks      []Task `json:"tasks"`
+	NextCursor string `json:"next_cursor"`
+	HasMore    bool   `json:"has_more"`
 }

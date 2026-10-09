@@ -131,3 +131,16 @@ jobs:
           exit 1
       - name: Run authenticated S3 contract under the race detector
         run: go test -race ./internal/artifacts -run '^TestMinIOStoreContractAndConcurrentConditionalWrite$' -count=1 -v
+
+  external-client:
+    name: Public Go client consumer module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Compile and exercise the client from a separate module
+        working-directory: test/external-client
+        run: go test -race ./... -count=1 -v

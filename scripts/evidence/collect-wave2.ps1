@@ -13,7 +13,7 @@ function Get-Text([string]$File, [string[]]$Arguments) {
     } catch { return "unavailable" }
 }
 
-function Invoke-RecordedCheck([string]$Name, [string]$File, [string[]]$Arguments, [hashtable]$Environment, [string]$LogDir) {
+function Invoke-RecordedCheck([string]$Name, [string]$File, [string[]]$Arguments, [hashtable]$Environment, [string]$LogDir, [string]$WorkingDirectory = $repoRoot) {
     $stdout = Join-Path $LogDir ($Name + ".stdout.log")
     $stderr = Join-Path $LogDir ($Name + ".stderr.log")
     $old = @{}
@@ -23,7 +23,7 @@ function Invoke-RecordedCheck([string]$Name, [string]$File, [string[]]$Arguments
     }
     $started = (Get-Date).ToUniversalTime()
     try {
-        $process = Start-Process -FilePath $File -ArgumentList $Arguments -WorkingDirectory $repoRoot -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+        $process = Start-Process -FilePath $File -ArgumentList $Arguments -WorkingDirectory $WorkingDirectory -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
         $code = $process.ExitCode
     } catch {
         $code = 127
@@ -67,6 +67,8 @@ $checks += Invoke-RecordedCheck "failurelab" "go" @("run", "./cmd/failurelab") @
 $existingChaosRuns = @((Get-ChildItem -LiteralPath (Join-Path $repoRoot "benchmarks\chaos") -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }))
 $checks += Invoke-RecordedCheck "chaosmatrix" "go" @("run", "./cmd/chaosmatrix") @{} $logDir
 $checks += Invoke-RecordedCheck "vet" "go" @("vet", "./...") @{} $logDir
+$checks += Invoke-RecordedCheck "external-client-race" "go" @("test", "-race", "./...", "-count=1", "-v") @{} $logDir (Join-Path $repoRoot "test\external-client")
+$checks += Invoke-RecordedCheck "otlp-receiver-race" "go" @("test", "-race", "./internal/observability", "-run", "^TestSetupTracingExportsSpanToOTLPHTTPReceiver$", "-count=1", "-v") @{} $logDir
 
 $chaosSource = $null
 $chaosFiles = @()
@@ -120,7 +122,9 @@ $fingerprintInput = @(
     "go test -race ./internal/storage/postgres -run ^TestRetryBackoff$ -count=20 -v",
     "go run ./cmd/failurelab",
     "go run ./cmd/chaosmatrix",
-    "go vet ./..."
+    "go vet ./...",
+    "go test -race ./... -count=1 (test/external-client)",
+    "go test -race ./internal/observability -run ^TestSetupTracingExportsSpanToOTLPHTTPReceiver$ -count=1 -v"
 ) -join "`n"
 $sha = [System.Security.Cryptography.SHA256]::Create()
 try { $configFingerprint = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($fingerprintInput)))).Replace("-", "").ToLowerInvariant() } finally { $sha.Dispose() }
@@ -136,7 +140,9 @@ foreach ($check in $checks) {
         $check.stderr_bytes = (Get-Item -LiteralPath $file).Length
     }
 }
-$minioImageID = Get-Text "docker" @("inspect", "tasklab-wave2-minio", "--format", "{{.Image}}")
+$minioContainer = [Environment]::GetEnvironmentVariable("MINIO_CONTAINER", "Process")
+if (-not $minioContainer) { $minioContainer = "tasklab-wave2-minio" }
+$minioImageID = Get-Text "docker" @("inspect", $minioContainer, "--format", "{{.Image}}")
 $minioHealth = "NOT VERIFIED"
 try {
     $healthEndpoint = [Environment]::GetEnvironmentVariable("MINIO_ENDPOINT", "Process")
@@ -157,6 +163,7 @@ $manifest = [ordered]@{
         docker_server = Get-Text "docker" @("info", "--format", "{{.ServerVersion}}")
         postgres_container = Get-Text "docker" @("inspect", "tasklab-test-postgres", "--format", "{{.Config.Image}}")
         postgres_server = Get-Text "docker" @("exec", "tasklab-test-postgres", "pg_config", "--version")
+        minio_container = $minioContainer
         minio_image_id = $minioImageID
         minio_health = $minioHealth
         minio_endpoint_configured = [bool]([Environment]::GetEnvironmentVariable("MINIO_ENDPOINT", "Process"))
@@ -168,7 +175,7 @@ $manifest = [ordered]@{
     checks = $checks
     chaos_matrix = [ordered]@{ status = $chaosState; run_id = $chaosRunID; files = $chaosFiles }
     result = if ($failed -gt 0) { "FAIL" } elseif ($unverified -gt 0 -or $otherDirtyAfter.Count -gt 0) { "NOT VERIFIED" } else { "PASS" }
-    limitations = @("This run does not by itself prove dual-worker E2E, external IdP/provider, OTLP receipt, DR, or production readiness.", "Credential values are never recorded.")
+    limitations = @("This run does not by itself prove dual-worker E2E, external IdP/provider, OTLP staging receipt, DR, or production readiness.", "Credential values are never recorded.")
 }
 $manifestPath = Join-Path $runRoot "manifest.json"
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath -Encoding utf8

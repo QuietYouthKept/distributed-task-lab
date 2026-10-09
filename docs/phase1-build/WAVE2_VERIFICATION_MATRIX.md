@@ -1,6 +1,6 @@
 # Wave 2 verification matrix
 
-Environment observed: Windows AMD64, Go 1.26.6, Docker Linux Engine; PostgreSQL 16 container `tasklab-test-postgres` on host port 5433; Docker MinIO health at `127.0.0.1:19000` and Windows MinIO health at `127.0.0.1:9000`. Current process had no MinIO credential environment variables. Historical evidence is not relabeled as current evidence.
+Environment observed: Windows AMD64, Go 1.26.6, Docker Linux Engine; PostgreSQL 16 container `tasklab-test-postgres` on host port 5433. Some earlier collection processes lacked MinIO credential variables and remain recorded as NOT VERIFIED; a later clean run used ephemeral credentials and passed the authenticated adapter contract. Historical evidence is not relabeled as current evidence.
 
 | Verification | Result | Command / evidence | Notes |
 |---|---|---|---|
@@ -12,7 +12,7 @@ Environment observed: Windows AMD64, Go 1.26.6, Docker Linux Engine; PostgreSQL 
 | MinIO adapter contract (earlier clean run) | NOT VERIFIED | `wave2-20261009T115734795Z-568c45d5ad66` | That Evidence collector had no credentials; its status remains immutable. |
 | MinIO adapter contract (latest clean run) | PASS | `evidence/phase1/runs/wave2-20261009T120751006Z-04d4b231c0cf/manifest.json` | Exit 0 under Race against temporary MinIO from the pinned digest, with random credentials. Covers same/different content, concurrency, missing object, invalid credentials and canceled request. |
 | MinIO CI job | CONFIGURED; remote NOT VERIFIED | `.github/workflows/ci.yml` job `minio-contract` | Pinned image digest and generated credentials; remote GitHub Actions has not run because no push was requested. |
-| Latest clean Wave 2 collector | PASS | `evidence/phase1/runs/wave2-20261009T120751006Z-04d4b231c0cf/manifest.json` | Implementation `04d4b23`; all eight recorded commands Exit 0, no skips; evidence commit `1f43dc2`. It does not include dual-worker E2E, remote CI, external IdP/provider, OTLP receiver or DR. |
+| Clean Wave 2 collector (historical) | PASS | `evidence/phase1/runs/wave2-20261009T123051207Z-0e8f75573f67/manifest.json` | Implementation `0e8f755`; eight recorded commands Exit 0, no skips; evidence commit `70e3d49`. It does not include dual-worker E2E, remote CI, external IdP/provider, or DR. |
 | Expanded OpenAPI role/route contract | PASS | `go test ./internal/api -run '^TestOpenAPI' -count=1 -v` | Exit 0 after adding exact route-set, method, unique operation ID, Bearer, role and auth/forbidden/rate-limit envelope checks. A clean Evidence run against this later implementation remains pending. |
 | Two independent workers against MinIO | NOT VERIFIED | No E2E run | No containerized API/worker topology or crash/reclaim run in this continuation. |
 | Failure Lab | PASS | `go run ./cmd/failurelab` | 12/12 database-oracle scenarios passed. |
@@ -21,7 +21,9 @@ Environment observed: Windows AMD64, Go 1.26.6, Docker Linux Engine; PostgreSQL 
 | OpenAPI contract | PASS | Included in full unit and Race runs | Existing targeted contract checks; no generated full-schema drift gate claimed. |
 | OIDC / RBAC / IDOR | PASS (local tests) | Included in full unit and Race runs | Ephemeral test JWKS and PostgreSQL integration, not a real external IdP deployment. |
 | 100k pagination benchmark | NOT VERIFIED | Not run | No new performance figures claimed. |
-| OTLP remote trace / backup restore / remote CI | NOT VERIFIED | Not run | No external receiver or recovery drill evidence. |
+| OTLP receiver | PASS (local test) | `go test -race ./internal/observability -run '^TestSetupTracingExportsSpanToOTLPHTTPReceiver$' -count=10 -v` | Local receiver decoded protobuf and asserted service name + span; no staging collector or full API-to-worker trace. Fresh Evidence collection pending. |
+| External Go client module | PASS (local test) | `(test/external-client) go test -race ./... -count=1 -v` | Separate module imports only `pkg/client`; create/get/page and auth/idempotency exercised. Fresh Evidence collection pending. |
+| 100k pagination benchmark / backup restore / remote CI | NOT VERIFIED | Not run | No performance figures, DR rehearsal, or remote Actions result claimed. |
 | `git diff --check` | PASS | Run after code changes | Final check will be repeated before commit. |
 | Clean-commit Evidence run | NOT VERIFIED | `evidence/phase1/runs/wave2-20261009T093214275Z-0b73ce734dcd/manifest.json` and 14 raw stdout/stderr logs | Commit `0b73ce7`; 7 executed commands Exit 0; MinIO contract not run due missing env. Evidence Commit `85cf764`. |
 | Later clean-commit regression run | FAIL | `evidence/phase1/runs/wave2-20261009T094212634Z-fcd9bf97ea83/manifest.json` | `TestMarkFailureWrongWorker` exposed an instantaneous DB-clock assumption in `claimOne`; the original run and raw logs/artifacts are preserved. Test-only bounded DB-clock fix is `583e019`; PostgreSQL Race ×5, RetryBackoff ×20, full unit and full Race passed after the fix. |
@@ -38,5 +40,7 @@ Environment observed: Windows AMD64, Go 1.26.6, Docker Linux Engine; PostgreSQL 
 | Latest API-contract Evidence attempt | FAIL | `evidence/phase1/runs/wave2-20261009T121704030Z-8d389ea2900b/manifest.json` | Full Race found float aggregation order could change a gateway manifest on persisted-receipt replay; other seven commands passed, including real MinIO. Failure preserved in Evidence Commit `1c73c3d`. |
 | Gateway manifest determinism regression | PASS | `go test -race ./internal/worker/handlers -run '^TestGatewayLLMEvalWritesReceiptsAndReusesFinalArtifact$' -count=20 -v` | 20/20 after sorting receipts before float aggregation and asserting identical immutable manifest bytes. Full required suite and new clean Evidence pending. |
 | Chaos DB-clock polling correction | PASS (current worktree) | `REQUIRE_TEST_DATABASE=1 go run ./cmd/chaosmatrix`; `benchmarks/chaos/20261009T122922Z` | Exit 0; six scenarios, 30/30 each. `postgres_short_disconnect` now keeps polling task eligibility from PostgreSQL time within the existing 3-second deadline. Fresh clean Evidence pending. |
+| Latest clean full verification | PASS | `evidence/phase1/runs/wave2-20261009T123051207Z-0e8f75573f67/manifest.json` | Eight checks Exit 0, including full unit/Race, PG Race ×5, RetryBackoff ×20, Failure Lab, Chaos 6×30/30, Vet and authenticated MinIO contract. Evidence Commit `70e3d49`; cross-process Worker E2E remains absent. |
+| Current public client and OTLP additions | PASS (worktree) | Full unit and full Race; independent-module Race; OTLP receiver Race ×10 | PostgreSQL Race ×5, RetryBackoff Race ×20, Failure Lab 12/12, Chaos 6×30/30 and vet also passed on this worktree. Clean Evidence for this implementation is pending. |
 
 Historical Chaos failures and Phase 0 evidence are immutable and are not replaced by the current run.

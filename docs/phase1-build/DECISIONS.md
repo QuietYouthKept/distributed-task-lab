@@ -30,7 +30,7 @@ This file records implementation assumptions for the authorized Phase 1 build. I
 - Production S3 vendor/region, encryption/key management, lifecycle policy, max object size and workload identity mechanism.
 - Real payment/notification sandbox and resolution authority; until provided, no real provider E2E claim.
 - Production deployment platform, approved secret distribution, on-call owner, SLO, RPO/RTO and registry signing policy.
-- The current Codex process did not inherit MinIO credentials despite healthy endpoints. Do not retrieve secrets from Docker metadata/logs or infer defaults; re-inject through the approved environment mechanism before authenticated S3 E2E.
+- Historical collector runs without MinIO variables remain NOT VERIFIED. The authenticated adapter contract later passed using one-run generated credentials; never retrieve secrets from Docker metadata/logs or infer defaults. The independent-worker E2E remains unverified.
 - Whether/when to execute optional AI Track (real vector database/model, dataset rights, privacy, budget and evaluation review).
 
 ## ADR links

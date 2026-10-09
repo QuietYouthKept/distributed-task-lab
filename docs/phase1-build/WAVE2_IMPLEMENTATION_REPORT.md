@@ -18,12 +18,20 @@ Date: 2026-10-09 (Asia/Shanghai). Scope is the implementation actually present i
 - Gateway eval determinism: receipt summaries and cost caps now aggregate case-ID-sorted receipts, so Go map iteration cannot change float rounding or immutable output bytes. The replay test compares the first and subsequent manifest byte-for-byte. The issue was first observed in full Race Evidence run `wave2-20261009T121704030Z-8d389ea2900b`; fix verification so far is targeted Race ×20 only.
 - Chaos harness clock-step tolerance: `cmd/chaosmatrix` no longer treats a temporarily future `next_run_at` as an immediate terminal test failure. It polls PostgreSQL eligibility within its existing finite 3-second bound, retaining status/time diagnostics on timeout. The 28/30 failure run remains immutable; local rerun `20261009T122922Z` is 30/30 for all six scenarios.
 
+## Follow-up public-client and tracing work
+
+- `pkg/client/{client,types}.go`: replaced the SDK's exported dependency on `internal/domain` with public API types. This keeps external consumers independent of private implementation packages; no DB/API schema migration is involved. Callers constructing client values use `client.TaskType*`, `client.TaskStatus*`, `TaskPayloadEnvelope`, and `Task`.
+- `pkg/client/client_test.go`: expanded stable API error tests for 404/409/429/5xx and transport failure, while retaining auth, idempotency, context cancellation, URL validation, and cursor checks.
+- `test/external-client/`: independent Go module imports only `pkg/client` and performs create/get/page against a local HTTP contract fixture. `.github/workflows/ci.yml` runs it under Race in a dedicated job.
+- `internal/observability/tracing_test.go`: local OTLP/HTTP receiver decodes the emitted protobuf and verifies `service.name` and the named span; targeted Race ×10 passed. This is a local receiver test, not staging telemetry acceptance.
+- `scripts/evidence/collect-wave2.ps1`: collection now records the external-module and OTLP-receiver gates and can identify the explicitly configured MinIO container. Evidence remains append-only.
+
 ## Not implemented or not verified
 
 - Side Effect still uses a local simulated provider receipt. It is not a real payment/notification provider and is deliberately not promoted to production.
 - Worker production startup is still rejected by `Config.ValidateWorker`; no production mode has been unlocked.
 - No dual-container API + two-worker E2E, worker crash-after-object-put scenario, or MinIO response-loss proxy was executed in this continuation. The MinIO adapter contract did pass under Race against a fresh temporary container from the pinned local image digest with random one-run credentials. The container used no persistent volume and was auto-removed. This proves the adapter contract only; it is not dual-worker E2E or an AWS/production S3 claim. GitHub Actions has not been remotely run.
-- No database least-privilege runtime role, external IdP, provider sandbox, 100k-page benchmark, remote CI run, OTLP receiver test, or backup/restore rehearsal was added here.
+- No database least-privilege runtime role, external IdP, provider sandbox, 100k-page benchmark, remote CI run, full API-to-worker staging trace, or backup/restore rehearsal was added here.
 - No schema migration was added in this continuation; migrations 010 and 011 from the existing worktree remain in scope and were exercised by PostgreSQL tests.
 
 ## Compatibility, rollback, and correctness

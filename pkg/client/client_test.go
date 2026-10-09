@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 )
 
 func TestCreateTaskContextUsesV1AuthAndIdempotencyHeaders(t *testing.T) {
@@ -30,14 +28,14 @@ func TestCreateTaskContextUsesV1AuthAndIdempotencyHeaders(t *testing.T) {
 
 	client := NewClient(server.URL + "/prefix").WithBearerToken("access-token")
 	result, err := client.CreateTaskContext(context.Background(), CreateTaskRequest{
-		Type:           domain.TaskTypeRAGIngestion,
-		Payload:        domain.TaskPayloadEnvelope{Version: "v1", Kind: "rag_ingestion", Data: map[string]any{}},
+		Type:           TaskTypeRAGIngestion,
+		Payload:        TaskPayloadEnvelope{Version: "v1", Kind: "rag_ingestion", Data: map[string]any{}},
 		IdempotencyKey: ptr(key),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ID != "task-1" || result.Status != domain.TaskStatusPending {
+	if result.ID != "task-1" || result.Status != TaskStatusPending {
 		t.Fatalf("unexpected response: %+v", result)
 	}
 }
@@ -61,6 +59,32 @@ func TestClientReturnsTypedAPIErrorAndHonorsCancellation(t *testing.T) {
 	_, err = NewClient(server.URL).GetTaskContext(ctx, "task-1")
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context cancellation, got %v", err)
+	}
+}
+
+func TestClientMapsStableErrorStatusesAndNetworkFailures(t *testing.T) {
+	for _, status := range []int{http.StatusNotFound, http.StatusConflict, http.StatusTooManyRequests, http.StatusInternalServerError} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"error":{"code":"stable_error","message":"safe message"},"request_id":"req-test"}`))
+			}))
+			defer server.Close()
+
+			_, err := NewClient(server.URL).GetTaskContext(context.Background(), "task-1")
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) || apiErr.StatusCode != status || apiErr.Code != "stable_error" || apiErr.RequestID != "req-test" {
+				t.Fatalf("expected typed HTTP %d error, got %#v", status, err)
+			}
+		})
+	}
+
+	server := httptest.NewServer(http.NotFoundHandler())
+	url := server.URL
+	server.Close()
+	_, err := NewClient(url).GetTaskContext(context.Background(), "task-1")
+	if err == nil {
+		t.Fatal("expected a network error after server shutdown")
 	}
 }
 
