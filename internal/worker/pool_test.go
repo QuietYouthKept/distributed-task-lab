@@ -10,6 +10,11 @@ import (
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"github.com/fantasticyi/distributed-task-lab/internal/queue"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // fakeQueue implements queue.Queue for pool tests. It embeds a nil queue.Queue
@@ -28,6 +33,7 @@ type fakeQueue struct {
 	queues        []domain.QueueConfig
 	renewCalls    int
 	renewErr      error
+	payload       map[string]any
 }
 
 func (q *fakeQueue) ClaimTasks(ctx context.Context, workerID string, limit int, leaseTimeout time.Duration) ([]domain.Task, error) {
@@ -41,7 +47,7 @@ func (q *fakeQueue) ClaimTasks(ctx context.Context, workerID string, limit int, 
 	return []domain.Task{{
 		ID:             "task-1",
 		Type:           domain.TaskTypeRAGIngestion,
-		Payload:        domain.TaskPayloadEnvelope{Data: map[string]any{}},
+		Payload:        domain.TaskPayloadEnvelope{Data: q.payload},
 		TimeoutSeconds: 1,
 		Attempt:        1,
 		LeaseVersion:   1,
@@ -141,6 +147,74 @@ func TestPoolGracefulShutdown(t *testing.T) {
 		// ok
 	case <-time.After(3 * time.Second):
 		t.Fatal("Stop() did not return within 3s")
+	}
+}
+
+type traceCaptureHandler struct {
+	called chan map[string]any
+}
+
+func (h traceCaptureHandler) Handle(ctx context.Context, _ string, payload map[string]any, _ int) (*TaskExecResult, error) {
+	h.called <- map[string]any{
+		"trace_id": trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
+		"payload":  payload,
+	}
+	return &TaskExecResult{Summary: "traced"}, nil
+}
+
+func TestWorkerExecutionContinuesPersistedTraceContext(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	previousProvider := otel.GetTracerProvider()
+	previousPropagator := otel.GetTextMapPropagator()
+	otel.SetTracerProvider(provider)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() {
+		_ = provider.Shutdown(context.Background())
+		otel.SetTracerProvider(previousProvider)
+		otel.SetTextMapPropagator(previousPropagator)
+	})
+
+	parent := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    trace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+		SpanID:     trace.SpanID{17, 18, 19, 20, 21, 22, 23, 24},
+		TraceFlags: trace.FlagsSampled,
+	})
+	carrier := propagation.MapCarrier{}
+	propagation.TraceContext{}.Inject(trace.ContextWithSpanContext(context.Background(), parent), carrier)
+	q := &fakeQueue{payload: map[string]any{
+		"_traceparent": carrier.Get("traceparent"),
+		"_tracestate":  carrier.Get("tracestate"),
+		"business":     "preserved",
+	}}
+	captured := make(chan map[string]any, 1)
+	p := NewPool(q, "worker-trace-test", 1, time.Millisecond, time.Second, 1, traceCaptureHandler{called: captured}, discardLogger())
+	p.Start()
+
+	select {
+	case got := <-captured:
+		if got["trace_id"] != parent.TraceID().String() {
+			t.Errorf("handler trace ID=%v, want persisted parent trace ID %s", got["trace_id"], parent.TraceID())
+		}
+		payload, ok := got["payload"].(map[string]any)
+		if !ok || payload["business"] != "preserved" {
+			t.Errorf("handler payload=%v, want business payload preserved", got["payload"])
+		}
+		if payload["_traceparent"] != nil || payload["_tracestate"] != nil {
+			t.Errorf("internal propagation fields leaked into handler payload: %v", payload)
+		}
+	case <-time.After(2 * time.Second):
+		p.Stop()
+		t.Fatal("worker handler was not called before deadline")
+	}
+	p.Stop()
+
+	spans := exporter.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("exported worker spans=%d, want 1", len(spans))
+	}
+	if spans[0].Parent.SpanID() != parent.SpanID() || spans[0].SpanContext.TraceID() != parent.TraceID() {
+		t.Errorf("worker span parent=%s/%s, want %s/%s", spans[0].Parent.TraceID(), spans[0].Parent.SpanID(), parent.TraceID(), parent.SpanID())
 	}
 }
 
