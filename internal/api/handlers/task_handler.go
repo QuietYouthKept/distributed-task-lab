@@ -20,7 +20,7 @@ import (
 type TaskHandler struct {
 	svc    *application.TaskService
 	logger *slog.Logger
-	cursor *cursorCodec
+	cursor taskCursorCodec
 }
 
 // NewTaskHandler creates a new task HTTP handler.
@@ -33,6 +33,16 @@ func NewTaskHandler(svc *application.TaskService, logger *slog.Logger) *TaskHand
 // deployment secret. Production callers must supply at least 32 random bytes.
 func NewTaskHandlerWithCursorKey(svc *application.TaskService, logger *slog.Logger, key []byte) (*TaskHandler, error) {
 	codec, err := newCursorCodec(key)
+	if err != nil {
+		return nil, err
+	}
+	return &TaskHandler{svc: svc, logger: logger, cursor: codec}, nil
+}
+
+// NewTaskHandlerWithCursorKeyRing explicitly opts into expiring v2 cursors.
+// NewTaskHandlerWithCursorKey remains the compatibility-preserving default.
+func NewTaskHandlerWithCursorKeyRing(svc *application.TaskService, logger *slog.Logger, config CursorKeyRingConfig) (*TaskHandler, error) {
+	codec, err := newRotatingCursorCodec(config)
 	if err != nil {
 		return nil, err
 	}

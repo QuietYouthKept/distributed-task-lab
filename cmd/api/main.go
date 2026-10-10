@@ -69,11 +69,23 @@ func main() {
 	}
 
 	// Initialize HTTP handlers and router.
-	cursorKey := []byte(cfg.CursorSigningKey)
-	if len(cursorKey) == 0 && cfg.Profile == "development" {
-		cursorKey = []byte("development-only-cursor-signing-key-32-bytes")
+	var taskHandler *handlers.TaskHandler
+	if cfg.CursorRotationEnabled {
+		previous := make([]handlers.CursorVerificationKey, 0, len(cfg.CursorPreviousKeys))
+		for _, key := range cfg.CursorPreviousKeys {
+			previous = append(previous, handlers.CursorVerificationKey{ID: key.ID, Key: []byte(key.Key), AcceptUntil: key.AcceptUntil})
+		}
+		taskHandler, err = handlers.NewTaskHandlerWithCursorKeyRing(svc, logger, handlers.CursorKeyRingConfig{
+			ActiveKeyID: cfg.CursorActiveKeyID, ActiveKey: []byte(cfg.CursorActiveKey), PreviousKeys: previous,
+			TTL: cfg.CursorTTL, LegacyV1Key: []byte(cfg.CursorLegacyV1Key), LegacyV1AcceptUntil: cfg.CursorLegacyV1AcceptUntil,
+		})
+	} else {
+		cursorKey := []byte(cfg.CursorSigningKey)
+		if len(cursorKey) == 0 && cfg.Profile == "development" {
+			cursorKey = []byte("development-only-cursor-signing-key-32-bytes")
+		}
+		taskHandler, err = handlers.NewTaskHandlerWithCursorKey(svc, logger, cursorKey)
 	}
-	taskHandler, err := handlers.NewTaskHandlerWithCursorKey(svc, logger, cursorKey)
 	if err != nil {
 		logger.Error("invalid pagination signing configuration", "error", err)
 		os.Exit(1)
@@ -85,6 +97,15 @@ func main() {
 	routerConfig := api.RouterConfig{
 		MaxRequestBodyBytes: cfg.MaxRequestBodyBytes, RequestTimeout: cfg.DBOperationTimeout,
 		EffectHandler: handlers.NewEffectHandler(postgres.NewEffectLedger(db), logger),
+	}
+	if cfg.SharedRateLimitEnabled {
+		limiter, err := postgres.NewSharedIngressLimiter(db, []byte(cfg.SharedRateLimitHashKey), cfg.SharedRateLimitRate, cfg.SharedRateLimitBurst)
+		if err != nil {
+			logger.Error("invalid shared API admission configuration", "error", err)
+			os.Exit(1)
+		}
+		routerConfig.SharedIngressLimiter = limiter
+		routerConfig.SharedIngressFailOpen = cfg.SharedRateLimitFailureMode == "open"
 	}
 	if cfg.OIDCIssuer != "" || cfg.OIDCAudience != "" || cfg.OIDCJWKSURL != "" {
 		roleMappings := make(map[string]auth.Role, len(cfg.OIDCRoleMappings))

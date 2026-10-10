@@ -22,6 +22,11 @@ type taskCursor struct {
 	Subject   string `json:"subject"`
 }
 
+type taskCursorCodec interface {
+	encode(taskCursor) string
+	decode(token, expectedFilter string, pageSize int, subject string) (time.Time, string, error)
+}
+
 type cursorCodec struct{ key []byte }
 
 func newCursorCodec(key []byte) (*cursorCodec, error) {
