@@ -1,18 +1,18 @@
 package handlers
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/artifacts"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"github.com/fantasticyi/distributed-task-lab/internal/worker"
 )
@@ -22,6 +22,8 @@ import (
 // resumes from durable receipts instead of paying for completed calls again.
 type GatewayLLMEval struct {
 	artifactDir          string
+	store                artifacts.Store
+	storeErr             error
 	url, profile, apiKey string
 	timeout              time.Duration
 	maxCases             int
@@ -32,6 +34,13 @@ type GatewayLLMEval struct {
 }
 
 func NewGatewayLLMEvalFromEnv(artifactDir string) *GatewayLLMEval {
+	store, err := artifacts.NewLocalStore(artifactDir, "", 64<<20)
+	h := NewGatewayLLMEvalFromEnvWithStore(store)
+	h.artifactDir, h.storeErr = artifactDir, err
+	return h
+}
+
+func NewGatewayLLMEvalFromEnvWithStore(store artifacts.Store) *GatewayLLMEval {
 	timeout := envEvalDuration("EVAL_REQUEST_TIMEOUT", 30*time.Second)
 	maxCases := envEvalInt("EVAL_MAX_CASES_PER_SHARD", 50)
 	if maxCases < 1 {
@@ -43,7 +52,7 @@ func NewGatewayLLMEvalFromEnv(artifactDir string) *GatewayLLMEval {
 	}
 	maxCost := envEvalFloat("EVAL_MAX_COST_USD", 10)
 	return &GatewayLLMEval{
-		artifactDir: artifactDir, url: strings.TrimRight(os.Getenv("EVAL_GATEWAY_URL"), "/"), profile: os.Getenv("EVAL_GATEWAY_PROFILE"), apiKey: os.Getenv("EVAL_GATEWAY_API_KEY"),
+		store: store, url: strings.TrimRight(os.Getenv("EVAL_GATEWAY_URL"), "/"), profile: os.Getenv("EVAL_GATEWAY_PROFILE"), apiKey: os.Getenv("EVAL_GATEWAY_API_KEY"),
 		timeout: timeout, maxCases: maxCases, maxCost: maxCost, providerGate: make(chan struct{}, providerConcurrency), client: &http.Client{Timeout: timeout},
 		allowlists: map[string]map[string]bool{
 			"dataset_version": parseAllowlist(os.Getenv("EVAL_DATASET_VERSION_ALLOWLIST")), "model_profile": parseAllowlist(os.Getenv("EVAL_MODEL_PROFILE_ALLOWLIST")),
@@ -61,21 +70,28 @@ func (h *GatewayLLMEval) Run(ctx context.Context, payload map[string]any) (*work
 	if err != nil {
 		return nil, err
 	}
+	if h.storeErr != nil {
+		return nil, fmt.Errorf("initialize gateway eval artifact store: %w", h.storeErr)
+	}
+	if h.store == nil {
+		return nil, fmt.Errorf("gateway eval artifact store is not configured")
+	}
 	fingerprint := p.fingerprint()
-	dir := filepath.Join(h.artifactDir, "eval", p.RunID, fingerprint)
-	finalPath, partialPath := filepath.Join(dir, "case-results.jsonl"), filepath.Join(dir, "case-results.jsonl.partial")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("create eval artifact directory: %w", err)
-	}
-	receipts, err := readEvalReceipts(finalPath)
-	if err != nil {
-		return nil, err
-	}
-	if len(receipts) == 0 {
-		receipts, err = readEvalReceipts(partialPath)
-		if err != nil {
-			return nil, err
+	baseKey := "eval/gateway/" + fingerprint
+	receipts := make(map[int]evalCaseReceipt, p.CaseEnd-p.CaseStart)
+	for caseID := p.CaseStart; caseID < p.CaseEnd; caseID++ {
+		raw, _, getErr := h.store.Get(ctx, fmt.Sprintf("%s/receipts/%d.json", baseKey, caseID))
+		if errors.Is(getErr, artifacts.ErrNotFound) {
+			continue
 		}
+		if getErr != nil {
+			return nil, fmt.Errorf("read gateway case receipt %d: %w", caseID, getErr)
+		}
+		var receipt evalCaseReceipt
+		if err := json.Unmarshal(raw, &receipt); err != nil || receipt.CaseID != caseID || receipt.RequestID != p.requestID(caseID) {
+			return nil, fmt.Errorf("gateway case receipt %d is corrupt or mismatched: %w", caseID, artifacts.ErrCorrupt)
+		}
+		receipts[caseID] = receipt
 	}
 	if h.maxCost >= 0 && currentCost(receipts) > h.maxCost {
 		return nil, worker.NewNonRetryableError(fmt.Errorf("eval cost cap %.6f USD has been exceeded", h.maxCost), domain.ErrorTypeBadPayload)
@@ -88,8 +104,12 @@ func (h *GatewayLLMEval) Run(ctx context.Context, payload map[string]any) (*work
 		if err != nil {
 			return nil, err
 		}
-		if err := appendEvalReceipt(partialPath, r); err != nil {
-			return nil, err
+		raw, err := json.Marshal(r)
+		if err != nil {
+			return nil, fmt.Errorf("marshal gateway case receipt: %w", err)
+		}
+		if _, err := h.store.PutIfAbsent(ctx, fmt.Sprintf("%s/receipts/%d.json", baseKey, caseID), raw, "application/json"); err != nil {
+			return nil, fmt.Errorf("persist gateway case receipt %d: %w", caseID, err)
 		}
 		receipts[caseID] = r
 		if h.maxCost >= 0 && currentCost(receipts) > h.maxCost {
@@ -99,22 +119,38 @@ func (h *GatewayLLMEval) Run(ctx context.Context, payload map[string]any) (*work
 	if len(receipts) != p.CaseEnd-p.CaseStart {
 		return nil, fmt.Errorf("eval receipts incomplete")
 	}
-	if err := writeEvalReceiptsAtomically(partialPath, finalPath, orderedReceipts(receipts)); err != nil {
-		return nil, err
+	finalKey := baseKey + "/case-results.jsonl"
+	var caseResults bytes.Buffer
+	for _, receipt := range orderedReceipts(receipts) {
+		if err := json.NewEncoder(&caseResults).Encode(receipt); err != nil {
+			return nil, fmt.Errorf("encode gateway case results: %w", err)
+		}
+	}
+	if _, err := h.store.PutIfAbsent(ctx, finalKey, caseResults.Bytes(), "application/x-ndjson"); err != nil {
+		return nil, fmt.Errorf("persist gateway case results: %w", err)
 	}
 	passed, failed, in, out, cost, providerWaitMS, providerMS := summarizeReceipts(receipts)
-	manifest := map[string]any{"version": "2", "run_id": p.RunID, "fingerprint": fingerprint, "dataset_version": p.DatasetVersion, "dataset_uri": p.DatasetURI, "dataset_sha256": p.DatasetSHA256, "model_profile": p.ModelProfile, "prompt_version": p.PromptVersion, "retriever_version": p.RetrieverVersion, "evaluator_schema_version": p.EvaluatorSchemaVersion, "case_start": p.CaseStart, "case_end": p.CaseEnd, "passed": passed, "failed": failed, "input_tokens": in, "output_tokens": out, "cost_usd": cost, "provider_wait_ms": providerWaitMS, "provider_duration_ms": providerMS, "completed_at": nowUTC()}
-	if err := writeJSONAtomically(filepath.Join(dir, "manifest.json"), manifest); err != nil {
+	manifest := map[string]any{"version": "2", "run_id": p.RunID, "fingerprint": fingerprint, "dataset_version": p.DatasetVersion, "dataset_uri": p.DatasetURI, "dataset_sha256": p.DatasetSHA256, "model_profile": p.ModelProfile, "prompt_version": p.PromptVersion, "retriever_version": p.RetrieverVersion, "evaluator_schema_version": p.EvaluatorSchemaVersion, "case_start": p.CaseStart, "case_end": p.CaseEnd, "passed": passed, "failed": failed, "input_tokens": in, "output_tokens": out, "cost_usd": cost, "provider_wait_ms": providerWaitMS, "provider_duration_ms": providerMS}
+	manifestKey := baseKey + "/manifest.json"
+	if err := putJSONArtifact(ctx, h.store, manifestKey, manifest); err != nil {
 		return nil, err
 	}
 	summary := map[string]any{"passed": passed, "failed": failed, "total_cases": passed + failed, "cost_usd": cost, "provider_wait_ms": providerWaitMS, "provider_duration_ms": providerMS}
-	if err := writeJSONAtomically(filepath.Join(dir, "summary.json"), summary); err != nil {
+	if err := putJSONArtifact(ctx, h.store, baseKey+"/summary.json", summary); err != nil {
 		return nil, err
 	}
-	if err := writeFailuresAtomically(filepath.Join(dir, "failures.jsonl"), orderedReceipts(receipts)); err != nil {
-		return nil, err
+	var failures bytes.Buffer
+	for _, receipt := range orderedReceipts(receipts) {
+		if receipt.Status != "passed" {
+			if err := json.NewEncoder(&failures).Encode(receipt); err != nil {
+				return nil, fmt.Errorf("encode gateway failures: %w", err)
+			}
+		}
 	}
-	return &worker.TaskExecResult{Summary: fmt.Sprintf("gateway LLM eval shard %s [%d,%d): %d/%d passed", p.RunID, p.CaseStart, p.CaseEnd, passed, p.CaseEnd-p.CaseStart), Artifacts: map[string]string{"eval_manifest_uri": filepath.Join(dir, "manifest.json"), "case_results_uri": finalPath, "result_fingerprint": fingerprint, "run_id": p.RunID, "dataset_version": p.DatasetVersion, "model_profile": p.ModelProfile, "prompt_version": p.PromptVersion}, Metrics: map[string]float64{"total_cases": float64(p.CaseEnd - p.CaseStart), "passed": float64(passed), "failed": float64(failed), "input_tokens": float64(in), "output_tokens": float64(out), "cost_usd": cost, "provider_wait_ms": providerWaitMS, "provider_duration_ms": providerMS}}, nil
+	if _, err := h.store.PutIfAbsent(ctx, baseKey+"/failures.jsonl", failures.Bytes(), "application/x-ndjson"); err != nil {
+		return nil, fmt.Errorf("persist gateway failures: %w", err)
+	}
+	return &worker.TaskExecResult{Summary: fmt.Sprintf("gateway LLM eval shard %s [%d,%d): %d/%d passed", p.RunID, p.CaseStart, p.CaseEnd, passed, p.CaseEnd-p.CaseStart), Artifacts: map[string]string{"eval_manifest_uri": "artifact://" + manifestKey, "case_results_uri": "artifact://" + finalKey, "result_fingerprint": fingerprint, "run_id": p.RunID, "dataset_version": p.DatasetVersion, "model_profile": p.ModelProfile, "prompt_version": p.PromptVersion}, Metrics: map[string]float64{"total_cases": float64(p.CaseEnd - p.CaseStart), "passed": float64(passed), "failed": float64(failed), "input_tokens": float64(in), "output_tokens": float64(out), "cost_usd": cost, "provider_wait_ms": providerWaitMS, "provider_duration_ms": providerMS}}, nil
 }
 
 func (h *GatewayLLMEval) callCase(ctx context.Context, p gatewayEvalPayload, caseID int) (evalCaseReceipt, error) {
@@ -163,89 +199,19 @@ func (h *GatewayLLMEval) callCase(ctx context.Context, p gatewayEvalPayload, cas
 	return evalCaseReceipt{CaseID: caseID, RequestID: p.requestID(caseID), Status: decoded.Status, Score: decoded.Score, InputTokens: decoded.InputTokens, OutputTokens: decoded.OutputTokens, CostUSD: decoded.CostUSD, ProviderWaitMS: float64(started.Sub(waitStarted)) / float64(time.Millisecond), ProviderMS: float64(time.Since(started)) / float64(time.Millisecond)}, nil
 }
 
-func readEvalReceipts(path string) (map[int]evalCaseReceipt, error) {
-	receipts := map[int]evalCaseReceipt{}
-	f, err := os.Open(path)
-	if os.IsNotExist(err) {
-		return receipts, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 1024), 1024*1024)
-	for scanner.Scan() {
-		var r evalCaseReceipt
-		if err := json.Unmarshal(scanner.Bytes(), &r); err != nil {
-			return nil, fmt.Errorf("read eval receipt: %w", err)
-		}
-		receipts[r.CaseID] = r
-	}
-	return receipts, scanner.Err()
-}
-func appendEvalReceipt(path string, receipt evalCaseReceipt) error {
-	raw, err := json.Marshal(receipt)
-	if err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	if _, err = f.Write(append(raw, '\n')); err != nil {
-		return err
-	}
-	return f.Sync()
-}
-func writeEvalReceiptsAtomically(partial, final string, receipts []evalCaseReceipt) error {
-	if _, err := os.Stat(final); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	if _, err := os.Stat(partial); err == nil {
-		return os.Rename(partial, final)
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	var b strings.Builder
-	for _, r := range receipts {
-		raw, _ := json.Marshal(r)
-		b.Write(raw)
-		b.WriteByte('\n')
-	}
-	return writeBytesAtomically(final, []byte(b.String()))
-}
-func writeFailuresAtomically(path string, receipts []evalCaseReceipt) error {
-	var b strings.Builder
-	for _, r := range receipts {
-		if r.Status != "passed" {
-			raw, _ := json.Marshal(r)
-			b.Write(raw)
-			b.WriteByte('\n')
-		}
-	}
-	return writeBytesAtomically(path, []byte(b.String()))
-}
-func writeJSONAtomically(path string, value any) error {
+func putJSONArtifact(ctx context.Context, store artifacts.Store, key string, value any) error {
 	raw, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal artifact %s: %w", key, err)
 	}
-	return writeBytesAtomically(path, raw)
-}
-func writeBytesAtomically(path string, raw []byte) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o644); err != nil {
-		return err
+	if _, err := store.PutIfAbsent(ctx, key, raw, "application/json"); err != nil {
+		return fmt.Errorf("persist artifact %s: %w", key, err)
 	}
-	return os.Rename(tmp, path)
+	return nil
 }
 func currentCost(receipts map[int]evalCaseReceipt) float64 {
 	total := 0.0
-	for _, r := range receipts {
+	for _, r := range orderedReceipts(receipts) {
 		total += r.CostUSD
 	}
 	return total

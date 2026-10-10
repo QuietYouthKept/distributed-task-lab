@@ -14,10 +14,10 @@ env:
 jobs:
   quality:
     name: Format, vet, unit, build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           cache: true
@@ -27,16 +27,18 @@ jobs:
         run: go vet $GO_PACKAGES
       - name: Unit and local-safe tests
         run: go test $GO_PACKAGES -count=1 -coverprofile=coverage.out
+      - name: Stable v1 OpenAPI contract
+        run: go test ./internal/api -run '^TestOpenAPI' -count=1
       - name: Build
         run: go build $GO_PACKAGES
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: coverage
           path: coverage.out
 
   postgres-integration:
     name: PostgreSQL integration (required)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16-alpine
@@ -54,8 +56,8 @@ jobs:
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
       REQUIRE_TEST_DATABASE: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           cache: true
@@ -64,7 +66,7 @@ jobs:
 
   race:
     name: Race detector with PostgreSQL
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16-alpine
@@ -82,9 +84,123 @@ jobs:
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
       REQUIRE_TEST_DATABASE: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           cache: true
       - run: go test -race $GO_PACKAGES -count=1
+
+  minio-contract:
+    name: MinIO contract and worker-process recovery (required)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      REQUIRE_TEST_DATABASE: "1"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build source-pinned MinIO CI image
+        run: bash scripts/evidence/build-minio-ci-image.sh
+      - name: Start MinIO with ephemeral credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="$MINIO_CI_IMAGE"
+          container="tasklab-minio-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          credentials_file="$(mktemp)"
+          trap 'rm -f "$credentials_file"' EXIT
+          umask 077
+          access_key="$(openssl rand -hex 16)"
+          secret_key="$(openssl rand -hex 32)"
+          echo "::add-mask::$access_key"
+          echo "::add-mask::$secret_key"
+          printf 'MINIO_ROOT_USER=%s\nMINIO_ROOT_PASSWORD=%s\n' "$access_key" "$secret_key" > "$credentials_file"
+          {
+            echo "MINIO_CONTAINER_NAME=$container"
+            echo "MINIO_ENDPOINT=http://127.0.0.1:9000"
+            echo "MINIO_BUCKET=tasklab-ci-contract"
+            echo "MINIO_ACCESS_KEY=$access_key"
+            echo "MINIO_SECRET_KEY=$secret_key"
+            echo 'REQUIRE_MINIO=1'
+          } >> "$GITHUB_ENV"
+          docker run --detach --name "$container" --env-file "$credentials_file" \
+            --publish 127.0.0.1:9000:9000 --publish 127.0.0.1:9001:9001 \
+            --tmpfs /data:rw,noexec,nosuid,size=512m "$image" \
+            server /data --console-address ':9001'
+          rm -f "$credentials_file"
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'MinIO failed to become healthy within 60 seconds' >&2
+          exit 1
+      - name: Run authenticated S3 contract under the race detector
+        run: go test -race ./internal/artifacts -run '^TestMinIOStoreContractAndConcurrentConditionalWrite$' -count=1 -v
+      - name: Run API and independent Worker process recovery under the race detector
+        run: go test -race ./internal/e2e -run '^TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash$' -count=1 -v
+      - name: Run isolated PostgreSQL backup/restore drill under the race detector
+        env:
+          PG_BACKUP_CONTAINER: ${{ job.services.postgres.id }}
+          RUN_BACKUP_RESTORE_DRILL: "1"
+        run: go test -race ./internal/storage/postgres -run '^TestDatabaseBackupRestoreDrill$' -count=1 -v
+      - name: Collect MinIO logs on failure (redacted)
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="${MINIO_CONTAINER_NAME:-}"
+          if [[ -z "$container" ]]; then
+            echo 'MinIO container was not started; no container logs available.'
+            exit 0
+          fi
+          if docker container inspect "$container" >/dev/null 2>&1; then
+            docker logs "$container" 2>&1 | sed \
+              -e "s/${MINIO_ACCESS_KEY:-__NO_ACCESS_KEY__}/[REDACTED]/g" \
+              -e "s/${MINIO_SECRET_KEY:-__NO_SECRET_KEY__}/[REDACTED]/g"
+          else
+            echo 'MinIO container is no longer present; no container logs available.'
+          fi
+      - name: Remove this job's MinIO container and image
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${MINIO_CONTAINER_NAME:-}" ]]; then
+            docker rm --force "$MINIO_CONTAINER_NAME" >/dev/null 2>&1 || true
+          fi
+          if [[ -n "${MINIO_CI_IMAGE:-}" ]]; then
+            docker image rm "$MINIO_CI_IMAGE" >/dev/null 2>&1 || true
+          fi
+
+  external-client:
+    name: Public Go client consumer module
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Compile and exercise the client from a separate module
+        working-directory: test/external-client
+        run: go test -race ./... -count=1 -v

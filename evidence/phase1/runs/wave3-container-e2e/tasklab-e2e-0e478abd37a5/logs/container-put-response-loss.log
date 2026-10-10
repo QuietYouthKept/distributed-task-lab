@@ -1,0 +1,5 @@
+=== RUN   TestAPIWorkerContainerRecoversLostPutResponse
+    container_recovery_test.go:400: PASS: Worker A PUT persisted but PUT/HEAD responses were dropped; PostgreSQL recorded one retry; Worker B reclaimed attempt=2 generation=2 and reused MinIO SHA256=8e0121c19c51a8ae1c2f3cff20d89f05e44d0eaae9f3724a012f3246a73fbfea
+--- PASS: TestAPIWorkerContainerRecoversLostPutResponse (14.00s)
+PASS
+ok  	github.com/fantasticyi/distributed-task-lab/internal/e2e	15.811s

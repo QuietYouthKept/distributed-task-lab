@@ -1,0 +1,2 @@
+WARNING: TCP connect to (127.0.0.1 : 19002) failed
+MinIO source build reached checksum and source validation, then failed while fetching the upstream license. No test command was started.

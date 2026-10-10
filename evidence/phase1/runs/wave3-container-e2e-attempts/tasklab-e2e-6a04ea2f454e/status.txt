@@ -1,0 +1,4 @@
+run_id=tasklab-e2e-6a04ea2f454e
+result=NOT VERIFIED
+reason=Compose services started but a later step did not pass.
+secrets_recorded=false

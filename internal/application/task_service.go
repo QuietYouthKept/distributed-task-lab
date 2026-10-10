@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/auth"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload"
 	"github.com/fantasticyi/distributed-task-lab/internal/queue"
@@ -13,12 +14,17 @@ import (
 
 // TaskService orchestrates task lifecycle operations.
 type TaskService struct {
-	q queue.Queue
+	q     queue.Queue
+	admit taskpayload.ExecutionPolicy
 }
 
 // NewTaskService creates a new task service backed by the given queue.
 func NewTaskService(q queue.Queue) *TaskService {
 	return &TaskService{q: q}
+}
+
+func NewTaskServiceWithAdmission(q queue.Queue, admission taskpayload.ExecutionPolicy) *TaskService {
+	return &TaskService{q: q, admit: admission}
 }
 
 // CreateTaskRequest is the input for creating a new task.
@@ -52,6 +58,9 @@ func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*C
 	canonicalPayload, err := taskpayload.Validate(req.Type, req.Payload)
 	if err != nil {
 		return nil, domain.InvalidArgument("invalid_task_payload", "task payload does not match its task type", err)
+	}
+	if !s.admit.Allows(req.Type, getExecutionMode(canonicalPayload)) {
+		return nil, domain.InvalidArgument("task_execution_disabled", "this task type and execution mode are not enabled in this deployment", nil)
 	}
 	if req.MaxAttempts < 0 || req.TimeoutSeconds < 0 || req.RetryDelaySeconds < 0 || req.RetryMaxDelaySeconds < 0 || req.RetryBackoffMultiplier < 0 {
 		return nil, domain.InvalidArgument("invalid_retry_policy", "retry and timeout values must be non-negative", nil)
@@ -99,6 +108,9 @@ func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*C
 		RetryJitter:            jitter,
 		IdempotencyKey:         req.IdempotencyKey,
 	}
+	if principal, ok := auth.PrincipalFromContext(ctx); ok {
+		task.CreatedBy = &principal.Subject
+	}
 
 	created, err := s.q.Enqueue(ctx, task)
 	if err != nil {
@@ -109,6 +121,11 @@ func (s *TaskService) CreateTask(ctx context.Context, req CreateTaskRequest) (*C
 		ID:     created.ID,
 		Status: created.Status,
 	}, nil
+}
+
+func getExecutionMode(payload map[string]any) string {
+	mode, _ := payload["execution_mode"].(string)
+	return mode
 }
 
 // GetTask retrieves a task by ID.
@@ -165,6 +182,9 @@ func (s *TaskService) Cancel(ctx context.Context, taskID string, reason string) 
 
 // GetTaskEvents retrieves the audit event log for a task.
 func (s *TaskService) GetTaskEvents(ctx context.Context, taskID string) ([]domain.TaskEvent, error) {
+	if _, err := s.GetTask(ctx, taskID); err != nil {
+		return nil, err
+	}
 	events, err := s.q.GetTaskEvents(ctx, taskID)
 	if err != nil {
 		return nil, wrapQueueError("task service: events", err)

@@ -48,6 +48,16 @@ func TestMigrationsFreshAndRerun(t *testing.T) {
 	if err := db.QueryRow(`SELECT to_regclass('public.effects')::text`).Scan(&effectTable); err != nil || effectTable == nil {
 		t.Fatalf("effects table missing after migration: table=%v err=%v", effectTable, err)
 	}
+	var auditTable *string
+	if err := db.QueryRow(`SELECT to_regclass('public.security_audit_events')::text`).Scan(&auditTable); err != nil || auditTable == nil {
+		t.Fatalf("security audit table missing after migration: table=%v err=%v", auditTable, err)
+	}
+	for _, index := range []string{"idx_tasks_created_at_id", "idx_tasks_creator_created_at_id"} {
+		var name *string
+		if err := db.QueryRow(`SELECT to_regclass($1)::text`, "public."+index).Scan(&name); err != nil || name == nil {
+			t.Fatalf("keyset pagination index %s missing: index=%v err=%v", index, name, err)
+		}
+	}
 }
 
 func TestMigrationsUpgradePreviouslyUntrackedSchema(t *testing.T) {

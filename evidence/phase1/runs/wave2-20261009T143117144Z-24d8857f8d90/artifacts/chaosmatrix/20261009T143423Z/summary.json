@@ -1,0 +1,50 @@
+{
+  "effect_before_ack": {
+    "Trials": 30,
+    "Passed": 30,
+    "Failed": 0,
+    "P50MS": 7.245,
+    "P95MS": 9.0951,
+    "P99MS": 9.7244
+  },
+  "postgres_short_disconnect": {
+    "Trials": 30,
+    "Passed": 30,
+    "Failed": 0,
+    "P50MS": 44.3656,
+    "P95MS": 55.4137,
+    "P99MS": 56.6482
+  },
+  "provider_response_lost": {
+    "Trials": 30,
+    "Passed": 30,
+    "Failed": 0,
+    "P50MS": 6.3784,
+    "P95MS": 8.2572,
+    "P99MS": 9.2979
+  },
+  "sigterm_drain": {
+    "Trials": 30,
+    "Passed": 30,
+    "Failed": 0,
+    "P50MS": 24.4529,
+    "P95MS": 26.8162,
+    "P99MS": 26.9863
+  },
+  "stale_generation": {
+    "Trials": 30,
+    "Passed": 30,
+    "Failed": 0,
+    "P50MS": 45.7288,
+    "P95MS": 53.0389,
+    "P99MS": 54.2806
+  },
+  "worker_sigkill": {
+    "Trials": 30,
+    "Passed": 30,
+    "Failed": 0,
+    "P50MS": 42.9199,
+    "P95MS": 53.1624,
+    "P99MS": 55.5863
+  }
+}

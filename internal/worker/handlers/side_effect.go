@@ -104,8 +104,7 @@ func (h *SideEffectHandler) Run(ctx context.Context, payload map[string]any) (*w
 		return nil, err
 	}
 	if receipt, err := h.adapter.LookupByKey(key); err != nil {
-		h.markUnknown(ctx, effectID, "provider receipt lookup failed")
-		return nil, fmt.Errorf("lookup receipt: %w", err)
+		return nil, errors.Join(fmt.Errorf("lookup receipt: %w", err), h.markUnknown(ctx, effectID, "provider receipt lookup failed"))
 	} else if receipt != nil {
 		if err := h.recordReceipt(ctx, effectID, receipt); err != nil {
 			return nil, err
@@ -113,17 +112,14 @@ func (h *SideEffectHandler) Run(ctx context.Context, payload map[string]any) (*w
 		return sideEffectResult(receipt, true), nil
 	}
 	if getBool(payload, "simulate_timeout_before_apply", false) {
-		h.markUnknown(ctx, effectID, "provider timeout before apply")
-		return nil, fmt.Errorf("simulated provider timeout before apply")
+		return nil, errors.Join(fmt.Errorf("simulated provider timeout before apply"), h.markUnknown(ctx, effectID, "provider timeout before apply"))
 	}
 	receipt, err := h.adapter.Apply(ctx, key, operation, target)
 	if err != nil {
-		h.markUnknown(ctx, effectID, "provider apply returned an error")
-		return nil, fmt.Errorf("apply external effect: %w", err)
+		return nil, errors.Join(fmt.Errorf("apply external effect: %w", err), h.markUnknown(ctx, effectID, "provider apply returned an error"))
 	}
 	if getBool(payload, "simulate_response_loss", false) {
-		h.markUnknown(ctx, effectID, "provider response lost after apply")
-		return nil, fmt.Errorf("provider response lost after durable apply; retry will reconcile receipt")
+		return nil, errors.Join(fmt.Errorf("provider response lost after durable apply; retry will reconcile receipt"), h.markUnknown(ctx, effectID, "provider response lost after apply"))
 	}
 	if err := h.recordReceipt(ctx, effectID, receipt); err != nil {
 		return nil, err
@@ -163,11 +159,14 @@ func (h *SideEffectHandler) recordReceipt(ctx context.Context, effectID string, 
 	return h.ledger.RecordReceipt(ctx, effectID, effects.Receipt{ProviderRequestID: receipt.IdempotencyKey, ResponseHash: fmt.Sprintf("%x", sum[:])})
 }
 
-func (h *SideEffectHandler) markUnknown(ctx context.Context, effectID, reason string) {
+func (h *SideEffectHandler) markUnknown(ctx context.Context, effectID, reason string) error {
 	if h.ledger != nil && effectID != "" {
 		observability.Runtime().EffectUnknown()
-		_ = h.ledger.MarkUnknown(ctx, effectID, reason)
+		if err := h.ledger.MarkUnknown(ctx, effectID, reason); err != nil {
+			return fmt.Errorf("record unknown external effect outcome: %w", err)
+		}
 	}
+	return nil
 }
 func sideEffectResult(r *Receipt, reconciled bool) *worker.TaskExecResult {
 	return &worker.TaskExecResult{Summary: fmt.Sprintf("%s %s for %s (reconciled=%t)", r.Operation, r.Status, r.Target, reconciled), Artifacts: map[string]string{"receipt_key": r.IdempotencyKey, "receipt_status": r.Status, "reconciled": fmt.Sprintf("%t", reconciled)}, Metrics: map[string]float64{"external_side_effects": 1}}

@@ -12,14 +12,16 @@ import (
 	"github.com/fantasticyi/distributed-task-lab/internal/api"
 	"github.com/fantasticyi/distributed-task-lab/internal/api/handlers"
 	"github.com/fantasticyi/distributed-task-lab/internal/application"
+	"github.com/fantasticyi/distributed-task-lab/internal/auth"
 	"github.com/fantasticyi/distributed-task-lab/internal/config"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload"
 	"github.com/fantasticyi/distributed-task-lab/internal/observability"
 	"github.com/fantasticyi/distributed-task-lab/internal/storage/postgres"
 )
 
 func main() {
 	cfg := config.Load()
-	logger := observability.Logger()
+	logger := observability.Logger(cfg.SensitiveValues()...)
 	if err := cfg.Validate(); err != nil {
 		logger.Error("invalid startup configuration", "error", err)
 		os.Exit(1)
@@ -60,17 +62,49 @@ func main() {
 	// Initialize queue and service layer.
 	pq := postgres.NewPostgresQueueWithTimeout(db, cfg.DBOperationTimeout)
 	svc := application.NewTaskService(pq)
+	if cfg.Profile == "production" {
+		// No handler mode is production-enabled until its complete provider and
+		// shared-artifact path is wired and independently verified.
+		svc = application.NewTaskServiceWithAdmission(pq, taskpayload.ProductionExecutionPolicy())
+	}
 
 	// Initialize HTTP handlers and router.
-	taskHandler := handlers.NewTaskHandler(svc, logger)
+	cursorKey := []byte(cfg.CursorSigningKey)
+	if len(cursorKey) == 0 && cfg.Profile == "development" {
+		cursorKey = []byte("development-only-cursor-signing-key-32-bytes")
+	}
+	taskHandler, err := handlers.NewTaskHandlerWithCursorKey(svc, logger, cursorKey)
+	if err != nil {
+		logger.Error("invalid pagination signing configuration", "error", err)
+		os.Exit(1)
+	}
 
 	// Metrics handler reads aggregated counts, per-queue depth, and oldest-pending age.
 	metricsHandler := handlers.NewMetricsHandler(svc)
 
-	router := api.NewRouterWithConfig(taskHandler, metricsHandler, svc, logger, api.RouterConfig{
-		APIToken: cfg.APIToken, AdminToken: cfg.AdminToken,
+	routerConfig := api.RouterConfig{
 		MaxRequestBodyBytes: cfg.MaxRequestBodyBytes, RequestTimeout: cfg.DBOperationTimeout,
-	})
+		EffectHandler: handlers.NewEffectHandler(postgres.NewEffectLedger(db), logger),
+	}
+	if cfg.OIDCIssuer != "" || cfg.OIDCAudience != "" || cfg.OIDCJWKSURL != "" {
+		roleMappings := make(map[string]auth.Role, len(cfg.OIDCRoleMappings))
+		for claim, role := range cfg.OIDCRoleMappings {
+			roleMappings[claim] = auth.Role(role)
+		}
+		verifier, err := auth.NewVerifier(auth.OIDCConfig{
+			Issuer: cfg.OIDCIssuer, Audience: cfg.OIDCAudience, JWKSURL: cfg.OIDCJWKSURL,
+			RoleClaim: cfg.OIDCRoleClaim, RoleMappings: roleMappings, ServiceClientIDs: cfg.OIDCServiceClientIDs,
+		})
+		if err != nil {
+			logger.Error("invalid OIDC configuration", "error", err)
+			os.Exit(1)
+		}
+		routerConfig.Authenticator = verifier
+	} else {
+		routerConfig.APIToken, routerConfig.AdminToken = cfg.APIToken, cfg.AdminToken
+	}
+	routerConfig.RequireAuthentication = cfg.Profile == "production"
+	router := api.NewRouterWithConfig(taskHandler, metricsHandler, svc, logger, routerConfig)
 
 	// Start HTTP server.
 	addr := fmt.Sprintf(":%d", cfg.APIPort)

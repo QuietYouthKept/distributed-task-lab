@@ -1,0 +1,12 @@
+migration applied: 001_create_tasks.sql
+migration applied: 002_create_task_events.sql
+migration applied: 003_create_workers.sql
+migration applied: 004_production_hardening.sql
+migration applied: 005_queue_governance.sql
+migration applied: 006_queue_rate_limit.sql
+migration applied: 007_integrity_and_runtime.sql
+migration applied: 008_queue_aging.sql
+migration applied: 009_create_effects.sql
+migration applied: 010_identity_audit.sql
+migration applied: 011_task_keyset_pagination.sql
+PASS: seeded 100000 PostgreSQL rows; evidence: benchmarks\pagination\20261009T152304Z-b963a609

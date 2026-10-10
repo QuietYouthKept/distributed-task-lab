@@ -3,10 +3,12 @@ package handlers
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload"
 	"github.com/fantasticyi/distributed-task-lab/internal/worker"
 )
 
@@ -65,5 +67,15 @@ func TestMockHandlerTimeout(t *testing.T) {
 	_, err := h.Handle(ctx, "rag_ingestion", map[string]any{"simulate": "timeout"}, 1)
 	if err == nil {
 		t.Fatal("expected timeout error")
+	}
+}
+
+func TestProductionExecutionPolicyRejectsValidMockPayload(t *testing.T) {
+	h := NewCompositeWithAdmission(t.TempDir(), t.TempDir(), taskpayload.ProductionExecutionPolicy())
+	_, err := h.Handle(context.Background(), "rag_ingestion", map[string]any{
+		"execution_mode": "mock", "document_id": "doc-1",
+	}, 1)
+	if err == nil || !strings.Contains(err.Error(), "not enabled in this worker deployment") {
+		t.Fatalf("valid but disabled mock mode was not rejected: %v", err)
 	}
 }

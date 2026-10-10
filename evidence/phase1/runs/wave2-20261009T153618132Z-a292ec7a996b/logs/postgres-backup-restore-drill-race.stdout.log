@@ -1,0 +1,16 @@
+=== RUN   TestDatabaseBackupRestoreDrill
+migration applied: 001_create_tasks.sql
+migration applied: 002_create_task_events.sql
+migration applied: 003_create_workers.sql
+migration applied: 004_production_hardening.sql
+migration applied: 005_queue_governance.sql
+migration applied: 006_queue_rate_limit.sql
+migration applied: 007_integrity_and_runtime.sql
+migration applied: 008_queue_aging.sql
+migration applied: 009_create_effects.sql
+migration applied: 010_identity_audit.sql
+migration applied: 011_task_keyset_pagination.sql
+    backup_restore_integration_test.go:191: BACKUP_RESTORE_RESULT {"artifact_sha256":"95f6251601e40797732a9ef7d405292a1432eee8961a769d0286eac9845aa922","backup_bytes":30051,"backup_format":"custom","backup_sha256":"30e671e36cf7652fe3e346c9612be90629446ff9bd3cbe63ef529cca15f53703","dump_duration_ms":373.2361,"postgres_version":"16.15","recovery_table_counts":{"effects":1,"schema_migrations":11,"security_audit_events":3,"task_events":3,"tasks":1},"restore_duration_ms":420.5405,"result":"PASS","task_attempt":1,"task_lease_version":1,"task_state":"success"}
+--- PASS: TestDatabaseBackupRestoreDrill (1.55s)
+PASS
+ok  	github.com/fantasticyi/distributed-task-lab/internal/storage/postgres	3.497s

@@ -1,0 +1,50 @@
+﻿{
+    "run_id":  "tasklab-e2e-03007b6a80c3",
+    "result":  "PASS",
+    "implementation_commit":  "3eef1603293aa0bbc45877bb8263699f09c9e2b5",
+    "worktree_dirty_at_test":  true,
+    "docker_compose_project":  "tasklab-e2e-03007b6a80c3",
+    "minio_source_commit":  "9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a",
+    "minio_ephemeral_local_image_id":  "sha256:a283e3400c7d32d59ed9d593388ba07c17252d7f65dda67f548df826d34e479b",
+    "postgres_image":  "postgres:16-alpine",
+    "credentials_recorded":  false,
+    "checks":  [
+                   {
+                       "name":  "minio-response-loss-contract",
+                       "exit_code":  0,
+                       "status":  "PASS"
+                   },
+                   {
+                       "name":  "api-two-worker-container-recovery",
+                       "exit_code":  0,
+                       "status":  "PASS"
+                   },
+                   {
+                       "name":  "api-worker-put-response-loss-recovery",
+                       "exit_code":  0,
+                       "status":  "PASS"
+                   }
+               ],
+    "files":  [
+                  {
+                      "path":  "logs/minio-response-loss-contract.log",
+                      "sha256":  "19e254ed04a2e461fae1b20548da19c03f3debb41429f1c618713ae4da0ed3b0",
+                      "bytes":  964
+                  },
+                  {
+                      "path":  "logs/container-recovery.log",
+                      "sha256":  "dd73254b6f764a3ecae458fb0fe615d5832a6a8f797066f8974f700994fa3ff3",
+                      "bytes":  1044
+                  },
+                  {
+                      "path":  "logs/container-put-response-loss.log",
+                      "sha256":  "f380caccf6c32aa48aed27c17969148f76dd060d241ede7ddeb7748c24205c56",
+                      "bytes":  932
+                  },
+                  {
+                      "path":  "logs/services.redacted.log",
+                      "sha256":  "d689a094656493d134d10f4fc48a1685d148061791b3aa59c781fddb11af89f1",
+                      "bytes":  87421
+                  }
+              ]
+}

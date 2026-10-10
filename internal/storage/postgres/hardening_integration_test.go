@@ -65,7 +65,7 @@ func TestExpiredRunningReclaimIgnoresCapacity(t *testing.T) {
 	task := newTask("expired-at-capacity", 3)
 	task.Queue = "reclaim"
 	enqueue(t, q, task)
-	first, err := q.ClaimTasks(ctx, "worker-a", 1, 2*time.Millisecond)
+	first, err := q.ClaimTasks(ctx, "worker-a", 1, time.Minute)
 	if err != nil || len(first) != 1 {
 		t.Fatalf("first claim: n=%d err=%v", len(first), err)
 	}
@@ -73,7 +73,7 @@ func TestExpiredRunningReclaimIgnoresCapacity(t *testing.T) {
 	pending.Queue = "reclaim"
 	pending.Priority = 1000
 	enqueue(t, q, pending)
-	time.Sleep(15 * time.Millisecond)
+	expireLeaseForTest(t, ctx, q, first[0].ID)
 	second, err := q.ClaimTasks(ctx, "worker-b", 1, time.Minute)
 	if err != nil || len(second) != 1 {
 		t.Fatalf("reclaim: n=%d err=%v", len(second), err)
@@ -92,8 +92,11 @@ func TestRenewLeaseRejectsRealStaleSameWorkerGeneration(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 	enqueue(t, q, newTask("stale-renew", 3))
-	first, _ := q.ClaimTasks(ctx, "same-worker", 1, 2*time.Millisecond)
-	time.Sleep(15 * time.Millisecond)
+	first, err := q.ClaimTasks(ctx, "same-worker", 1, time.Minute)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("first claim: n=%d err=%v", len(first), err)
+	}
+	expireLeaseForTest(t, ctx, q, first[0].ID)
 	second, err := q.ClaimTasks(ctx, "same-worker", 1, time.Minute)
 	if err != nil || len(second) != 1 {
 		t.Fatalf("reclaim: n=%d err=%v", len(second), err)
@@ -103,9 +106,27 @@ func TestRenewLeaseRejectsRealStaleSameWorkerGeneration(t *testing.T) {
 	if !errors.Is(err, domain.ErrTaskNotClaimed) {
 		t.Fatalf("stale renew error=%v", err)
 	}
-	got, _ := q.GetTask(ctx, second[0].ID)
+	got, err := q.GetTask(ctx, second[0].ID)
+	if err != nil {
+		t.Fatalf("read reclaimed task: %v", err)
+	}
 	if !got.LeaseExpiresAt.Equal(before) {
 		t.Fatalf("stale renew changed generation 2 lease: %v -> %v", before, *got.LeaseExpiresAt)
+	}
+}
+
+func expireLeaseForTest(t *testing.T, ctx context.Context, q *PostgresQueue, taskID string) {
+	t.Helper()
+	result, err := q.db.ExecContext(ctx, `UPDATE tasks SET lease_expires_at=clock_timestamp()-interval '1 millisecond' WHERE id=$1`, taskID)
+	if err != nil {
+		t.Fatalf("expire test lease using PostgreSQL clock: %v", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		t.Fatalf("count expired test lease rows: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("expired %d test lease rows, want 1", rows)
 	}
 }
 
@@ -174,6 +195,9 @@ func TestGlobalQueueRateLimitAcrossWorkersAndStableRefresh(t *testing.T) {
 		task.Queue = cfg.Name
 		enqueue(t, q1, task)
 	}
+	if _, err := q1.db.ExecContext(ctx, `UPDATE tasks SET next_run_at=clock_timestamp()-interval '1 millisecond' WHERE queue=$1 AND status='pending'`, cfg.Name); err != nil {
+		t.Fatalf("make rate-limit fixtures due using PostgreSQL time: %v", err)
+	}
 	start := make(chan struct{})
 	results := make(chan int, 2)
 	var wg sync.WaitGroup
@@ -209,10 +233,50 @@ func TestGlobalQueueRateLimitAcrossWorkersAndStableRefresh(t *testing.T) {
 	if len(immediate) != 0 {
 		t.Fatal("same-config refresh reset the shared burst")
 	}
-	// Token refill is calculated from PostgreSQL time. Poll to a finite
-	// deadline instead of assuming the database clock has advanced enough after
-	// a fixed process-local sleep.
-	claimOneEventually(t, q2, "later-worker", 2*time.Second)
+	// Token refill is calculated from PostgreSQL time. Wait for the persisted
+	// bucket plus DB-clock refill to reach one token, then verify the worker can
+	// claim. This avoids repeatedly opening claim transactions just to learn
+	// that PostgreSQL's authoritative clock has not reached the refill boundary.
+	// The 10-second bound is a liveness ceiling for a loaded local PostgreSQL
+	// integration run, not the expected refill delay (one token at 5/s is 200ms).
+	waitForQueueToken(t, q2, cfg.Name, 1, 10*time.Second)
+	refilled, err := q2.ClaimTasks(ctx, "later-worker", 1, time.Minute)
+	if err != nil {
+		t.Fatalf("claim after PostgreSQL reports a refilled queue token: %v", err)
+	}
+	if len(refilled) != 1 {
+		t.Fatalf("claim after PostgreSQL reports a refilled queue token: got %d tasks, want 1", len(refilled))
+	}
+}
+
+func waitForQueueToken(t *testing.T, q *PostgresQueue, queueName string, want float64, timeout time.Duration) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	var databaseTime time.Time
+	var tokens float64
+	for {
+		err := q.db.QueryRowContext(ctx, `
+			SELECT clock_timestamp(),
+			       LEAST(burst::double precision,
+			         rate_tokens + GREATEST(0, EXTRACT(EPOCH FROM (clock_timestamp()-rate_updated_at))) * rate_limit_per_second)
+			FROM queues WHERE name=$1
+		`, queueName).Scan(&databaseTime, &tokens)
+		if err != nil {
+			t.Fatalf("read queue token state using PostgreSQL clock: %v", err)
+		}
+		if tokens >= want {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timed out after %s waiting for PostgreSQL queue token refill: queue=%q tokens=%.6f want=%.6f db_now=%s", timeout, queueName, tokens, want, databaseTime)
+		case <-ticker.C:
+		}
+	}
 }
 
 func TestLeaseUsesDatabaseClockAuthority(t *testing.T) {

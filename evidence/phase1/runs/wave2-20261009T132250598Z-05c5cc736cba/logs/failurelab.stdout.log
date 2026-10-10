@@ -1,0 +1,24 @@
+migration applied: 001_create_tasks.sql
+migration applied: 002_create_task_events.sql
+migration applied: 003_create_workers.sql
+migration applied: 004_production_hardening.sql
+migration applied: 005_queue_governance.sql
+migration applied: 006_queue_rate_limit.sql
+migration applied: 007_integrity_and_runtime.sql
+migration applied: 008_queue_aging.sql
+migration applied: 009_create_effects.sql
+migration applied: 010_identity_audit.sql
+migration applied: 011_task_keyset_pagination.sql
+{"time":"2026-10-09T13:25:56.451676Z","scenario":"concurrent-claim-no-duplicate","operation":"claim","result":"PASS: 16 unique rows claimed once"}
+{"time":"2026-10-09T13:25:56.5074559Z","scenario":"strict-max-concurrency","operation":"admission","result":"PASS: combined claims remained 1"}
+{"time":"2026-10-09T13:25:56.5640013Z","scenario":"lease-expiry-reclaim","worker":"same-worker","task":"fl-1791552356296730900-fence","operation":"reclaim","lease_version":2,"attempt":2,"state":"running","result":"PASS: expired ownership generation reclaimed"}
+{"time":"2026-10-09T13:25:56.5693512Z","scenario":"same-worker-id-stale-fencing","worker":"same-worker","task":"fl-1791552356296730900-fence","operation":"fence","lease_version":2,"attempt":2,"state":"success","result":"PASS: stale generation rejected"}
+{"time":"2026-10-09T13:25:56.7197847Z","scenario":"lease-renewal","operation":"renew","result":"PASS: ownership survived original expiry"}
+{"time":"2026-10-09T13:25:56.736798Z","scenario":"retry-backoff-dlq","operation":"failure","result":"PASS: max-attempt task moved to DLQ"}
+{"time":"2026-10-09T13:25:56.7784154Z","scenario":"concurrent-idempotent-enqueue","operation":"enqueue","result":"PASS: 32 callers converged on one task ID"}
+{"time":"2026-10-09T13:25:56.8457564Z","scenario":"effect-before-ack","operation":"side_effect","result":"PASS: execution duplicated; idempotency key converged business effect once"}
+{"time":"2026-10-09T13:25:56.8671759Z","scenario":"queue-pause","operation":"pause/resume","result":"PASS: pause blocked new claim and resume restored it"}
+{"time":"2026-10-09T13:25:56.8944099Z","scenario":"global-rate-across-replicas","operation":"rate_admission","result":"PASS: two replicas consumed one shared burst token"}
+{"time":"2026-10-09T13:25:57.0521541Z","scenario":"graceful-shutdown","operation":"SIGTERM-drain","result":"PASS: claiming stopped, lease renewed, handler acked before exit"}
+{"time":"2026-10-09T13:25:57.1368875Z","scenario":"hard-crash-recovery","operation":"SIGKILL","result":"PASS: expired lease reclaimed and completed"}
+{"time":"2026-10-09T13:25:57.1374069Z","scenario":"summary","operation":"all","result":"PASS: 12 failure-lab scenarios satisfied their database oracles"}

@@ -1,0 +1,186 @@
+﻿{
+    "schema_version":  1,
+    "updated_at_utc":  "2026-10-10T02:42:16.8973278Z",
+    "records":  [
+                    {
+                        "evidence_id":  "wave2-20261009T093214275Z-0b73ce734dcd",
+                        "status":  "NOT VERIFIED",
+                        "implementation_commit":  "0b73ce734dcd1f09db830bb46524c450c7732239",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T093214275Z-0b73ce734dcd/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T093728451Z-e34e272f85c4",
+                        "status":  "NOT VERIFIED",
+                        "implementation_commit":  "e34e272f85c4d2c8699f1aabbb1c91f19dfc1d28",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T093728451Z-e34e272f85c4/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T094212634Z-fcd9bf97ea83",
+                        "status":  "FAIL",
+                        "implementation_commit":  "fcd9bf97ea83c5622bd5b1ddc6984a6b5b14a796",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T094212634Z-fcd9bf97ea83/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T095347192Z-f16c2df5831f",
+                        "status":  "FAIL",
+                        "implementation_commit":  "f16c2df5831f334d17706e3829ecf1fcfda91d11",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T095347192Z-f16c2df5831f/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T115734795Z-568c45d5ad66",
+                        "status":  "NOT VERIFIED",
+                        "implementation_commit":  "568c45d5ad669801594604ecdc39854480106645",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T115734795Z-568c45d5ad66/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T120751006Z-04d4b231c0cf",
+                        "status":  "PASS",
+                        "implementation_commit":  "04d4b231c0cf5ef0bb4f435328973cc891316b60",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T120751006Z-04d4b231c0cf/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T121704030Z-8d389ea2900b",
+                        "status":  "FAIL",
+                        "implementation_commit":  "8d389ea2900b85fc364cf92e544e5d829d496cd7",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T121704030Z-8d389ea2900b/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T122242810Z-a7948148c334",
+                        "status":  "FAIL",
+                        "implementation_commit":  "a7948148c334824ec6f8868f2ddaab1c8829459a",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T122242810Z-a7948148c334/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T123051207Z-0e8f75573f67",
+                        "status":  "PASS",
+                        "implementation_commit":  "0e8f75573f67aad840544ccd0c8b4a2119e8e033",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T123051207Z-0e8f75573f67/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T132250598Z-05c5cc736cba",
+                        "status":  "FAIL",
+                        "implementation_commit":  "05c5cc736cba9a8a25c74c9a752bcc74fc1e3180",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T132250598Z-05c5cc736cba/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T132951262Z-0b321e18aed2",
+                        "status":  "PASS",
+                        "implementation_commit":  "0b321e18aed2ed3c9193a379222f12968d6f304e",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T132951262Z-0b321e18aed2/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T135024749Z-1971e8ee55f2",
+                        "status":  "PASS",
+                        "implementation_commit":  "1971e8ee55f260031f2b025e2466ce662ec43f43",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T135024749Z-1971e8ee55f2/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T141334610Z-dd9894cf4393",
+                        "status":  "PASS",
+                        "implementation_commit":  "dd9894cf4393a7489a47365dfa8f45f407b3c522",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T141334610Z-dd9894cf4393/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T143117144Z-24d8857f8d90",
+                        "status":  "PASS",
+                        "implementation_commit":  "24d8857f8d9070bed0b31d61446c2dead0f8ba6b",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T143117144Z-24d8857f8d90/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T144813183Z-8b16c19c357c",
+                        "status":  "PASS",
+                        "implementation_commit":  "8b16c19c357cc7ee5df7600ed33d0eddc636600f",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T144813183Z-8b16c19c357c/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T150131176Z-c632abd2fd1b",
+                        "status":  "FAIL",
+                        "implementation_commit":  "c632abd2fd1bd46db1e35db584c564dd9b43702e",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T150131176Z-c632abd2fd1b/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T151234676Z-553d5f6cd2cf",
+                        "status":  "FAIL",
+                        "implementation_commit":  "553d5f6cd2cf091fec0c4ad6c0a48e1e10f391c4",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T151234676Z-553d5f6cd2cf/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T151936028Z-5b98642760d6",
+                        "status":  "PASS",
+                        "implementation_commit":  "5b98642760d6d6d0adc6dcc406354fcce64d919b",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T151936028Z-5b98642760d6/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T152839292Z-42dc2e69182e",
+                        "status":  "PASS",
+                        "implementation_commit":  "42dc2e69182ed639d9b57fb4cd1337ab7a28cdcb",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T152839292Z-42dc2e69182e/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave2-20261009T153618132Z-a292ec7a996b",
+                        "status":  "PASS",
+                        "implementation_commit":  "a292ec7a996bc39214ab413c420eacd9268a7298",
+                        "manifest":  "evidence/phase1/runs/wave2-20261009T153618132Z-a292ec7a996b/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave3-20261010T171000Z-9b360f5952bb",
+                        "status":  "PASS",
+                        "implementation_commit":  "9b360f5952bb745fcbd25dfcb32c7c9bbe20f1bf",
+                        "manifest":  "evidence/phase1/runs/wave3-20261010T171000Z-9b360f5952bb/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave3-minio-proxy-preflight-fail-9b360f5952bb",
+                        "status":  "NOT VERIFIED",
+                        "implementation_commit":  "9b360f5952bb745fcbd25dfcb32c7c9bbe20f1bf",
+                        "manifest":  "evidence/phase1/runs/wave3-minio-proxy-preflight-fail-9b360f5952bb/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave3-20261010T171600Z-cedbdc1edb09",
+                        "status":  "PASS",
+                        "implementation_commit":  "cedbdc1edb09a5abf4225ecdbc288ab7e623389d",
+                        "manifest":  "evidence/phase1/runs/wave3-20261010T171600Z-cedbdc1edb09/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave3-container-e2e-tasklab-e2e-980f3ba036b3",
+                        "status":  "PASS",
+                        "implementation_commit":  "9b81e96b498b05d92469efb41c53c6c1fe6acedf",
+                        "manifest":  "evidence/phase1/runs/wave3-container-e2e/tasklab-e2e-980f3ba036b3/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave3-20261010T172000Z-962ec4e",
+                        "status":  "FAIL",
+                        "implementation_commit":  "962ec4e33c2c907a73eae628e9f9d39dd2704acb",
+                        "manifest":  "evidence/phase1/runs/wave3-20261010T172000Z-962ec4e/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave3-20261010T173000Z-80b7baa",
+                        "status":  "PASS",
+                        "implementation_commit":  "eafc0a83037d24273eb8cfae881c94a8c7ce3d53",
+                        "manifest":  "evidence/phase1/runs/wave3-20261010T173000Z-80b7baa/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave3-container-e2e-tasklab-e2e-d55fb468070f",
+                        "status":  "PASS",
+                        "implementation_commit":  "3eef1603293aa0bbc45877bb8263699f09c9e2b5",
+                        "manifest":  "evidence/phase1/runs/wave3-container-e2e/tasklab-e2e-d55fb468070f/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave3-20261010T174500Z-67eb27c",
+                        "status":  "FAIL",
+                        "implementation_commit":  "67eb27c6451f5d85bb3f0f0637d950745340a6a5",
+                        "manifest":  "evidence/phase1/runs/wave3-20261010T174500Z-67eb27c/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave3-20261010T180000Z-22478c8",
+                        "status":  "PASS",
+                        "implementation_commit":  "22478c8986b8d1c7d6b89d76c6249304f25c8cda",
+                        "manifest":  "evidence/phase1/runs/wave3-20261010T180000Z-22478c8/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave3-d3c5310-full-14-gate",
+                        "status":  "PASS",
+                        "implementation_commit":  "d3c5310910b942ad7232a287a62ba550625cc855",
+                        "manifest":  "evidence/phase1/runs/wave3-d3c5310-full-14-gate/manifest.json"
+                    }
+                ]
+}

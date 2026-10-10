@@ -16,15 +16,51 @@ kill. The worker stops claims first and continues renewal while draining.
 
 ## Security
 
-Set separate high-entropy `API_TOKEN` and `ADMIN_TOKEN`, terminate TLS at the
-ingress, restrict PostgreSQL network access, and inject secrets through the
-platform secret store. Empty tokens are local-development mode only.
+Set `APP_PROFILE=production` only after the deployment supplies an HTTPS OIDC
+issuer, audience, JWKS endpoint, and explicit role mappings. Production rejects
+`API_TOKEN`/`ADMIN_TOKEN`; these are development compatibility only. Provide
+`API_CURSOR_SIGNING_KEY` with at least 32 random bytes through the platform
+secret store. Rotating this key invalidates outstanding pagination cursors.
 
-Set `APP_PROFILE=production` for deployed processes. Startup validates all
-environment parsing and cross-field limits before opening the database. The
-production profile requires separate API/admin tokens, PostgreSQL TLS, a
-non-default database password, and an `s3://` or `minio://` artifact location;
-the log includes only a redacted database endpoint and a configuration checksum.
+Production API startup also validates a non-local PostgreSQL URL with TLS and
+non-default credentials, an HTTPS S3-compatible endpoint, bucket and explicit
+credentials, and the HTTPS evaluation gateway configuration. The API logs a
+redacted DB endpoint plus a checksum that excludes credentials. Do not place
+secret values in logs, task payloads, shell history, or evidence bundles.
+
+The worker currently fails closed in production until shared artifact storage
+is wired through every artifact-producing handler and verified against an
+actual MinIO/S3 service. A configured S3 endpoint alone is not proof that
+workers share artifacts. The production task execution allowlist is currently
+empty; structurally valid Mock/deterministic tasks are intentionally rejected.
+Do not weaken either gate to make a demo run.
+
+Queue governance rate limits apply cluster-wide through PostgreSQL. The API
+ingress token bucket is per process only and is an overload guard, not a
+cluster-wide tenant quota.
+
+## Backup and restore
+
+Use the platform's encrypted backup system for PostgreSQL and the configured
+object store. Treat task payloads/results, task events, security audit rows,
+effect ledger records, and referenced artifacts as one recovery set. Object
+retention must not delete an artifact still referenced by a live task or an
+audit/effect record. Never use `TRUNCATE` or delete audit/effect history as a
+routine cleanup mechanism.
+
+For a PostgreSQL logical recovery, use an isolated target database and a
+verified backup, then:
+
+```sh
+pg_restore --exit-on-error --no-owner --dbname="$RESTORE_DATABASE_URL" backup.dump
+```
+
+After restore, confirm `/ready` reports the expected schema, compare task,
+event, audit and effect counts with the backup manifest, verify representative
+artifact hashes against the object store, and exercise one non-production
+claim/complete workflow before switching traffic. The repository does not yet
+contain a rehearsed production restore or RPO/RTO evidence; this procedure is a
+runbook, not a claim that disaster recovery has been tested.
 
 ## Alerts
 
@@ -66,6 +102,10 @@ generation and request hash identify the actual provider request. Query the
 provider with that idempotency key before changing task state. If the provider
 cannot be queried or made idempotent, set the effect to `manual_resolution` and
 resolve it with a documented operator decision; do not retry automatically.
+The API exposes unresolved records at `GET /v1/effects` to operators. Only an
+admin may call `POST /v1/effects/{id}/resolve`, and the required reason is
+written to the append-only security audit in the same transaction. This
+manual state means “operator reviewed”; it does not prove provider settlement.
 
 ### Connection exhaustion and worker drain
 

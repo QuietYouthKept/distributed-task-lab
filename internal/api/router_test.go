@@ -9,13 +9,24 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/api/handlers"
+	"github.com/fantasticyi/distributed-task-lab/internal/auth"
 )
 
 type readinessStub struct{ err error }
 
 func (s readinessStub) HealthCheck(context.Context) error { return s.err }
+
+type verifierStub struct{ principal auth.Principal }
+
+func (s verifierStub) Verify(_ context.Context, token string) (auth.Principal, error) {
+	if token != "signed-test-token" {
+		return auth.Principal{}, errors.New("invalid token")
+	}
+	return s.principal, nil
+}
 
 func testRouter(ready ReadinessProvider, cfg RouterConfig) http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -48,6 +59,108 @@ func TestAdminTokenBoundary(t *testing.T) {
 		if w.Code != tc.want {
 			t.Fatalf("token=%q status=%d want=%d", tc.token, w.Code, tc.want)
 		}
+	}
+}
+
+func TestEffectReconciliationAlwaysRequiresAdminBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		cfg                 RouterConfig
+		path, method, token string
+	}{
+		{"no credentials", RouterConfig{}, "/v1/effects", http.MethodGet, ""},
+		{"API token cannot resolve", RouterConfig{APIToken: "reader-token"}, "/v1/effects/effect-1/resolve", http.MethodPost, "reader-token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := testRouter(readinessStub{}, tc.cfg)
+			r := httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{"reason":"reviewed"}`))
+			if tc.token != "" {
+				r.Header.Set("Authorization", "Bearer "+tc.token)
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != http.StatusUnauthorized {
+				t.Fatalf("status=%d want 401 body=%s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestOIDCRouteAuthorizationRequiresExplicitRole(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		principal auth.Principal
+		path      string
+		method    string
+		want      int
+	}{
+		{"reader cannot create", auth.Principal{Subject: "reader-1", Roles: map[auth.Role]struct{}{auth.RoleReader: {}}}, "/v1/tasks", http.MethodPost, http.StatusForbidden},
+		{"operator cannot configure queue", auth.Principal{Subject: "operator-1", Roles: map[auth.Role]struct{}{auth.RoleOperator: {}}}, "/v1/queues/default/pause", http.MethodPost, http.StatusForbidden},
+		{"reader cannot inspect effects", auth.Principal{Subject: "reader-1", Roles: map[auth.Role]struct{}{auth.RoleReader: {}}}, "/v1/effects", http.MethodGet, http.StatusForbidden},
+		{"operator cannot resolve effects", auth.Principal{Subject: "operator-1", Roles: map[auth.Role]struct{}{auth.RoleOperator: {}}}, "/v1/effects/effect-1/resolve", http.MethodPost, http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := testRouter(readinessStub{}, RouterConfig{Authenticator: verifierStub{principal: tc.principal}, RequireAuthentication: true})
+			r := httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{}`))
+			r.Header.Set("Authorization", "Bearer signed-test-token")
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != tc.want {
+				t.Fatalf("status=%d want=%d body=%s", w.Code, tc.want, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestIngressRateLimitIsBoundToVerifiedPrincipal(t *testing.T) {
+	principal := auth.Principal{Subject: "tenant-user-1", Roles: map[auth.Role]struct{}{auth.RoleReader: {}}}
+	cfg := RouterConfig{Authenticator: verifierStub{principal: principal}, RequireAuthentication: true, IngressRatePerSecond: 0.01, IngressBurst: 1}
+	h := testRouter(readinessStub{}, cfg)
+	request := func() *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, "/v1/not-a-route", nil)
+		r.Header.Set("Authorization", "Bearer signed-test-token")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if got := request().Code; got != http.StatusNotFound {
+		t.Fatalf("first request status=%d want 404", got)
+	}
+	limited := request()
+	if limited.Code != http.StatusTooManyRequests || limited.Header().Get("Retry-After") == "" || !strings.Contains(limited.Body.String(), `"request_id"`) {
+		t.Fatalf("second request should be a correlated 429, got status=%d headers=%v body=%s", limited.Code, limited.Header(), limited.Body.String())
+	}
+
+	other := testRouter(readinessStub{}, RouterConfig{Authenticator: verifierStub{principal: auth.Principal{Subject: "tenant-user-2", Roles: map[auth.Role]struct{}{auth.RoleReader: {}}}}, RequireAuthentication: true, IngressRatePerSecond: 0.01, IngressBurst: 1})
+	r := httptest.NewRequest(http.MethodGet, "/v1/not-a-route", nil)
+	r.Header.Set("Authorization", "Bearer signed-test-token")
+	w := httptest.NewRecorder()
+	other.ServeHTTP(w, r)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("different principal should have an independent bucket; status=%d", w.Code)
+	}
+}
+
+func TestIngressLimiterReclaimsOnlyFullyRefilledIdleBuckets(t *testing.T) {
+	limiter := newIngressLimiter(1, 1)
+	limiter.maxBuckets = 1
+	start := time.Unix(100, 0)
+	if allowed, _ := limiter.allow("idle-principal", start); !allowed {
+		t.Fatal("first request should consume the initial token")
+	}
+
+	if allowed, _ := limiter.allow("new-principal", start.Add(time.Second-time.Nanosecond)); allowed {
+		t.Fatal("a bucket must not be evicted before its token has fully refilled")
+	}
+	if len(limiter.buckets) != 1 {
+		t.Fatalf("bucket count after premature request = %d, want 1", len(limiter.buckets))
+	}
+
+	if allowed, retryAfter := limiter.allow("new-principal", start.Add(time.Second)); !allowed {
+		t.Fatalf("fully refilled idle bucket should be reclaimable; retry_after=%d", retryAfter)
+	}
+	if len(limiter.buckets) != 1 {
+		t.Fatalf("bucket count after reclamation = %d, want 1", len(limiter.buckets))
 	}
 }
 

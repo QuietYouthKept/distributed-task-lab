@@ -19,6 +19,8 @@ future deployment manifest must use a least-privilege runtime database user,
 TLS verification appropriate to its provider, and a shared artifact adapter.
 
 The API production profile can validate these boundaries today, but the worker
-deliberately refuses to start in production: its artifact handlers still use
-filesystem APIs and no MinIO/S3 adapter is wired in yet. This fail-closed guard
-prevents an `s3://` or `minio://` value from being interpreted as a local path.
+deliberately refuses to start in production: no task execution type has passed
+the complete provider, shared-artifact, fencing, and recovery acceptance gate.
+An explicit S3 Store can be used by development/test workers, but that does not
+approve production execution. Do not replace this fail-closed guard until the
+end-to-end gates are satisfied.

@@ -1,0 +1,5 @@
+=== RUN   TestAPIWorkerContainersRecoverSharedArtifact
+    container_recovery_test.go:201: PASS: isolated API, PostgreSQL, MinIO and two Worker containers; owner=e2e-worker-b killed after Put/before ACK; reclaimed_by=e2e-worker-a attempt=2 generation=2; artifact_sha256=900cbfeaf782b09de048bd33337a9011adf46a0ef43c552b46d723e4ee2eeb50; stale generation fenced; one success event
+--- PASS: TestAPIWorkerContainersRecoverSharedArtifact (3.92s)
+PASS
+ok  	github.com/fantasticyi/distributed-task-lab/internal/e2e	5.671s

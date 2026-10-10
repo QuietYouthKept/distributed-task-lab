@@ -1,0 +1,4 @@
+=== RUN   TestPublicClientFromIndependentModule
+--- PASS: TestPublicClientFromIndependentModule (0.00s)
+PASS
+ok  	example.com/tasklab-external-client	1.722s

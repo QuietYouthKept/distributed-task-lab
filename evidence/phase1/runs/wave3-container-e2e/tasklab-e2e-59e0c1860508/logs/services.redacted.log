@@ -1,0 +1,219 @@
+api-1       | 2026-10-10T01:02:56.987624526Z {"time":"2026-10-10T01:02:56.987073261Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"f9d6ec362ea6912988611717023dde4d135071bca54503189e11317bf8b46cb8"}
+api-1       | 2026-10-10T01:02:56.987668247Z {"time":"2026-10-10T01:02:56.987483117Z","level":"INFO","msg":"starting API server","port":8080}
+api-1       | 2026-10-10T01:02:57.006016658Z {"time":"2026-10-10T01:02:57.005636659Z","level":"INFO","msg":"database migrations applied"}
+api-1       | 2026-10-10T01:02:57.006337835Z {"time":"2026-10-10T01:02:57.00604352Z","level":"INFO","msg":"API server listening","addr":":8080"}
+worker-a-1  | 2026-10-10T01:02:56.664760191Z {"time":"2026-10-10T01:02:56.664388608Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"e38a120d6a654f869307f58a838ef9ec86caadaa84790ffadd3541dce20efc11"}
+minio-1     | 2026-10-10T01:02:33.175845950Z INFO: Formatting 1st pool, 1 set(s), 1 drives per set.
+worker-a-1  | 2026-10-10T01:02:56.664792922Z {"time":"2026-10-10T01:02:56.664681546Z","level":"INFO","msg":"starting worker","worker_id":"e2e-worker-a","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000}
+api-1       | 2026-10-10T01:03:15.462778677Z {"time":"2026-10-10T01:03:15.462417726Z","level":"INFO","msg":"request","method":"GET","path":"/ready"}
+api-1       | 2026-10-10T01:03:15.474507042Z {"time":"2026-10-10T01:03:15.474250333Z","level":"INFO","msg":"request","method":"POST","path":"/v1/tasks"}
+worker-a-1  | 2026-10-10T01:02:56.717563084Z migration applied: 001_create_tasks.sql
+postgres-1  | 2026-10-10T01:02:33.060768420Z The files belonging to this database system will be owned by user "postgres".
+api-1       | 2026-10-10T01:03:15.484116902Z {"time":"2026-10-10T01:03:15.483874945Z","level":"INFO","msg":"task created","task_id":"f935677c-777f-432c-900e-276c7f5569ad","type":"rag_ingestion"}
+api-1       | 2026-10-10T01:03:15.503990109Z {"time":"2026-10-10T01:03:15.503745094Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:15.510203112Z {"time":"2026-10-10T01:03:15.509978381Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+minio-1     | 2026-10-10T01:02:33.175879250Z INFO: WARNING: Host local has more than 0 drives of set. A host failure will result in data becoming unavailable.
+postgres-1  | 2026-10-10T01:02:33.060801929Z This user must also own the server process.
+postgres-1  | 2026-10-10T01:02:33.060804735Z 
+api-1       | 2026-10-10T01:03:16.152300202Z {"time":"2026-10-10T01:03:16.152060482Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:33.060806815Z The database cluster will be initialized with locale "en_US.utf8".
+postgres-1  | 2026-10-10T01:02:33.060808875Z The default database encoding has accordingly been set to "UTF8".
+postgres-1  | 2026-10-10T01:02:33.060811061Z The default text search configuration will be set to "english".
+worker-a-1  | 2026-10-10T01:02:56.735918371Z migration applied: 002_create_task_events.sql
+worker-b-1  | 2026-10-10T01:03:01.967689180Z {"time":"2026-10-10T01:03:01.96650039Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"e38a120d6a654f869307f58a838ef9ec86caadaa84790ffadd3541dce20efc11"}
+worker-b-1  | 2026-10-10T01:03:01.967823591Z {"time":"2026-10-10T01:03:01.967621033Z","level":"INFO","msg":"starting worker","worker_id":"e2e-worker-b","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000}
+worker-b-1  | 2026-10-10T01:03:01.999344863Z {"time":"2026-10-10T01:03:01.998976203Z","level":"INFO","msg":"database migrations applied","worker_id":"e2e-worker-b"}
+api-1       | 2026-10-10T01:03:16.181099399Z {"time":"2026-10-10T01:03:16.180827668Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.209648131Z {"time":"2026-10-10T01:03:16.209374279Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.238114685Z {"time":"2026-10-10T01:03:16.237879064Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+minio-1     | 2026-10-10T01:02:33.193888177Z MinIO Object Storage Server
+postgres-1  | 2026-10-10T01:02:33.060813068Z 
+api-1       | 2026-10-10T01:03:16.266574665Z {"time":"2026-10-10T01:03:16.266328455Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.295013256Z {"time":"2026-10-10T01:03:16.294776388Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:33.060814833Z Data page checksums are disabled.
+minio-1     | 2026-10-10T01:02:33.193918744Z Copyright: 2015-2026 MinIO, Inc.
+worker-a-1  | 2026-10-10T01:02:56.748895746Z migration applied: 003_create_workers.sql
+worker-a-1  | 2026-10-10T01:02:56.760234238Z migration applied: 004_production_hardening.sql
+worker-a-1  | 2026-10-10T01:02:56.774011626Z migration applied: 005_queue_governance.sql
+worker-a-1  | 2026-10-10T01:02:56.777186598Z migration applied: 006_queue_rate_limit.sql
+worker-a-1  | 2026-10-10T01:02:56.826383539Z migration applied: 007_integrity_and_runtime.sql
+worker-a-1  | 2026-10-10T01:02:56.831758893Z migration applied: 008_queue_aging.sql
+api-1       | 2026-10-10T01:03:16.323161860Z {"time":"2026-10-10T01:03:16.322854244Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.351755771Z {"time":"2026-10-10T01:03:16.351490572Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.379984977Z {"time":"2026-10-10T01:03:16.379727263Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.408536411Z {"time":"2026-10-10T01:03:16.408236075Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+minio-1     | 2026-10-10T01:02:33.193923556Z License: GNU AGPLv3 - https://www.gnu.org/licenses/agpl-3.0.html
+minio-1     | 2026-10-10T01:02:33.193926751Z Version: DEVELOPMENT.GOGET (go1.26.9 linux/amd64)
+minio-1     | 2026-10-10T01:02:33.193929651Z 
+minio-1     | 2026-10-10T01:02:33.193932310Z API: http://192.168.112.2:9000  http://127.0.0.1:9000 
+minio-1     | 2026-10-10T01:02:33.193935021Z WebUI: http://192.168.112.2:9001 http://127.0.0.1:9001  
+worker-a-1  | 2026-10-10T01:02:56.852430387Z migration applied: 009_create_effects.sql
+worker-a-1  | 2026-10-10T01:02:56.885227198Z migration applied: 010_identity_audit.sql
+worker-a-1  | 2026-10-10T01:02:56.896601559Z migration applied: 011_task_keyset_pagination.sql
+postgres-1  | 2026-10-10T01:02:33.060816651Z 
+worker-b-1  | 2026-10-10T01:03:02.003203585Z {"time":"2026-10-10T01:03:02.002182433Z","level":"INFO","msg":"worker pool starting","worker_id":"e2e-worker-b","worker_id":"e2e-worker-b","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000,"max_local_claims":2}
+worker-b-1  | 2026-10-10T01:03:19.504825453Z {"time":"2026-10-10T01:03:19.504523377Z","level":"INFO","msg":"executing task","worker_id":"e2e-worker-b","task_id":"f935677c-777f-432c-900e-276c7f5569ad","task_type":"rag_ingestion","queue":"default","attempt":2,"lease_version":2,"worker_id":"e2e-worker-b","goroutine":0}
+api-1       | 2026-10-10T01:03:16.437178831Z {"time":"2026-10-10T01:03:16.436892251Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+minio-1     | 2026-10-10T01:02:33.193941798Z 
+api-1       | 2026-10-10T01:03:16.465890853Z {"time":"2026-10-10T01:03:16.465595014Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+minio-1     | 2026-10-10T01:02:33.193944929Z Docs: https://docs.min.io
+postgres-1  | 2026-10-10T01:02:33.060941998Z fixing permissions on existing directory /var/lib/postgresql/data ... ok
+postgres-1  | 2026-10-10T01:02:33.068121692Z creating subdirectories ... ok
+api-1       | 2026-10-10T01:03:16.494377896Z {"time":"2026-10-10T01:03:16.494168049Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+worker-a-1  | 2026-10-10T01:02:56.898165460Z {"time":"2026-10-10T01:02:56.897727572Z","level":"INFO","msg":"database migrations applied","worker_id":"e2e-worker-a"}
+worker-a-1  | 2026-10-10T01:02:56.915748857Z {"time":"2026-10-10T01:02:56.91543357Z","level":"INFO","msg":"worker pool starting","worker_id":"e2e-worker-a","worker_id":"e2e-worker-a","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000,"max_local_claims":2}
+worker-a-1  | 2026-10-10T01:03:15.496936792Z {"time":"2026-10-10T01:03:15.496537395Z","level":"INFO","msg":"executing task","worker_id":"e2e-worker-a","task_id":"f935677c-777f-432c-900e-276c7f5569ad","task_type":"rag_ingestion","queue":"default","attempt":1,"lease_version":1,"worker_id":"e2e-worker-a","goroutine":0}
+api-1       | 2026-10-10T01:03:16.525066039Z {"time":"2026-10-10T01:03:16.52410694Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.553965186Z {"time":"2026-10-10T01:03:16.553714519Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.583047944Z {"time":"2026-10-10T01:03:16.58282134Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.611760279Z {"time":"2026-10-10T01:03:16.611491084Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.640115677Z {"time":"2026-10-10T01:03:16.639851956Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.668760046Z {"time":"2026-10-10T01:03:16.668497311Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.698469923Z {"time":"2026-10-10T01:03:16.698169847Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.727750176Z {"time":"2026-10-10T01:03:16.727420644Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.757654349Z {"time":"2026-10-10T01:03:16.757319116Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.787621268Z {"time":"2026-10-10T01:03:16.78717447Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+worker-b-1  | 2026-10-10T01:03:19.515224652Z {"time":"2026-10-10T01:03:19.514951756Z","level":"INFO","msg":"task completed successfully","worker_id":"e2e-worker-b","task_id":"f935677c-777f-432c-900e-276c7f5569ad","worker_id":"e2e-worker-b"}
+api-1       | 2026-10-10T01:03:16.817411861Z {"time":"2026-10-10T01:03:16.816988843Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.848006371Z {"time":"2026-10-10T01:03:16.847661596Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.877623964Z {"time":"2026-10-10T01:03:16.877219117Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.907202371Z {"time":"2026-10-10T01:03:16.906831825Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.936886506Z {"time":"2026-10-10T01:03:16.936530765Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:16.966285708Z {"time":"2026-10-10T01:03:16.965934641Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:33.068225887Z selecting dynamic shared memory implementation ... posix
+postgres-1  | 2026-10-10T01:02:33.086641833Z selecting default max_connections ... 100
+postgres-1  | 2026-10-10T01:02:33.110796437Z selecting default shared_buffers ... 128MB
+postgres-1  | 2026-10-10T01:02:33.160822702Z selecting default time zone ... UTC
+postgres-1  | 2026-10-10T01:02:33.161824709Z creating configuration files ... ok
+postgres-1  | 2026-10-10T01:02:33.296920572Z running bootstrap script ... ok
+api-1       | 2026-10-10T01:03:16.995183228Z {"time":"2026-10-10T01:03:16.994916802Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:33.501357804Z sh: locale: not found
+postgres-1  | 2026-10-10T01:02:33.501572768Z 2026-10-10 01:02:33.501 UTC [35] WARNING:  no usable system locales were found
+postgres-1  | 2026-10-10T01:02:33.995852077Z performing post-bootstrap initialization ... ok
+postgres-1  | 2026-10-10T01:02:34.422855755Z syncing data to disk ... ok
+api-1       | 2026-10-10T01:03:17.024185348Z {"time":"2026-10-10T01:03:17.023909394Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.053006275Z {"time":"2026-10-10T01:03:17.052788785Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.081401447Z {"time":"2026-10-10T01:03:17.081111313Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.110441497Z {"time":"2026-10-10T01:03:17.110041443Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:34.422887383Z 
+api-1       | 2026-10-10T01:03:17.139819589Z {"time":"2026-10-10T01:03:17.139556162Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:34.422889853Z 
+api-1       | 2026-10-10T01:03:17.169393710Z {"time":"2026-10-10T01:03:17.169098877Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.198868422Z {"time":"2026-10-10T01:03:17.198537755Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.227978909Z {"time":"2026-10-10T01:03:17.227764449Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.256957935Z {"time":"2026-10-10T01:03:17.256671869Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.286031360Z {"time":"2026-10-10T01:03:17.285770575Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.315002520Z {"time":"2026-10-10T01:03:17.314697191Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.343262919Z {"time":"2026-10-10T01:03:17.343045125Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.372046734Z {"time":"2026-10-10T01:03:17.371704687Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.400683513Z {"time":"2026-10-10T01:03:17.400379569Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.429084669Z {"time":"2026-10-10T01:03:17.428860886Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.457534731Z {"time":"2026-10-10T01:03:17.457293648Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:34.422891860Z Success. You can now start the database server using:
+postgres-1  | 2026-10-10T01:02:34.422890105Z initdb: warning: enabling "trust" authentication for local connections
+postgres-1  | 2026-10-10T01:02:34.422902515Z initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+postgres-1  | 2026-10-10T01:02:34.422894266Z 
+postgres-1  | 2026-10-10T01:02:34.422909576Z     pg_ctl -D /var/lib/postgresql/data -l logfile start
+postgres-1  | 2026-10-10T01:02:34.422911741Z 
+api-1       | 2026-10-10T01:03:17.485996546Z {"time":"2026-10-10T01:03:17.485712022Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.514136174Z {"time":"2026-10-10T01:03:17.51385666Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.542501396Z {"time":"2026-10-10T01:03:17.542228416Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.570835204Z {"time":"2026-10-10T01:03:17.570635539Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.599415727Z {"time":"2026-10-10T01:03:17.59919688Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.627688111Z {"time":"2026-10-10T01:03:17.627460102Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:34.472690724Z waiting for server to start....2026-10-10 01:02:34.472 UTC [41] LOG:  starting PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1  | 2026-10-10T01:02:34.475796915Z 2026-10-10 01:02:34.475 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-10-10T01:02:34.482196903Z 2026-10-10 01:02:34.482 UTC [44] LOG:  database system was shut down at 2026-10-10 01:02:33 UTC
+api-1       | 2026-10-10T01:03:17.656211152Z {"time":"2026-10-10T01:03:17.65594053Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.684753255Z {"time":"2026-10-10T01:03:17.684527617Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.713666305Z {"time":"2026-10-10T01:03:17.713376013Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:34.489233028Z 2026-10-10 01:02:34.489 UTC [41] LOG:  database system is ready to accept connections
+api-1       | 2026-10-10T01:03:17.742050968Z {"time":"2026-10-10T01:03:17.74178285Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:34.548387610Z  done
+api-1       | 2026-10-10T01:03:17.770669751Z {"time":"2026-10-10T01:03:17.770259725Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:34.548412776Z server started
+postgres-1  | 2026-10-10T01:02:34.637203157Z CREATE DATABASE
+postgres-1  | 2026-10-10T01:02:34.638049081Z 
+postgres-1  | 2026-10-10T01:02:34.638070149Z 
+postgres-1  | 2026-10-10T01:02:34.638195256Z /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+postgres-1  | 2026-10-10T01:02:34.638209263Z 
+postgres-1  | 2026-10-10T01:02:34.639284762Z waiting for server to shut down...2026-10-10 01:02:34.639 UTC [41] LOG:  received fast shutdown request
+postgres-1  | 2026-10-10T01:02:34.641516848Z .2026-10-10 01:02:34.641 UTC [41] LOG:  aborting any active transactions
+postgres-1  | 2026-10-10T01:02:34.643910429Z 2026-10-10 01:02:34.643 UTC [41] LOG:  background worker "logical replication launcher" (PID 47) exited with exit code 1
+postgres-1  | 2026-10-10T01:02:34.644372343Z 2026-10-10 01:02:34.644 UTC [42] LOG:  shutting down
+postgres-1  | 2026-10-10T01:02:34.646329439Z 2026-10-10 01:02:34.646 UTC [42] LOG:  checkpoint starting: shutdown immediate
+postgres-1  | 2026-10-10T01:02:34.789542396Z 2026-10-10 01:02:34.789 UTC [42] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.026 s, sync=0.111 s, total=0.146 s; sync files=301, longest=0.002 s, average=0.001 s; distance=4283 kB, estimate=4283 kB; lsn=0/1925D60, redo lsn=0/1925D60
+postgres-1  | 2026-10-10T01:02:34.802849306Z 2026-10-10 01:02:34.802 UTC [41] LOG:  database system is shut down
+postgres-1  | 2026-10-10T01:02:34.841183085Z  done
+postgres-1  | 2026-10-10T01:02:34.841210615Z server stopped
+postgres-1  | 2026-10-10T01:02:34.842433390Z 
+postgres-1  | 2026-10-10T01:02:34.842445705Z PostgreSQL init process complete; ready for start up.
+postgres-1  | 2026-10-10T01:02:34.842448426Z 
+api-1       | 2026-10-10T01:03:17.799489680Z {"time":"2026-10-10T01:03:17.799265206Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:34.866381192Z 2026-10-10 01:02:34.866 UTC [1] LOG:  starting PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+api-1       | 2026-10-10T01:03:17.828485931Z {"time":"2026-10-10T01:03:17.828178808Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:34.867225612Z 2026-10-10 01:02:34.867 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+postgres-1  | 2026-10-10T01:02:34.877743783Z 2026-10-10 01:02:34.877 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+api-1       | 2026-10-10T01:03:17.856780284Z {"time":"2026-10-10T01:03:17.856538456Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.885209633Z {"time":"2026-10-10T01:03:17.884952584Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.913640278Z {"time":"2026-10-10T01:03:17.913377602Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.942345746Z {"time":"2026-10-10T01:03:17.942111164Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:17.970640067Z {"time":"2026-10-10T01:03:17.970405904Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+postgres-1  | 2026-10-10T01:02:34.888070448Z 2026-10-10 01:02:34.887 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-10-10T01:02:34.894467274Z 2026-10-10 01:02:34.894 UTC [57] LOG:  database system was shut down at 2026-10-10 01:02:34 UTC
+postgres-1  | 2026-10-10T01:02:34.900951022Z 2026-10-10 01:02:34.900 UTC [1] LOG:  database system is ready to accept connections
+postgres-1  | 2026-10-10T01:03:16.151614124Z 2026-10-10 01:03:16.151 UTC [138] LOG:  unexpected EOF on client connection with an open transaction
+api-1       | 2026-10-10T01:03:17.998860180Z {"time":"2026-10-10T01:03:17.998634643Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.027268813Z {"time":"2026-10-10T01:03:18.027053523Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.055450036Z {"time":"2026-10-10T01:03:18.055222467Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.083960902Z {"time":"2026-10-10T01:03:18.083719117Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.112744111Z {"time":"2026-10-10T01:03:18.112525865Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.140945538Z {"time":"2026-10-10T01:03:18.140701583Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.169527781Z {"time":"2026-10-10T01:03:18.169330443Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.198227881Z {"time":"2026-10-10T01:03:18.197925247Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.227093514Z {"time":"2026-10-10T01:03:18.226847252Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.256441383Z {"time":"2026-10-10T01:03:18.256176584Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.285436550Z {"time":"2026-10-10T01:03:18.285220874Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.314585566Z {"time":"2026-10-10T01:03:18.314322346Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.343308995Z {"time":"2026-10-10T01:03:18.34304624Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.372529021Z {"time":"2026-10-10T01:03:18.372283335Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.401209228Z {"time":"2026-10-10T01:03:18.400896686Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.430281711Z {"time":"2026-10-10T01:03:18.430015484Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.459046411Z {"time":"2026-10-10T01:03:18.458802848Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.487828319Z {"time":"2026-10-10T01:03:18.48759466Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.516417228Z {"time":"2026-10-10T01:03:18.516191643Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.545110248Z {"time":"2026-10-10T01:03:18.544877997Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.573459453Z {"time":"2026-10-10T01:03:18.573223371Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.602461860Z {"time":"2026-10-10T01:03:18.602181298Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.630987868Z {"time":"2026-10-10T01:03:18.630696664Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.659543834Z {"time":"2026-10-10T01:03:18.659295169Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.688535921Z {"time":"2026-10-10T01:03:18.688256826Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.717864242Z {"time":"2026-10-10T01:03:18.717596137Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.746334950Z {"time":"2026-10-10T01:03:18.746086002Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.774932605Z {"time":"2026-10-10T01:03:18.774671994Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.803498867Z {"time":"2026-10-10T01:03:18.803267892Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.832167530Z {"time":"2026-10-10T01:03:18.831926626Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.860744833Z {"time":"2026-10-10T01:03:18.860491029Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.889081212Z {"time":"2026-10-10T01:03:18.888839803Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.917386415Z {"time":"2026-10-10T01:03:18.917134238Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.946142884Z {"time":"2026-10-10T01:03:18.945866622Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:18.974811884Z {"time":"2026-10-10T01:03:18.97451787Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.004017059Z {"time":"2026-10-10T01:03:19.003692024Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.033096336Z {"time":"2026-10-10T01:03:19.03277313Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.062045435Z {"time":"2026-10-10T01:03:19.061819033Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.091358425Z {"time":"2026-10-10T01:03:19.091078943Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.120509454Z {"time":"2026-10-10T01:03:19.119897079Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.149499720Z {"time":"2026-10-10T01:03:19.149230084Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.178854544Z {"time":"2026-10-10T01:03:19.17849621Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.208053725Z {"time":"2026-10-10T01:03:19.207775186Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.237017445Z {"time":"2026-10-10T01:03:19.236742888Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.266184532Z {"time":"2026-10-10T01:03:19.265873909Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.295735712Z {"time":"2026-10-10T01:03:19.295115482Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.324500872Z {"time":"2026-10-10T01:03:19.324219924Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.353733825Z {"time":"2026-10-10T01:03:19.353374895Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.383156074Z {"time":"2026-10-10T01:03:19.382827929Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.412843217Z {"time":"2026-10-10T01:03:19.41245606Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.442161490Z {"time":"2026-10-10T01:03:19.441890408Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.470722478Z {"time":"2026-10-10T01:03:19.470448428Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.499344731Z {"time":"2026-10-10T01:03:19.49906889Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}
+api-1       | 2026-10-10T01:03:19.528162028Z {"time":"2026-10-10T01:03:19.527903652Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/f935677c-777f-432c-900e-276c7f5569ad"}

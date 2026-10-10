@@ -1,0 +1,6 @@
+=== RUN   TestMinIOStoreContractAndConcurrentConditionalWrite
+    minio_integration_test.go:100: PUT response and verification HEAD loss returned <nil>, want ErrUnknownOutcome
+--- FAIL: TestMinIOStoreContractAndConcurrentConditionalWrite (0.08s)
+FAIL
+FAIL	github.com/fantasticyi/distributed-task-lab/internal/artifacts	0.786s
+FAIL

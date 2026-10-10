@@ -9,7 +9,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/artifacts"
 	"github.com/fantasticyi/distributed-task-lab/internal/config"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload"
 	"github.com/fantasticyi/distributed-task-lab/internal/observability"
 	"github.com/fantasticyi/distributed-task-lab/internal/storage/postgres"
 	"github.com/fantasticyi/distributed-task-lab/internal/worker"
@@ -18,7 +20,7 @@ import (
 
 func main() {
 	cfg := config.Load()
-	logger := observability.Logger()
+	logger := observability.Logger(cfg.SensitiveValues()...)
 	if err := cfg.ValidateWorker(); err != nil {
 		logger.Error("invalid startup configuration", "error", err)
 		os.Exit(1)
@@ -64,7 +66,23 @@ func main() {
 	pq := postgres.NewPostgresQueueWithTimeout(db, cfg.DBOperationTimeout)
 
 	// Composite handler: explicit real-RAG object-key tasks or explicit mock workloads.
-	handler := handlers.NewComposite(cfg.DocDir, cfg.ArtifactDir, postgres.NewEffectLedger(db))
+	var handler worker.Handler
+	if cfg.ArtifactBackend == "s3" {
+		artifactStore, err := newArtifactStore(cfg)
+		if err != nil {
+			logger.Error("failed to initialize artifact store", "error", err)
+			os.Exit(1)
+		}
+		if cfg.Profile == "production" {
+			handler = handlers.NewCompositeWithArtifactStore(cfg.DocDir, cfg.ArtifactDir, taskpayload.ProductionExecutionPolicy(), artifactStore, postgres.NewEffectLedger(db))
+		} else {
+			handler = handlers.NewCompositeWithArtifactStore(cfg.DocDir, cfg.ArtifactDir, nil, artifactStore, postgres.NewEffectLedger(db))
+		}
+	} else if cfg.Profile == "production" {
+		handler = handlers.NewCompositeWithAdmission(cfg.DocDir, cfg.ArtifactDir, taskpayload.ProductionExecutionPolicy(), postgres.NewEffectLedger(db))
+	} else {
+		handler = handlers.NewComposite(cfg.DocDir, cfg.ArtifactDir, postgres.NewEffectLedger(db))
+	}
 
 	// Create and start the worker pool.
 	pool := worker.NewPool(
@@ -123,4 +141,25 @@ func main() {
 	}
 	_ = healthServer.Shutdown(shutdownCtx)
 	logger.Info("worker stopped")
+}
+
+func newArtifactStore(cfg *config.Config) (artifacts.Store, error) {
+	if cfg.ArtifactBackend == "s3" {
+		store, err := artifacts.NewS3Store(artifacts.S3Config{
+			Endpoint: cfg.ArtifactS3Endpoint, Bucket: cfg.ArtifactS3Bucket, Prefix: cfg.ArtifactS3Prefix,
+			AccessKey: cfg.ArtifactS3AccessKey, SecretKey: cfg.ArtifactS3SecretKey, Region: cfg.ArtifactS3Region,
+			MaxBytes: cfg.ArtifactMaxObjectBytes, AllowHTTP: cfg.ArtifactAllowHTTP,
+			AllowBucketCreate: cfg.ArtifactAllowBucketCreate,
+		})
+		if err != nil {
+			return nil, err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := store.EnsureBucket(ctx); err != nil {
+			return nil, fmt.Errorf("verify artifact bucket: %w", err)
+		}
+		return store, nil
+	}
+	return artifacts.NewLocalStore(cfg.ArtifactDir, "", cfg.ArtifactMaxObjectBytes)
 }

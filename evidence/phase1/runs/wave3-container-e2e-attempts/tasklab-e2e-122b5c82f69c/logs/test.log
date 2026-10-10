@@ -1,0 +1,6 @@
+=== RUN   TestAPIWorkerContainersRecoverSharedArtifact
+    container_recovery_test.go:116: create response status=422 id_present=false decode_err=<nil> close_err=<nil>
+--- FAIL: TestAPIWorkerContainersRecoverSharedArtifact (0.03s)
+FAIL
+FAIL	github.com/fantasticyi/distributed-task-lab/internal/e2e	0.791s
+FAIL

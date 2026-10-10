@@ -1,0 +1,5 @@
+=== RUN   TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash
+    worker_recovery_test.go:201: PASS: API-created task recovered by the surviving worker after owner e2e-worker-b was killed after shared Put and before ACK; attempt=2 lease_version=2
+--- PASS: TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash (32.02s)
+PASS
+ok  	github.com/fantasticyi/distributed-task-lab/internal/e2e	33.741s
