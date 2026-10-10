@@ -2,9 +2,8 @@
 
 ## P0 — cross-container storage and recovery
 
-- Add a disposable Compose topology with PostgreSQL, MinIO, API and at least two separately built Worker containers on a task-specific network, each with independent filesystems.
-- Demonstrate shared input/output reads, Put response loss after persistence, same-key/same-content reuse, same-key/different-content conflict, worker crash after Put/before ACK, lease reclaim, and stale-generation fencing.
-- Preserve exact object bytes/hash and database result-reference evidence. Existing CI recovery is host-process based, not container topology proof.
+- A disposable Compose topology now exercises PostgreSQL, source-built MinIO, API and two separately built Worker containers on a run-scoped network with independent worker filesystems. Pre-commit diagnostic run `tasklab-e2e-e71c60f64c06` passed the container crash/recovery and real MinIO response-loss contract; its manifest records a dirty worktree, so clean implementation-bound Evidence is still required.
+- Remaining: put-response loss is tested through the real S3 adapter separately from the worker-container scenario, not inside a Worker request; malformed object metadata recovery and simultaneous same-case writes from both Worker containers are not yet covered. Preserve exact object bytes/hash and DB result-reference checks. Existing remote CI recovery is host-process based, not container-topology proof.
 
 ## P0 — external side effects
 

@@ -3,8 +3,13 @@ package artifacts
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -91,6 +96,7 @@ func TestMinIOStoreContractAndConcurrentConditionalWrite(t *testing.T) {
 	if _, err := store.Head(ctx, key+"-missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing object Head=%v, want ErrNotFound", err)
 	}
+	assertMinIOPutResponseLossRecovery(t, ctx, cfg, key+"-response-lost")
 	canceledCtx, cancelRequest := context.WithCancel(ctx)
 	cancelRequest()
 	if _, _, err := store.Get(canceledCtx, key); !errors.Is(err, context.Canceled) {
@@ -129,4 +135,82 @@ func TestMinIOStoreContractAndConcurrentConditionalWrite(t *testing.T) {
 	if err := store.Delete(ctx, key); err != nil {
 		t.Fatal(err)
 	}
+}
+
+var errDropS3Response = errors.New("test proxy dropped an S3 response")
+
+func assertMinIOPutResponseLossRecovery(t *testing.T, ctx context.Context, cfg S3Config, key string) {
+	t.Helper()
+	backend, err := url.Parse(cfg.Endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var putResponseDropped atomic.Bool
+	var headResponseDropped atomic.Bool
+	var faultEnabled atomic.Bool
+	faultEnabled.Store(true)
+	proxy := httputil.NewSingleHostReverseProxy(backend)
+	director := proxy.Director
+	proxy.Director = func(request *http.Request) {
+		originalHost := request.Host
+		director(request)
+		request.Host = originalHost
+	}
+	proxy.ModifyResponse = func(response *http.Response) error {
+		if !faultEnabled.Load() {
+			return nil
+		}
+		if response.Request.Method == http.MethodPut && response.StatusCode >= 200 && response.StatusCode < 300 {
+			putResponseDropped.Store(true)
+			return errDropS3Response
+		}
+		if response.Request.Method == http.MethodHead && putResponseDropped.Load() && response.StatusCode >= 200 && response.StatusCode < 300 {
+			headResponseDropped.Store(true)
+			return errDropS3Response
+		}
+		return nil
+	}
+	proxy.ErrorHandler = func(writer http.ResponseWriter, request *http.Request, proxyErr error) {
+		if errors.Is(proxyErr, errDropS3Response) {
+			if hijacker, ok := writer.(http.Hijacker); ok {
+				connection, _, err := hijacker.Hijack()
+				if err == nil {
+					_ = connection.Close()
+					return
+				}
+			}
+			return
+		}
+		http.Error(writer, "test proxy upstream failure", http.StatusBadGateway)
+	}
+	server := httptest.NewServer(proxy)
+	defer server.Close()
+	proxiedConfig := cfg
+	proxiedConfig.Endpoint = server.URL
+	proxied, err := NewS3Store(proxiedConfig)
+	if err != nil {
+		t.Fatalf("configure response-loss S3 proxy client: %v", err)
+	}
+	payload := []byte(`{"response":"lost after persistence"}`)
+	_, putErr := proxied.PutIfAbsent(ctx, key, payload, "application/json")
+	faultEnabled.Store(false)
+	if !errors.Is(putErr, ErrUnknownOutcome) {
+		t.Fatalf("PUT response and verification HEAD loss returned %v (put_response_dropped=%t head_response_dropped=%t), want ErrUnknownOutcome", putErr, putResponseDropped.Load(), headResponseDropped.Load())
+	}
+	if !putResponseDropped.Load() || !headResponseDropped.Load() {
+		t.Fatalf("fault proxy did not drop both intended responses: put=%t head=%t", putResponseDropped.Load(), headResponseDropped.Load())
+	}
+	verified, err := NewS3Store(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, info, err := verified.Get(ctx, key)
+	if err != nil || string(data) != string(payload) {
+		t.Fatalf("MinIO object after lost responses body=%q info=%+v err=%v", data, info, err)
+	}
+	retryInfo, err := proxied.PutIfAbsent(ctx, key, payload, "application/json")
+	if err != nil || retryInfo.SHA256 != info.SHA256 || retryInfo.Size != info.Size {
+		t.Fatalf("same-content retry did not reconcile existing object: retry=%+v verified=%+v err=%v", retryInfo, info, err)
+	}
+	t.Logf("PASS: S3 PUT committed but response and first verification HEAD were dropped; outcome=%v; real MinIO re-read and retry reused SHA256=%s", ErrUnknownOutcome, info.SHA256)
 }

@@ -369,7 +369,11 @@ func getTask(t *testing.T, ctx context.Context, apiURL, id string) *domain.Task 
 	if err != nil {
 		t.Fatalf("build task read request: %v", err)
 	}
-	request.Header.Set("Authorization", "Bearer "+apiToken)
+	token := apiToken
+	if containerToken := os.Getenv("E2E_API_TOKEN"); containerToken != "" {
+		token = containerToken
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatalf("read task through API: %v", err)

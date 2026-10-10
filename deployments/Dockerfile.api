@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 AS builder
 
 # GOPROXY is a build arg so China users can use a mirror:
 #   docker compose build --build-arg GOPROXY=https://goproxy.cn,direct

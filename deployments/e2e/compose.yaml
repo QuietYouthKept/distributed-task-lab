@@ -1,0 +1,93 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${E2E_POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: tasklab
+    ports:
+      - "127.0.0.1:${E2E_POSTGRES_PORT:?required}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tasklab"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  minio:
+    image: ${MINIO_CI_IMAGE:?use the pinned source-built test image}
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${E2E_S3_ACCESS_KEY:?required}
+      MINIO_ROOT_PASSWORD: ${E2E_S3_SECRET_KEY:?required}
+    ports:
+      - "127.0.0.1:${E2E_MINIO_PORT:?required}:9000"
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.api
+    environment:
+      APP_PROFILE: development
+      DATABASE_URL: postgres://postgres:${E2E_POSTGRES_PASSWORD}@postgres:5432/tasklab?sslmode=disable
+      API_PORT: "8080"
+      API_TOKEN: ${E2E_API_TOKEN:?required}
+      ADMIN_TOKEN: ${E2E_ADMIN_TOKEN:?required}
+      LOG_LEVEL: error
+    ports:
+      - "127.0.0.1:${E2E_API_PORT:?required}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker-a:
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.worker
+    environment: &worker_environment
+      APP_PROFILE: development
+      DATABASE_URL: postgres://postgres:${E2E_POSTGRES_PASSWORD}@postgres:5432/tasklab?sslmode=disable
+      WORKER_ID: e2e-worker-a
+      WORKER_CONCURRENCY: "1"
+      WORKER_POLL_INTERVAL: 20ms
+      CLAIM_BATCH_SIZE: "1"
+      LEASE_TIMEOUT: 4s
+      DB_OPERATION_TIMEOUT: 1s
+      SHUTDOWN_TIMEOUT: 1s
+      ARTIFACT_STORE_BACKEND: s3
+      ARTIFACT_S3_ENDPOINT: http://minio:9000
+      ARTIFACT_S3_BUCKET: tasklab-e2e
+      ARTIFACT_S3_PREFIX: ${E2E_ARTIFACT_PREFIX:?required}
+      ARTIFACT_S3_ACCESS_KEY: ${E2E_S3_ACCESS_KEY:?required}
+      ARTIFACT_S3_SECRET_KEY: ${E2E_S3_SECRET_KEY:?required}
+      ARTIFACT_S3_REGION: us-east-1
+      ARTIFACT_ALLOW_HTTP: "true"
+      ARTIFACT_ALLOW_BUCKET_CREATE: "true"
+      LOG_LEVEL: error
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9091/ready >/dev/null || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  worker-b:
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.worker
+    environment:
+      <<: *worker_environment
+      WORKER_ID: e2e-worker-b
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9091/ready >/dev/null || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

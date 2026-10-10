@@ -46,10 +46,14 @@ if command -v cygpath >/dev/null 2>&1; then
   module_dir="$(cygpath --unix "$module_dir")"
 fi
 license_file="$build_root/context/LICENSE"
-if ! curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
-  "$MINIO_LICENSE_URL" --output "$license_file"; then
-  printf 'Failed to fetch the upstream MinIO license at pinned commit %s.\n' "$MINIO_SOURCE_COMMIT" >&2
-  exit 1
+if [[ -f "$module_dir/LICENSE" ]]; then
+  cp "$module_dir/LICENSE" "$license_file"
+else
+  if ! curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+    "$MINIO_LICENSE_URL" --output "$license_file"; then
+    printf 'Failed to fetch the upstream MinIO license at pinned commit %s.\n' "$MINIO_SOURCE_COMMIT" >&2
+    exit 1
+  fi
 fi
 license_sum="$(sha256sum "$license_file" | cut -d ' ' -f 1)"
 if [[ "$license_sum" != "$MINIO_LICENSE_SHA256" ]]; then
