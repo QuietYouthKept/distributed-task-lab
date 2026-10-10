@@ -13,12 +13,12 @@ permissions:
 jobs:
   image-sbom-and-vulnerability-scan:
     name: Build, SBOM, and vulnerability scan (API + Worker)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Prepare report directories
         run: mkdir -p artifacts/sbom artifacts/vulnerability
@@ -101,7 +101,7 @@ jobs:
 
       - name: Preserve SBOM and vulnerability reports, including on scan failure
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: container-supply-chain-${{ github.sha }}
           path: artifacts/
