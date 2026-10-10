@@ -13,7 +13,7 @@ Decision: `WAVE4_ENGINEERING_PARTIAL`; `PRODUCTION_NOT_APPROVED`.
 | Database migration rollback | `ROLLBACK_BLOCKED` | Wave 3 API/Worker fail closed on schema12. Runtime matrix proves startup/readiness only; task/effect mixed-version data semantics and a populated-data forward/rollback drill remain unverified. No binary downgrade across migration 012. |
 | Artifacts / backup restore | Authenticated MinIO and one isolated DB+object restore pass | No cloud IAM/KMS/region durability or operational backup schedule evidence. |
 | Vulnerability scan | Local `govulncheck ./...` pass with residual module advisory | Current source not found to call the affected OpenPGP package; advisory has no fixed version and remains unresolved. |
-| Hosted CI / supply-chain checks | PASS on head `00c04793119b8ab1e435dc7ea0b88fb9f9afd6b5`, attempt 1 | Required CI, Security, and Supply Chain jobs passed; Scorecard skipped as expected for PR event. A docs-only closeout update will trigger a follow-up run. |
+| Hosted CI / supply-chain checks | PASS on `00c0479` and docs-only `fb412eb`, attempt 1 | Required CI, Security, and Supply Chain jobs passed on both; Scorecard skipped as expected for PR event. |
 | Production credentials, external providers, deployment | Not exercised | Keep production Worker allowlist closed and all production profiles fail-closed. |
 
 ## Required before any production approval

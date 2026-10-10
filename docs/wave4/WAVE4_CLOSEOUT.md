@@ -18,4 +18,4 @@ No production migrations, real provider credentials, external effects, release t
 
 ## Delivery state
 
-The branch was pushed fast-forward-only and Draft PR [#2](https://github.com/QuietYouthKept/distributed-task-lab/pull/2) was opened against `codex/phase1-production-hardening`. This report update is docs-only and will trigger a subsequent set of hosted checks; the successful workflow evidence above remains bound to SHA `00c0479`. Do not merge or publish a release. Keep the overall result partial because rollback and operation-level migration compatibility remain open.
+The branch was pushed fast-forward-only and Draft PR [#2](https://github.com/QuietYouthKept/distributed-task-lab/pull/2) was opened against `codex/phase1-production-hardening`. The docs-only commit `fb412eb036ed810fae47b0096a163e16dbcb54ce` also completed CI `38042254943`, Security `38042254958`, and Supply Chain `38042254954` PASS on attempt 1; Scorecard was expected SKIPPED. Those results verify that documentation snapshot. Do not merge or publish a release. Keep the overall result partial because rollback and operation-level migration compatibility remain open.
