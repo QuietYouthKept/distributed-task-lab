@@ -7,6 +7,7 @@ Updated: 2026-10-09 (Asia/Shanghai)
 - Package A's four clean-bound MinIO/API/two-Worker E2E checks passed on implementation `e74e59f`; these include Worker-path PUT response loss, crash recovery, and concurrent same-key writes. Separate Evidence is preserved under `evidence/phase1/runs/wave3-container-e2e/tasklab-e2e-10de3fd9335c/`.
 - The post-closeout broad local regression passed 14/14 against `d3c5310`; its raw run records are append-only under `evidence/phase1/runs/wave3-d3c5310-full-14-gate/`. This run does not claim remote CI or production readiness.
 - Next independent work remains Package D (end-to-end telemetry and operational recovery evidence) and Package E (image/SBOM/release controls). Provider integration remains blocked on approved provider/sandbox details; Production Worker fail-closed is retained.
+- Package D local metrics scrape is now closed in implementation commit `f5974777a452c2e455a0c9b03bffa2df88ed989f`: a bounded exact-commit Compose run observed API and Worker targets both UP, with API auth passed as a runtime secret. No production or alerting claim is made.
 
 ## Scope and recovery point
 

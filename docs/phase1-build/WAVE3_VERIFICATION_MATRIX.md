@@ -32,5 +32,6 @@
 | Cross-instance rate limit / cursor key rotation | ADR-0006 proposal; no shared implementation/key-ring behavior | NOT IMPLEMENTED / NOT VERIFIED | Must not change production semantics without owner-approved outage/quota/TTL/overlap policy. |
 | Full distributed trace / alert firing | Collector and operational alert | NOT VERIFIED | Existing local OTLP receiver does not verify API-to-worker continuity or production alert closure. |
 | SBOM / image vulnerability scan / release smoke | supply-chain and deployment evidence | NOT VERIFIED | Existing CI CodeQL/govulncheck do not substitute for container image scanning/SBOM. |
+| Package D API + Worker Prometheus scrape | Exact-commit Compose overlay at `f5974777a452c2e455a0c9b03bffa2df88ed989f`; bounded wait for active targets | PASS, both targets `up` | API Bearer token supplied through Compose runtime secret; Worker target stays internal. Local dev only; no alert or production discovery proof. |
 
 No Wave 2 Evidence is relabeled to cover Wave 3 code.

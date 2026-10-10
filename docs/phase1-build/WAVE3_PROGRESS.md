@@ -60,8 +60,15 @@ Updated: 2026-10-10 (Asia/Shanghai)
 
 ## Remaining work and next commands
 
-1. Commit the newly collected full 14/14 Evidence for `d3c5310` with this status update, preserving all preceding failed and diagnostic runs.
-2. Package A's former response-loss and same-key cross-worker gaps are now covered by `e74e59f`; continue independent package D/E gaps, then revisit OpenAPI schema coverage and provider-dependent B work only where inputs permit.
+1. Package A's full collector Evidence is committed as `6d3474b`, alongside its clean four-gate cross-container Evidence.
+2. Package A's former response-loss and same-key cross-worker gaps are now covered by `e74e59f`; Package D local API/Worker metrics scraping is implemented in `f597477`. Continue with independent Package E supply-chain controls, then revisit OpenAPI schema coverage and provider-dependent B work only where inputs permit.
 3. Preserve Production Fail-Closed. External IdP, real Provider/Sandbox, cloud S3/DR, production RPO/RTO, and SLO/on-call remain unverified.
 
 Latest resumable command after checking status: `git status -sb; git rev-parse HEAD; go test -race ./internal/api -run '^TestIngress' -count=100`.
+
+## Package D — Worker metric scraping closeout — 2026-10-10
+
+- Commit `f5974777a452c2e455a0c9b03bffa2df88ed989f` adds an optional local Compose observability overlay with a stable, explicitly named Worker metrics endpoint and in-network Prometheus targets for API and Worker.
+- Live Compose verification first exposed API `/metrics` returning 401. The final design preserves existing operator authorization: Compose provides the API token to Prometheus as a runtime secret file, while the scrape config only names the secret path. The Worker health/metrics endpoint stays on the Compose network and is not host-published.
+- Exact-commit Docker Compose verification passed: PostgreSQL healthy, API and Worker containers started, and Prometheus reported `tasklab-api` (`api:8080`) and `tasklab-worker` (`worker-metrics:9091`) both `up`. Only the uniquely named verification Compose project was removed afterward, including its disposable volumes.
+- Scope is local development only. The extra named Worker is not replica discovery; production scrape authentication/TLS, cluster discovery, worker-level actionable alerts, Alertmanager/on-call ownership, and image pinning remain open.

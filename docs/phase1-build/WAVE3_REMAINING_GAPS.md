@@ -23,7 +23,7 @@
 ## P1 — observability and operations
 
 - Local OTLP receiver proves an exported span, not the API → database → async Worker → ArtifactStore → fenced ACK path. Add a real Collector and trace-link evidence with secret redaction.
-- Prometheus currently scrapes the API; add Worker scraping and thresholds only after service owners approve actionable alert policy. Validate actual alert firing and recovery. No Alertmanager/on-call loop is certified.
+- Optional local Compose observability now scrapes API and Worker successfully; API scraping retains Bearer auth via a runtime secret file. It uses a single named development Worker and mutable Prometheus/Grafana tags. Production replica/service discovery, TLS/authentication, pinned images, alert thresholds, actual alert firing/recovery, and Alertmanager/on-call ownership remain unverified.
 - Owner-filtered pagination plan needs representative high/low owner-selectivity EXPLAIN ANALYZE, buffers and write-cost comparison before index changes.
 - Backup/restore is a local rehearsal only. Automate protected/offsite backups and isolated recovery checks; cloud DR and RPO/RTO remain unverified.
 - Retention/GC remains to be designed as dry-run first with reference checks, bounded batches, audit and resumability.
