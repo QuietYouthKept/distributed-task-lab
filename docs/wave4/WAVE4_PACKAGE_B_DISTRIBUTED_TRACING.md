@@ -1,6 +1,8 @@
 # Wave 4 Package B — Distributed Tracing
 
-Status: `IMPLEMENTED — LOCAL ACCEPTANCE IN PROGRESS`
+Status: `PASS — LOCAL PACKAGE ACCEPTANCE`
+
+Implementation commit: `8099c68fd1448999cf3a262672519967d0a1d867` (tree `9eb8bde1820462f7fb3353810bc2bac20baa18df`), based on Package A commit `2069ce1406b8626f003e72266f558600926db2a0`. All results below are bound to the clean Package B source commit; hosted CI remains unverified.
 
 Production remains `PRODUCTION_NOT_APPROVED`; this package adds diagnostic instrumentation and does not enable production task execution.
 
@@ -21,7 +23,12 @@ The first post-fix run reached a separate harness assertion failure: the test ex
 
 The first successful run established API → PostgreSQL → two Workers → MinIO → Collector export and trace-link correlation. The next run also executed the real Worker-A crash-after-PUT/before-ACK recovery test with tracing enabled: the owner was killed, Worker B reclaimed attempt 2 / lease version 2, verified the same durable artifact, and completed the task. Collector output contains the task ID, `expired_lease` reason, worker execution span, and link to the API producer span. Both runs used fresh Compose project names, ephemeral credentials, and separate evidence directories.
 
-Evidence directories (outside the D: repository):
+Final clean-source evidence directories (outside the D: repository):
+
+- `E:\distributed-task-lab-temp\wave4-artifacts\package-b-final-8099c68-20261010` — full unit, full Race, vet, required PostgreSQL integration logs, manifest, and SHA-256 list.
+- `E:\distributed-task-lab-temp\wave4-artifacts\tracing-e2e-runs\evidence\tasklab-e2e-4df8581dda83` — final clean-source Collector + crash/reclaim E2E, two passing checks, per-file SHA-256 values, and redacted service logs.
+
+Earlier successful dirty-source runs (useful diagnostic evidence, not the clean-source acceptance basis):
 
 - `E:\distributed-task-lab-temp\wave4-artifacts\tracing-e2e-runs\evidence\tasklab-e2e-7b22580a0bfc` — tracing happy path; initial post-fix run; source was dirty and its manifest records that fact.
 - `E:\distributed-task-lab-temp\wave4-artifacts\tracing-e2e-runs\evidence\tasklab-e2e-491d9ebd5983` — tracing plus two-worker crash recovery; source was dirty and its manifest records that fact.
@@ -29,9 +36,8 @@ Evidence directories (outside the D: repository):
 
 The Collector is `otel/opentelemetry-collector-contrib@sha256:89107a3a8f4636a396927edf7025bb9614b8da2d92f4cc3f43109e8d115736e2` (release 0.135.0; upstream source `open-telemetry/opentelemetry-collector-releases`; Apache-2.0 metadata). The manifest records the immutable digest. This local E2E proves receipt by the Collector debug exporter, not retention, alerting, or a production trace backend.
 
-## Remaining acceptance gates
+## Limits and follow-up
 
-- Repeat the tracing + crash-recovery E2E against the final clean implementation commit and preserve its manifest/log hashes.
-- Run full unit and Race suites plus required PostgreSQL integration against the Package B source.
-- Review the final diff for data leakage, error handling, duplicate provider setup, and exporter shutdown behavior; run `go vet` and `git diff --check`.
+- Full unit, full Race, `go vet ./...`, required PostgreSQL integration, and the clean-source traced crash/reclaim E2E all passed. PostgreSQL integration included `TestRetryBackoff` and `TestRetryTaskReclaimable`; the opt-in backup/restore drill remained skipped because `RUN_BACKUP_RESTORE_DRILL=1` was not enabled.
+- The scoped E2E proves delivery to the Collector debug exporter and redaction for that run. It does not prove durable retention, alerting, cross-region delivery, or production trace-backend operations.
 - Hosted CI has not been run for the Wave 4 branch. No production readiness or availability claim is made.

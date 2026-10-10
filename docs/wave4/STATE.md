@@ -15,14 +15,13 @@ Updated: 2026-10-10 (Asia/Shanghai)
 
 ## Current phase
 
-- Overall: `WAVE4_ENGINEERING_PARTIAL` (Package A local acceptance complete; Package B implementation is in local gates; Packages C–G remain).
-- Current package: B — end-to-end distributed tracing, final validation.
+- Overall: `WAVE4_ENGINEERING_PARTIAL` (Packages A and B local acceptance complete; Packages C–G remain).
+- Current package: C — idempotency integrity and provider reconciliation.
 - Completed: Package A committed as `e3d496495dd4c9da6cdfb67b923facda2910aed3`, tree `921e3098cfb13d712d7eaf7165f303a79713bc59`. It documents all 15 stable v1 operations, binds handler JSON through named DTOs, and tests router/method, DTO/schema, parameters, statuses, roles and error-envelope drift. See `WAVE4_PACKAGE_A_API_CONTRACT.md`.
 - Validation: API unit/race/vet PASS; full `go test ./... -count=1` PASS; full `go test -race ./... -count=1` PASS; required PostgreSQL integration `go test ./internal/storage/postgres -count=1 -v` PASS on a fresh isolated PostgreSQL 16 instance (99.285s). The explicit backup/restore drill was SKIPPED by its opt-in guard and is not part of Package A acceptance. Final evidence and hashes: `E:\distributed-task-lab-temp\wave4-artifacts\package-a-final-e3d4964-20261010`.
-- Package B in progress: fixed a production payload validation bug exposed by traced E2E (`_traceparent` injected by trusted API context was rejected as unknown RAG data); added reserved-metadata validation and regression tests. Worker execution now uses linked consumer spans rather than false synchronous parentage across queue wait; PostgreSQL state transitions and S3 operations have safe spans; ACK/failure writes retain the worker span under bounded detached context. The optional tracing harness starts the digest-pinned Collector, checks actual HTTP method/path attributes, polls exporter delivery with a bounded deadline, and redacts credentials.
-- Package B E2E: two isolated successful runs so far, both from dirty source and clearly identified as such in manifests. The second includes a real two-worker crash after MinIO PUT/before ACK and confirms recovery on attempt 2 / lease version 2 with `expired_lease` telemetry. Earlier failed attempts are preserved under the E: tracing run directory and documented in `WAVE4_PACKAGE_B_DISTRIBUTED_TRACING.md`.
-- Unresolved: full Race, required PostgreSQL integration, clean-commit repeat, and hosted CI for Package B. Packages C–G remain; production remains `PRODUCTION_NOT_APPROVED` and the Worker allowlist remains closed.
-- Next: run full unit/race/vet and required fresh PostgreSQL integration; commit Package B if gates pass; repeat tracing + crash recovery on the clean commit and hash the final E: evidence. Then proceed to Package C.
+- Package B accepted locally at `8099c68fd1448999cf3a262672519967d0a1d867` (tree `9eb8bde1820462f7fb3353810bc2bac20baa18df`). Full unit, full Race, vet, and required PostgreSQL integration passed; the explicit backup/restore drill was skipped because its opt-in flag was not set. Clean-commit Collector + crash/reclaim E2E passed with fresh credentials and per-file hashes. Details and caveats: `WAVE4_PACKAGE_B_DISTRIBUTED_TRACING.md`; evidence lives on E:.
+- Unresolved: hosted CI for Wave 4 has not run. Packages C–G remain; production stays `PRODUCTION_NOT_APPROVED` and the Worker allowlist stays closed.
+- Next: audit Package C's effect identity/fingerprint and provider reconciliation invariants; implement only gaps confirmed by source/tests; use isolated provider fault tests and preserve E: evidence.
 
 ## Recovery
 
