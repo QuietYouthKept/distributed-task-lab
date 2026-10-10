@@ -26,7 +26,7 @@ import (
 const (
 	rowCount = 100_000
 	pageSize = 500
-	seed     = "distributed-task-lab-pagination-v1-seed-20261009"
+	seed     = "distributed-task-lab-pagination-v2-skewed-seed-20261010"
 )
 
 type latencySummary struct {
@@ -48,8 +48,10 @@ type runManifest struct {
 	Postgres      map[string]string          `json:"postgres"`
 	Generator     map[string]any             `json:"generator"`
 	Indexes       []string                   `json:"task_indexes"`
+	IndexSizes    map[string]int64           `json:"task_index_size_bytes"`
 	Queries       map[string]json.RawMessage `json:"explain_analyze_json"`
 	Latency       map[string]latencySummary  `json:"latency_ms"`
+	WriteCost     map[string]any             `json:"pagination_index_write_cost"`
 	Pagination    map[string]any             `json:"keyset_walk"`
 	Concurrent    map[string]any             `json:"concurrent_write_check"`
 	Result        string                     `json:"result"`
@@ -100,16 +102,29 @@ func run() error {
 		return err
 	}
 	owner := "bench-owner-007"
-	filteredTime, filteredID, err := cursorAt(ctx, db, 2_000, owner)
+	filteredTime, filteredID, err := cursorAt(ctx, db, 500, owner)
 	if err != nil {
 		return fmt.Errorf("filtered cursor: %w", err)
 	}
+	broadOwner, rareOwner := "bench-owner-hot", "bench-owner-rare"
+	broadTime, broadID, err := cursorAt(ctx, db, 40_000, broadOwner)
+	if err != nil {
+		return fmt.Errorf("broad owner cursor: %w", err)
+	}
+	rareTime, rareID, err := cursorAt(ctx, db, 500, rareOwner)
+	if err != nil {
+		return fmt.Errorf("rare owner cursor: %w", err)
+	}
 	queries := map[string]domain.TaskFilter{
-		"head":            {Limit: pageSize + 1},
-		"middle_keyset":   {Limit: pageSize + 1, AfterCreatedAt: &deepTime, AfterID: &deepID},
-		"tail_keyset":     {Limit: pageSize + 1, AfterCreatedAt: &lastTime, AfterID: &lastID},
-		"filtered_owner":  {Limit: pageSize + 1, CreatedBy: &owner},
-		"filtered_keyset": {Limit: pageSize + 1, CreatedBy: &owner, AfterCreatedAt: &filteredTime, AfterID: &filteredID},
+		"head":                {Limit: pageSize + 1},
+		"middle_keyset":       {Limit: pageSize + 1, AfterCreatedAt: &deepTime, AfterID: &deepID},
+		"tail_keyset":         {Limit: pageSize + 1, AfterCreatedAt: &lastTime, AfterID: &lastID},
+		"filtered_owner":      {Limit: pageSize + 1, CreatedBy: &owner},
+		"filtered_keyset":     {Limit: pageSize + 1, CreatedBy: &owner, AfterCreatedAt: &filteredTime, AfterID: &filteredID},
+		"owner_broad_70pct":   {Limit: pageSize + 1, CreatedBy: &broadOwner},
+		"owner_broad_keyset":  {Limit: pageSize + 1, CreatedBy: &broadOwner, AfterCreatedAt: &broadTime, AfterID: &broadID},
+		"owner_sparse_1pct":   {Limit: pageSize + 1, CreatedBy: &rareOwner},
+		"owner_sparse_keyset": {Limit: pageSize + 1, CreatedBy: &rareOwner, AfterCreatedAt: &rareTime, AfterID: &rareID},
 	}
 	latency := make(map[string]latencySummary, len(queries))
 	for name, filter := range queries {
@@ -119,7 +134,7 @@ func run() error {
 		}
 	}
 
-	plans := make(map[string]json.RawMessage, 4)
+	plans := make(map[string]json.RawMessage, 8)
 	plans["head"], err = explain(ctx, db, "", nil, nil)
 	if err != nil {
 		return fmt.Errorf("explain head: %w", err)
@@ -135,6 +150,22 @@ func run() error {
 	plans["filtered_keyset"], err = explain(ctx, db, owner, &filteredTime, &filteredID)
 	if err != nil {
 		return fmt.Errorf("explain filtered keyset: %w", err)
+	}
+	plans["owner_broad_70pct"], err = explain(ctx, db, broadOwner, nil, nil)
+	if err != nil {
+		return fmt.Errorf("explain broad owner: %w", err)
+	}
+	plans["owner_broad_keyset"], err = explain(ctx, db, broadOwner, &broadTime, &broadID)
+	if err != nil {
+		return fmt.Errorf("explain broad owner keyset: %w", err)
+	}
+	plans["owner_sparse_1pct"], err = explain(ctx, db, rareOwner, nil, nil)
+	if err != nil {
+		return fmt.Errorf("explain sparse owner: %w", err)
+	}
+	plans["owner_sparse_keyset"], err = explain(ctx, db, rareOwner, &rareTime, &rareID)
+	if err != nil {
+		return fmt.Errorf("explain sparse owner keyset: %w", err)
 	}
 
 	walk, err := walkSnapshot(ctx, queue, pageSize, rowCount)
@@ -152,6 +183,14 @@ func run() error {
 	indexes, err := taskIndexes(ctx, db)
 	if err != nil {
 		return err
+	}
+	indexSizes, err := taskIndexSizes(ctx, db)
+	if err != nil {
+		return err
+	}
+	writeCost, err := measurePaginationIndexWriteCost(ctx, db)
+	if err != nil {
+		return fmt.Errorf("measure pagination index write cost: %w", err)
 	}
 	gitCommit := os.Getenv("GIT_COMMIT")
 	if gitCommit == "" {
@@ -182,12 +221,12 @@ func run() error {
 		Platform:      runtime.GOOS + "/" + runtime.GOARCH,
 		Postgres:      pgInfo,
 		Generator: map[string]any{
-			"version": "paginationbench-v1", "seed": seed, "rows": rowCount,
-			"distribution":       "10-row timestamp tie groups; 5 statuses; 2 types; 20 owners; default queue",
+			"version": "paginationbench-v2-skewed", "seed": seed, "rows": rowCount,
+			"distribution":       "10-row timestamp tie groups; 5 statuses; 2 types; 70% hot owner, 1% rare owner, remaining 29% across 20 owners; default queue",
 			"insert_duration_ms": float64(time.Since(started)) / float64(time.Millisecond),
-			"schema_migrations":  "001-011",
+			"schema_migrations":  "001-012",
 		},
-		Indexes: indexes, Queries: plans, Latency: latency,
+		Indexes: indexes, IndexSizes: indexSizes, Queries: plans, Latency: latency, WriteCost: writeCost,
 		Pagination: walk, Concurrent: concurrent, Result: "PASS",
 	}
 	if err := writeJSON(filepath.Join(outDir, "manifest.json"), manifest); err != nil {
@@ -218,6 +257,11 @@ func seedTasks(db *sql.DB) error {
 		taskType := []string{"eval", "rag_ingestion"}[i%2]
 		createdAt := base.Add(time.Duration(i/10) * time.Second)
 		owner := fmt.Sprintf("bench-owner-%03d", i%20)
+		if i%100 < 70 {
+			owner = "bench-owner-hot"
+		} else if i%100 == 70 {
+			owner = "bench-owner-rare"
+		}
 		if _, err := stmt.Exec(fmt.Sprintf("pagination-%06d", i), taskType, status, string(payload), i%10, 5, i%3, 60, 1, 60, 2.0, createdAt, createdAt, createdAt, domain.DefaultQueueName, owner); err != nil {
 			_ = stmt.Close()
 			_ = tx.Rollback()
@@ -399,6 +443,98 @@ func taskIndexes(ctx context.Context, db *sql.DB) ([]string, error) {
 	return indexes, rows.Err()
 }
 
+func taskIndexSizes(ctx context.Context, db *sql.DB) (map[string]int64, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT indexrelname, pg_relation_size(indexrelid)
+		FROM pg_stat_user_indexes
+		WHERE relname='tasks' AND schemaname=current_schema()
+		ORDER BY indexrelname
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	sizes := make(map[string]int64)
+	for rows.Next() {
+		var name string
+		var size int64
+		if err := rows.Scan(&name, &size); err != nil {
+			return nil, err
+		}
+		sizes[name] = size
+	}
+	return sizes, rows.Err()
+}
+
+func measurePaginationIndexWriteCost(ctx context.Context, db *sql.DB) (map[string]any, error) {
+	const (
+		rowsPerSample = 5000
+		samples       = 5
+	)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	ddl := []string{
+		`CREATE TEMP TABLE pagination_write_without_indexes (id text PRIMARY KEY, created_at timestamptz NOT NULL, created_by text, status text NOT NULL, next_run_at timestamptz NOT NULL, queue text NOT NULL, priority integer NOT NULL) ON COMMIT PRESERVE ROWS`,
+		`CREATE TEMP TABLE pagination_write_with_indexes (id text PRIMARY KEY, created_at timestamptz NOT NULL, created_by text, status text NOT NULL, next_run_at timestamptz NOT NULL, queue text NOT NULL, priority integer NOT NULL) ON COMMIT PRESERVE ROWS`,
+		`CREATE INDEX pagination_write_created_at_id ON pagination_write_with_indexes (created_at DESC, id DESC)`,
+		`CREATE INDEX pagination_write_owner_created_at_id ON pagination_write_with_indexes (created_by, created_at DESC, id DESC) WHERE created_by IS NOT NULL`,
+	}
+	for _, statement := range ddl {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
+			return nil, err
+		}
+	}
+	insert := func(table string) (latencySummary, int64, error) {
+		values := make([]float64, 0, samples)
+		for sample := 0; sample < samples; sample++ {
+			if _, err := conn.ExecContext(ctx, `TRUNCATE `+table); err != nil {
+				return latencySummary{}, 0, err
+			}
+			started := time.Now()
+			_, err := conn.ExecContext(ctx, `
+				INSERT INTO `+table+` (id,created_at,created_by,status,next_run_at,queue,priority)
+				SELECT 'write-cost-' || g::text, TIMESTAMPTZ '2025-01-01 00:00:00+00' + g * INTERVAL '1 second',
+				       CASE WHEN g % 100 < 70 THEN 'bench-owner-hot' WHEN g % 100 = 70 THEN 'bench-owner-rare' ELSE 'bench-owner-' || lpad((g % 20)::text,3,'0') END,
+				       'pending', TIMESTAMPTZ '2025-01-01 00:00:00+00', 'default', (g % 10)::integer
+			FROM generate_series(1,$1) AS g
+			`, rowsPerSample)
+			if err != nil {
+				return latencySummary{}, 0, err
+			}
+			values = append(values, float64(time.Since(started))/float64(time.Millisecond))
+		}
+		var bytes int64
+		if err := conn.QueryRowContext(ctx, `SELECT pg_total_relation_size($1::regclass)`, "pg_temp."+table).Scan(&bytes); err != nil {
+			return latencySummary{}, 0, err
+		}
+		return summarize(values), bytes, nil
+	}
+	without, withoutBytes, err := insert("pagination_write_without_indexes")
+	if err != nil {
+		return nil, err
+	}
+	with, withBytes, err := insert("pagination_write_with_indexes")
+	if err != nil {
+		return nil, err
+	}
+	overhead := 0.0
+	if without.P50MS > 0 {
+		overhead = (with.P50MS/without.P50MS - 1) * 100
+	}
+	return map[string]any{
+		"method":          "same-session temporary tables; identical 5000-row INSERT SELECT repeated 5 times; primary key common to both; pagination indexes added only to indexed table",
+		"rows_per_sample": rowsPerSample, "samples": samples,
+		"without_pagination_indexes_latency_ms": without,
+		"with_pagination_indexes_latency_ms":    with,
+		"p50_write_latency_overhead_percent":    overhead,
+		"without_indexes_relation_bytes":        withoutBytes,
+		"with_indexes_relation_bytes":           withBytes,
+	}, nil
+}
+
 func summarize(values []float64) latencySummary {
 	sort.Float64s(values)
 	at := func(f float64) float64 { return values[int(float64(len(values)-1)*f)] }
@@ -414,10 +550,11 @@ func writeJSON(path string, value any) error {
 }
 
 func writeReport(path string, manifest runManifest) error {
-	content := fmt.Sprintf("# PostgreSQL keyset pagination benchmark\n\n- Run: `%s`\n- PostgreSQL: `%s`\n- Rows: %d\n- Generator: `%s`; seed: `%s`\n- Page size: %d\n- Keyset walk: %v rows across %v pages; duplicates: %v\n- Concurrent write check: %v initial rows; %v new rows; duplicate count: %v\n\nLatency values are local measurements for this host/container and are not production SLOs. Full `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` plans and indexes are in `manifest.json`.\n\n| Query | Samples | P50 ms | P95 ms | P99 ms | Max ms |\n|---|---:|---:|---:|---:|---:|\n", manifest.RunID, manifest.Postgres["server_version"], rowCount, manifest.Generator["version"], manifest.Generator["seed"], pageSize, manifest.Pagination["rows_seen"], manifest.Pagination["pages"], manifest.Pagination["duplicates"], manifest.Concurrent["initial_rows_seen"], manifest.Concurrent["concurrent_rows_written"], manifest.Concurrent["duplicates"])
-	for _, name := range []string{"head", "middle_keyset", "tail_keyset", "filtered_owner", "filtered_keyset"} {
+	content := fmt.Sprintf("# PostgreSQL keyset pagination benchmark\n\n- Run: `%s`\n- PostgreSQL: `%s`\n- Rows: %d\n- Generator: `%s`; seed: `%s`\n- Distribution: %v\n- Page size: %d\n- Keyset walk: %v rows across %v pages; duplicates: %v\n- Concurrent write check: %v initial rows; %v new rows; duplicate count: %v\n\nLatency values are local measurements for this host/container and are not production SLOs. Full `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` plans, index sizes, and write-cost comparison are in `manifest.json`.\n\n| Query | Samples | P50 ms | P95 ms | P99 ms | Max ms |\n|---|---:|---:|---:|---:|---:|\n", manifest.RunID, manifest.Postgres["server_version"], rowCount, manifest.Generator["version"], manifest.Generator["seed"], manifest.Generator["distribution"], pageSize, manifest.Pagination["rows_seen"], manifest.Pagination["pages"], manifest.Pagination["duplicates"], manifest.Concurrent["initial_rows_seen"], manifest.Concurrent["concurrent_rows_written"], manifest.Concurrent["duplicates"])
+	for _, name := range []string{"head", "middle_keyset", "tail_keyset", "filtered_owner", "filtered_keyset", "owner_broad_70pct", "owner_broad_keyset", "owner_sparse_1pct", "owner_sparse_keyset"} {
 		latency := manifest.Latency[name]
 		content += fmt.Sprintf("| %s | %d | %.3f | %.3f | %.3f | %.3f |\n", name, latency.Samples, latency.P50MS, latency.P95MS, latency.P99MS, latency.MaxMS)
 	}
+	content += fmt.Sprintf("\n## Index write-cost sample\n\n- Method: %v\n- Without pagination indexes: P50 %.3f ms, relation %v bytes\n- With pagination indexes: P50 %.3f ms, relation %v bytes\n- Measured P50 write latency change: %.1f%%\n\nThis temporary-table comparison isolates pagination-index maintenance on this test host. It is not an index recommendation or production SLO. Existing task indexes and sizes are enumerated in the JSON manifest.\n", manifest.WriteCost["method"], manifest.WriteCost["without_pagination_indexes_latency_ms"].(latencySummary).P50MS, manifest.WriteCost["without_indexes_relation_bytes"], manifest.WriteCost["with_pagination_indexes_latency_ms"].(latencySummary).P50MS, manifest.WriteCost["with_indexes_relation_bytes"], manifest.WriteCost["p50_write_latency_overhead_percent"])
 	return os.WriteFile(path, []byte(content), 0o644)
 }
