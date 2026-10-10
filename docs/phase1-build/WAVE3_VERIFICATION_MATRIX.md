@@ -9,6 +9,8 @@
 | Provider HTTP contract | `go test -race ./internal/effects -count=10` | PASS | Local `httptest` HTTP listener; test contract only, no external Provider. |
 | Provider + side-effect handlers | Targeted Race ×10 and full suites in clean Evidence | PASS | Exact implementation `9b360f5`; Provider is a controlled local HTTP contract, not a real external service. |
 | Clean Wave 3 Evidence | `scripts/evidence/run-wave2-with-ephemeral-minio.ps1 -RunID wave3-20261010T171000Z-9b360f5952bb` | PASS, 14/14, all Exit 0 | Exact commit `9b360f5952bb745fcbd25dfcb32c7c9bbe20f1bf`, clean start/after excluding run artifacts. Manifest records logs, SHA256, configuration fingerprint, PostgreSQL 16.15, MinIO image ID/health and test artifacts. |
+| Package C clean Evidence | `scripts/evidence/run-wave2-with-ephemeral-minio.ps1 -RunID wave3-20261010T171600Z-cedbdc1edb09` | PASS, 14/14, all Exit 0 | Exact implementation `cedbdc1edb09a5abf4225ecdbc288ab7e623389d`, clean start/after excluding run artifacts. Manifest, logs and hashed artifacts are preserved. |
+| Package C remote CI/security | GitHub CI Run `37965020508` and Security Run `37965020486` at `cedbdc1` | PASS; Security PASS except expected Scorecard SKIP | Exact pushed SHA; not staging/production validation. |
 | Full unit/integration and Race | Included in the clean Evidence collector | PASS | `REQUIRE_TEST_DATABASE=1`; actual PostgreSQL 16.15. |
 | PostgreSQL Race ×5 and RetryBackoff Race ×20 | Included in the clean Evidence collector | PASS | Exact raw logs and hashes in the Evidence run. |
 | Failure Lab / Chaos / pagination benchmark | Included in the clean Evidence collector | PASS | Failure Lab 12/12; Chaos six scenarios ×30/30; pagination 100,000 rows, 201 pages, zero duplicates. Measured timings are local only. |
@@ -16,7 +18,7 @@
 | Provider + side-effect full suite | Included in full unit/integration and full Race at `9b360f5` | PASS | Local targeted Race ×10 also passed before commit. Contract only, no real provider. |
 | Wave 3 remote CI | GitHub CI Run `37963245838` at `9b360f5` | PASS, all 5 jobs | Includes MinIO real image/test path; this is remote CI, not staging. |
 | Wave 3 security CI | GitHub Security Run `37963245883` at `9b360f5` | PASS: govulncheck, CodeQL, Secret Scan; Scorecard SKIP | Scorecard skip is an expected PR-event condition. |
-| Local ingress bucket lifecycle | `go test -race ./internal/api -run '^TestIngress' -count=100` | PASS | Working-tree verification of capacity recovery only; process-local overload guard semantics are preserved. Clean commit/Evidence run is pending. |
+| Local ingress bucket lifecycle | Targeted Race ×100; included in full Evidence at `cedbdc1` | PASS | Reclaims only when the bucket would already be fully refilled; process-local guard only, no global fairness claim. |
 | Cross-container ArtifactStore crash/recovery and Put response loss | Compose topology and fault injection | NOT VERIFIED | Existing remote CI recovery is independent host processes, not API/Worker containers or response-loss proxy. |
 | Real Provider/Sandbox | Provider-specific contract and reconciliation | NOT VERIFIED | No selected provider, credentials, sandbox, or reconciliation authority. |
 | Cross-instance rate limit / cursor key rotation | ADR-0006 proposal; no shared implementation/key-ring behavior | NOT IMPLEMENTED / NOT VERIFIED | Must not change production semantics without owner-approved outage/quota/TTL/overlap policy. |

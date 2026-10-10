@@ -12,7 +12,7 @@ Implementation commit: `ac46b6bf2411aa68af671897f6ebdb2e0786e323`.
 - Remote CI Run `37962333979` passed all five jobs, including real MinIO image construction/start and required S3, recovery and backup/restore tests. Security Run `37962334001` passed CodeQL, govulncheck and Secret Scan; Scorecard was skipped by its PR-event condition.
 - No production API, database schema, or worker admission policy changed in this commit. The original failed Runs remain immutable.
 
-## Package B — provider-independent HTTP contract (in progress)
+## Package B — provider-independent HTTP contract (implemented; provider integration remains open)
 
 New source: `internal/effects/http_provider.go`; new tests: `internal/effects/http_provider_test.go`; decision: `docs/adr/ADR-0005-provider-independent-http-contract.md`.
 
@@ -30,12 +30,14 @@ The full local Evidence environment was Windows AMD64, Go 1.26.9, Docker Engine 
 
 The 100,000-row keyset traversal completed 201 pages with zero duplicates; local middle-cursor P50/P95 was 4.123/4.411 ms and owner-filtered P50/P95 was 5.572/7.141 ms on the recorded fixture. The six Chaos scenarios passed 30/30 each. Recorded recovery percentiles are local harness measurements and not production SLOs. See the manifest and copied artifacts for query plans and exact configuration.
 
+## Package C — local rate-limit bucket lifecycle fix and policy proposal
+
+Review confirmed that `internal/api/router.go` kept a hard-bounded map of 10,000 verified Principal buckets but never evicted any. Once filled, even inactive identities remained unable to obtain a bucket until process restart. Commit `cedbdc1edb09a5abf4225ecdbc288ab7e623389d` reclaims only a bucket whose available tokens would already have reached the configured burst under normal refill. `TestIngressLimiterReclaimsOnlyFullyRefilledIdleBuckets` checks just-before-refill denial and exact-refill reclamation; targeted Race ×100 and vet passed.
+
+Clean Evidence `wave3-20261010T171600Z-cedbdc1edb09` passed 14/14 against the exact implementation commit, including full tests, full Race, PostgreSQL Race ×5, RetryBackoff Race ×20, Failure Lab 12/12, Chaos, pagination, MinIO contract, process-recovery and backup/restore. CI Run `37965020508` and Security Run `37965020486` also passed for this commit (Scorecard was conditionally skipped).
+
+This is only process-local bucket lifecycle management. It does not implement cluster-wide quotas. ADR-0006 records the decisions needed for shared quotas and cursor key rotation; no cursor format or production setting changed.
+
 ## Other packages
 
-Packages A, C, D and the remaining parts of E are not yet accepted. In particular, the dual-Worker recovery is still an independent host-process test, not API/Worker containers; response-loss via an S3 network proxy, conflicting-content process recovery, cursor rotation, cluster rate-limit semantics, full trace/alert firing, SBOM/image scan and release smoke remain unverified. Their exact gaps and next actions are in `WAVE3_REMAINING_GAPS.md`; no production/staging claims are inferred from these local results.
-
-## Package C — local rate-limit lifecycle and policy proposal (in progress)
-
-Review confirmed that `internal/api/router.go` kept a hard-bounded map of 10,000 verified Principal buckets but never evicted any. Once filled, even inactive identities remained permanently unable to obtain a bucket until process restart. The current change reclaims only a bucket whose available tokens would already have reached the configured burst under normal refill. `TestIngressLimiterReclaimsOnlyFullyRefilledIdleBuckets` checks both just-before-refill rejection and exact-refill reclamation; `go test -race ./internal/api -run '^TestIngress' -count=100` passes.
-
-This does not make quotas cluster-wide. `docs/adr/ADR-0006-shared-ingress-limits-and-cursor-key-rotation.md` records the current local-guard boundary and a proposed decision framework for PostgreSQL/Redis/gateway quotas, outage policy, cursor TTL, key IDs and bounded rotation overlap. No cursor format or production setting has changed. Shared limits and cursor rotation remain NOT IMPLEMENTED/NOT VERIFIED pending owner decisions and integration evidence.
+Package A and remaining parts of D/E are not yet accepted. The dual-Worker recovery is still an independent host-process test, not API/Worker containers; response-loss via an S3 network proxy, conflicting-content process recovery, cursor rotation, cluster rate-limit semantics, full trace/alert firing, SBOM/image scan and release smoke remain unverified. Their exact gaps and next actions are in `WAVE3_REMAINING_GAPS.md`; no production/staging claims are inferred from these local results.
