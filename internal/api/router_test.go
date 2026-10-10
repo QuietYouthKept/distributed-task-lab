@@ -13,6 +13,7 @@ import (
 
 	"github.com/fantasticyi/distributed-task-lab/internal/api/handlers"
 	"github.com/fantasticyi/distributed-task-lab/internal/auth"
+	"github.com/fantasticyi/distributed-task-lab/internal/observability"
 )
 
 type readinessStub struct{ err error }
@@ -26,6 +27,29 @@ func (s verifierStub) Verify(_ context.Context, token string) (auth.Principal, e
 		return auth.Principal{}, errors.New("invalid token")
 	}
 	return s.principal, nil
+}
+
+func TestAPIResponseMetricsUseFiniteStatusClassOnly(t *testing.T) {
+	var metrics observability.RuntimeMetrics
+	h := apiResponseMetricsMiddleware(&metrics, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "failed", http.StatusServiceUnavailable)
+	}))
+	r := httptest.NewRequest(http.MethodGet, "/v1/tasks/private-customer-id?token=secret", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d want=%d", w.Code, http.StatusServiceUnavailable)
+	}
+	var out strings.Builder
+	metrics.WritePrometheus(&out)
+	if !strings.Contains(out.String(), `tasklab_api_requests_total{status_class="5xx"} 1`) {
+		t.Fatalf("missing 5xx count: %s", out.String())
+	}
+	for _, secret := range []string{"private-customer-id", "token=secret"} {
+		if strings.Contains(out.String(), secret) {
+			t.Fatalf("metric leaked request value %q", secret)
+		}
+	}
 }
 
 type sharedAdmissionStub struct {

@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tasklab
+      POSTGRES_PASSWORD: ${E2E_POSTGRES_PASSWORD:?set E2E_POSTGRES_PASSWORD}
+      POSTGRES_DB: tasklab
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tasklab -d tasklab"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.api
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    environment:
+      APP_PROFILE: development
+      DATABASE_URL: postgres://tasklab:${E2E_POSTGRES_PASSWORD}@postgres:5432/tasklab?sslmode=disable
+      API_PORT: "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus@sha256:508729e0e2d18e11fd742a5a5ca70e557b940a93948c3c95fd0123a6fd538b69
+    ports:
+      - "127.0.0.1:${E2E_PROMETHEUS_PORT:?set E2E_PROMETHEUS_PORT}:9090"
+    volumes:
+      - ./prometheus/alert-e2e.yml:/etc/prometheus/prometheus.yml:ro
+      - ./tasklab-alerts.yml:/etc/prometheus/tasklab-alerts.yml:ro
+    depends_on:
+      api:
+        condition: service_started

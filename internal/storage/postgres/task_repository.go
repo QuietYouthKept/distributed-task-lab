@@ -730,6 +730,7 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("mark failure: commit: %w", err)
 	}
+	observability.Runtime().TaskRetried()
 	span.SetAttributes(attribute.String("task.final_status", "pending"), attribute.String("task.failure_class", failure.ErrorType), attribute.Int64("task.retry_delay_ms", retryAt.Sub(now).Milliseconds()))
 	span.AddEvent("db.transaction.commit")
 	return nil

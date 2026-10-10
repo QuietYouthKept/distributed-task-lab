@@ -16,6 +16,7 @@ import (
 	"github.com/fantasticyi/distributed-task-lab/internal/api/handlers"
 	"github.com/fantasticyi/distributed-task-lab/internal/auth"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/observability"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -129,8 +130,43 @@ func NewRouterWithConfig(taskHandler *handlers.TaskHandler, metricsHandler *hand
 	h = requestSafetyMiddleware(h, cfg)
 	h = loggingMiddleware(h, logger)
 	h = requestIDMiddleware(h)
+	h = apiResponseMetricsMiddleware(observability.Runtime(), h)
 	h = otelhttp.NewHandler(h, "task-lab.http")
 	return h
+}
+
+type responseStatusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *responseStatusWriter) WriteHeader(status int) {
+	if w.status != 0 {
+		return
+	}
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *responseStatusWriter) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func (w *responseStatusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func apiResponseMetricsMiddleware(metrics *observability.RuntimeMetrics, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capture := &responseStatusWriter{ResponseWriter: w}
+		next.ServeHTTP(capture, r)
+		status := capture.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		metrics.APIResponse(status)
+	})
 }
 
 type sharedIngressLimiter struct {
