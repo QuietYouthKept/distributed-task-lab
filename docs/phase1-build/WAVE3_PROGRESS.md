@@ -92,3 +92,5 @@ Latest resumable command after checking status: `git status -sb; git rev-parse H
 - Test commit `17c1fba31a7e35a76622c34bd0adafdb1b299857` verifies that persisted W3C `traceparent` is extracted by a Worker, the execution span retains the submitting trace and parent span, and internal propagation fields do not reach the task handler.
 - Validation: targeted test ×20, full `internal/worker` tests, and targeted Race ×10 passed; `git diff --check` passed.
 - This is a bounded unit-level propagation check. End-to-end API→PostgreSQL→separate Worker process→ArtifactStore/fenced ACK export through a real Collector and production alert firing remain unverified.
+
+- Combined regression at exact code commit `aa0cff3a7cfc340f1f17225dadab0a16e5095101` passed full Go unit tests, full Race tests, `go vet`, and `git diff --check` with a clean worktree. Docker E2E, Failure Lab and remote CI were not part of this follow-up regression.

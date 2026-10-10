@@ -43,6 +43,12 @@ The external E: artifacts are immutable run outputs; earlier failed and intermed
 |---|---|---|
 | `17c1fba31a7e35a76622c34bd0adafdb1b299857` | PASS locally | Worker trace continuation test ×20, full `internal/worker` package, and test Race ×10 passed. Validates extracted parent context and propagation-field filtering only; it does not close the distributed persistence/Collector path. |
 
+## Combined local regression after Package C/D follow-ups
+
+| Exact source commit | Result | Checks and boundary |
+|---|---|---|
+| `aa0cff3a7cfc340f1f17225dadab0a16e5095101` | PASS locally, clean worktree | `go test ./cmd/... ./internal/... ./pkg/... -count=1`; `go test -race ./cmd/... ./internal/... ./pkg/... -count=1`; `go vet ./cmd/... ./internal/... ./pkg/...`; `git diff --check`. This is Go regression evidence only; no Docker E2E, Failure Lab, remote CI, staging, or production claim. |
+
 Artifact SHA256 (uppercase hex):
 
 - `api-image.tar`: `E7179E346D9A9E0CD909E9913678875CF9A1DAA30CBD4BB077836939EBDDD46C`

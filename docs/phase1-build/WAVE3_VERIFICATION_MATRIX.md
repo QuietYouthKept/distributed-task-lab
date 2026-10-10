@@ -36,5 +36,6 @@
 | Release / rollback smoke | RC migration, rollout/drain, rollback and recovery | NOT VERIFIED | No staging deployment or release approval. |
 | Package D API + Worker Prometheus scrape | Exact-commit Compose overlay at `f5974777a452c2e455a0c9b03bffa2df88ed989f`; bounded wait for active targets | PASS, both targets `up` | API Bearer token supplied through Compose runtime secret; Worker target stays internal. Local dev only; no alert or production discovery proof. |
 | OpenAPI CreateTask DTO schema alignment | `api/openapi.json`; `internal/api/openapi_contract_test.go` | PASS locally: `go test ./internal/api -count=1`; OpenAPI Race ×10 | Exact CreateTask request, nested PayloadEnvelope and response property names match Go DTO JSON tags. Other operation bodies remain uncovered; not whole-API drift validation. |
+| Combined regression after C/D follow-ups | Exact source commit `aa0cff3a7cfc340f1f17225dadab0a16e5095101`, clean worktree | PASS locally: full unit, full Race, `go vet`, diff check | Covers Go code at this snapshot. Does not re-run Docker E2E, Failure Lab, remote CI, or production acceptance. |
 
 No Wave 2 Evidence is relabeled to cover Wave 3 code.
