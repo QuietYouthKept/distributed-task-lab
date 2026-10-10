@@ -157,6 +157,12 @@
                         "status":  "PASS",
                         "implementation_commit":  "eafc0a83037d24273eb8cfae881c94a8c7ce3d53",
                         "manifest":  "evidence/phase1/runs/wave3-20261010T173000Z-80b7baa/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave3-container-e2e-tasklab-e2e-d55fb468070f",
+                        "status":  "PASS",
+                        "implementation_commit":  "3eef1603293aa0bbc45877bb8263699f09c9e2b5",
+                        "manifest":  "evidence/phase1/runs/wave3-container-e2e/tasklab-e2e-d55fb468070f/manifest.json"
                     }
                 ]
 }
