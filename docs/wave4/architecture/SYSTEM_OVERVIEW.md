@@ -42,7 +42,7 @@ The router contains legacy and `/v1` stable routes, strict payload decoding, bou
 
 ## Operations and trust boundaries
 
-The repository includes digest-pinned API/Worker base images, PostgreSQL migration checks, Worker lease/heartbeat/drain behavior, Prometheus-compatible metrics, a local Prometheus/Grafana overlay, required integration/Race jobs, and local evidence scripts. The observability overlay is for development only. CI/hosted evidence applies only to the exact SHA that ran. There is no approved cloud deployment, registry signing, production secret distribution, backup operator, on-call system, or tested previous-binary rollback after migration 012.
+The repository includes digest-pinned API/Worker base images, PostgreSQL migration checks, Worker lease/heartbeat/drain behavior, Prometheus-compatible metrics, a local Prometheus/Grafana overlay, required integration/Race jobs, and local evidence scripts. The observability overlay is for development only. CI/hosted evidence applies only to the exact SHA that ran. Migration 012 is additive, but a process matrix proved the previous API and Worker refuse schema 12 before serving; this is a real rollback boundary, not an assumed compatibility. There is no approved cloud deployment, registry signing, production secret distribution, backup operator, on-call system, or safe previous-binary rollback after migration 012. See [`WAVE4_MIGRATION_ROLLBACK_COMPATIBILITY.md`](../WAVE4_MIGRATION_ROLLBACK_COMPATIBILITY.md).
 
 ## Deliberate non-claims
 
