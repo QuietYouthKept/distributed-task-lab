@@ -1,0 +1,4 @@
+run_id=tasklab-e2e-a533b3ad11a4
+result=NOT VERIFIED
+reason=Compose up did not pass its startup or health gate; inspect logs/compose.log and logs/services.redacted.log.
+secrets_recorded=false

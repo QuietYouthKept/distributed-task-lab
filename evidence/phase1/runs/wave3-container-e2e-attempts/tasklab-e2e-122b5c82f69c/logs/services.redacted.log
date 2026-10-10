@@ -1,0 +1,95 @@
+minio-1     | 2026-10-10T00:13:17.388460810Z INFO: Formatting 1st pool, 1 set(s), 1 drives per set.
+api-1       | 2026-10-10T00:13:41.540830283Z {"time":"2026-10-10T00:13:41.540353877Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"f9d6ec362ea6912988611717023dde4d135071bca54503189e11317bf8b46cb8"}
+postgres-1  | 2026-10-10T00:13:17.111969787Z The files belonging to this database system will be owned by user "postgres".
+postgres-1  | 2026-10-10T00:13:17.112021734Z This user must also own the server process.
+worker-b-1  | 2026-10-10T00:13:46.556107728Z {"time":"2026-10-10T00:13:46.555812094Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"d08b88b68c6f890963adb59a2c03eab1cf69cb786c7d3074a56dda1103602615"}
+worker-b-1  | 2026-10-10T00:13:46.556135334Z {"time":"2026-10-10T00:13:46.556021141Z","level":"INFO","msg":"starting worker","worker_id":"e2e-worker-b","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000}
+worker-b-1  | 2026-10-10T00:13:46.571444584Z {"time":"2026-10-10T00:13:46.571299153Z","level":"INFO","msg":"database migrations applied","worker_id":"e2e-worker-b"}
+worker-b-1  | 2026-10-10T00:13:46.574420576Z {"time":"2026-10-10T00:13:46.574136246Z","level":"INFO","msg":"worker pool starting","worker_id":"e2e-worker-b","worker_id":"e2e-worker-b","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000,"max_local_claims":2}
+api-1       | 2026-10-10T00:13:41.540895862Z {"time":"2026-10-10T00:13:41.540678648Z","level":"INFO","msg":"starting API server","port":8080}
+postgres-1  | 2026-10-10T00:13:17.112024930Z 
+worker-a-1  | 2026-10-10T00:13:41.254353438Z {"time":"2026-10-10T00:13:41.25280655Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"d08b88b68c6f890963adb59a2c03eab1cf69cb786c7d3074a56dda1103602615"}
+worker-a-1  | 2026-10-10T00:13:41.254393004Z {"time":"2026-10-10T00:13:41.254263268Z","level":"INFO","msg":"starting worker","worker_id":"e2e-worker-a","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000}
+worker-a-1  | 2026-10-10T00:13:41.302970109Z migration applied: 001_create_tasks.sql
+postgres-1  | 2026-10-10T00:13:17.112476450Z The database cluster will be initialized with locale "en_US.utf8".
+worker-a-1  | 2026-10-10T00:13:41.321033505Z migration applied: 002_create_task_events.sql
+worker-a-1  | 2026-10-10T00:13:41.332038990Z migration applied: 003_create_workers.sql
+worker-a-1  | 2026-10-10T00:13:41.340542816Z migration applied: 004_production_hardening.sql
+minio-1     | 2026-10-10T00:13:17.388513906Z INFO: WARNING: Host local has more than 0 drives of set. A host failure will result in data becoming unavailable.
+api-1       | 2026-10-10T00:13:41.556770200Z {"time":"2026-10-10T00:13:41.556568804Z","level":"INFO","msg":"database migrations applied"}
+minio-1     | 2026-10-10T00:13:17.413622394Z MinIO Object Storage Server
+postgres-1  | 2026-10-10T00:13:17.112491375Z The default database encoding has accordingly been set to "UTF8".
+api-1       | 2026-10-10T00:13:41.557104599Z {"time":"2026-10-10T00:13:41.55694136Z","level":"INFO","msg":"API server listening","addr":":8080"}
+api-1       | 2026-10-10T00:13:53.537954778Z {"time":"2026-10-10T00:13:53.537615235Z","level":"INFO","msg":"request","method":"GET","path":"/ready"}
+api-1       | 2026-10-10T00:13:53.553138242Z {"time":"2026-10-10T00:13:53.55284732Z","level":"INFO","msg":"request","method":"POST","path":"/v1/tasks"}
+minio-1     | 2026-10-10T00:13:17.413652127Z Copyright: 2015-2026 MinIO, Inc.
+minio-1     | 2026-10-10T00:13:17.413655271Z License: GNU AGPLv3 - https://www.gnu.org/licenses/agpl-3.0.html
+worker-a-1  | 2026-10-10T00:13:41.352814815Z migration applied: 005_queue_governance.sql
+worker-a-1  | 2026-10-10T00:13:41.355322063Z migration applied: 006_queue_rate_limit.sql
+worker-a-1  | 2026-10-10T00:13:41.399558402Z migration applied: 007_integrity_and_runtime.sql
+minio-1     | 2026-10-10T00:13:17.413657924Z Version: DEVELOPMENT.GOGET (go1.26.9 linux/amd64)
+postgres-1  | 2026-10-10T00:13:17.112494142Z The default text search configuration will be set to "english".
+minio-1     | 2026-10-10T00:13:17.413660462Z 
+minio-1     | 2026-10-10T00:13:17.413662801Z API: http://192.168.96.2:9000  http://127.0.0.1:9000 
+worker-a-1  | 2026-10-10T00:13:41.404615888Z migration applied: 008_queue_aging.sql
+minio-1     | 2026-10-10T00:13:17.413665088Z WebUI: http://192.168.96.2:9001 http://127.0.0.1:9001  
+minio-1     | 2026-10-10T00:13:17.413667396Z 
+postgres-1  | 2026-10-10T00:13:17.112496315Z 
+postgres-1  | 2026-10-10T00:13:17.112498727Z Data page checksums are disabled.
+api-1       | 2026-10-10T00:13:53.553560444Z {"time":"2026-10-10T00:13:53.553333565Z","level":"ERROR","msg":"create task failed","error":"task payload does not match its task type: execution_mode must be a non-empty string up to 64 characters"}
+postgres-1  | 2026-10-10T00:13:17.112500680Z 
+worker-a-1  | 2026-10-10T00:13:41.422368140Z migration applied: 009_create_effects.sql
+minio-1     | 2026-10-10T00:13:17.413669589Z Docs: https://docs.min.io
+worker-a-1  | 2026-10-10T00:13:41.447549972Z migration applied: 010_identity_audit.sql
+postgres-1  | 2026-10-10T00:13:17.112629913Z fixing permissions on existing directory /var/lib/postgresql/data ... ok
+postgres-1  | 2026-10-10T00:13:17.120882211Z creating subdirectories ... ok
+worker-a-1  | 2026-10-10T00:13:41.455679867Z migration applied: 011_task_keyset_pagination.sql
+worker-a-1  | 2026-10-10T00:13:41.456187852Z {"time":"2026-10-10T00:13:41.45600724Z","level":"INFO","msg":"database migrations applied","worker_id":"e2e-worker-a"}
+postgres-1  | 2026-10-10T00:13:17.121023906Z selecting dynamic shared memory implementation ... posix
+postgres-1  | 2026-10-10T00:13:17.142853443Z selecting default max_connections ... 100
+postgres-1  | 2026-10-10T00:13:17.172387125Z selecting default shared_buffers ... 128MB
+worker-a-1  | 2026-10-10T00:13:41.464877324Z {"time":"2026-10-10T00:13:41.464648487Z","level":"INFO","msg":"worker pool starting","worker_id":"e2e-worker-a","worker_id":"e2e-worker-a","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000,"max_local_claims":2}
+postgres-1  | 2026-10-10T00:13:17.221766052Z selecting default time zone ... UTC
+postgres-1  | 2026-10-10T00:13:17.223071597Z creating configuration files ... ok
+postgres-1  | 2026-10-10T00:13:17.389150981Z running bootstrap script ... ok
+postgres-1  | 2026-10-10T00:13:17.595842737Z sh: locale: not found
+postgres-1  | 2026-10-10T00:13:17.595992366Z 2026-10-10 00:13:17.595 UTC [35] WARNING:  no usable system locales were found
+postgres-1  | 2026-10-10T00:13:18.042168458Z performing post-bootstrap initialization ... ok
+postgres-1  | 2026-10-10T00:13:18.486034515Z initdb: warning: enabling "trust" authentication for local connections
+postgres-1  | 2026-10-10T00:13:18.486066097Z initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+postgres-1  | 2026-10-10T00:13:18.486034545Z syncing data to disk ... ok
+postgres-1  | 2026-10-10T00:13:18.486075768Z 
+postgres-1  | 2026-10-10T00:13:18.486079006Z 
+postgres-1  | 2026-10-10T00:13:18.486082139Z Success. You can now start the database server using:
+postgres-1  | 2026-10-10T00:13:18.486085251Z 
+postgres-1  | 2026-10-10T00:13:18.486088186Z     pg_ctl -D /var/lib/postgresql/data -l logfile start
+postgres-1  | 2026-10-10T00:13:18.486091267Z 
+postgres-1  | 2026-10-10T00:13:18.538002757Z waiting for server to start....2026-10-10 00:13:18.537 UTC [41] LOG:  starting PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1  | 2026-10-10T00:13:18.541550847Z 2026-10-10 00:13:18.541 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-10-10T00:13:18.554072062Z 2026-10-10 00:13:18.553 UTC [44] LOG:  database system was shut down at 2026-10-10 00:13:18 UTC
+postgres-1  | 2026-10-10T00:13:18.562040646Z 2026-10-10 00:13:18.561 UTC [41] LOG:  database system is ready to accept connections
+postgres-1  | 2026-10-10T00:13:18.612755448Z  done
+postgres-1  | 2026-10-10T00:13:18.612807991Z server started
+postgres-1  | 2026-10-10T00:13:18.701842237Z CREATE DATABASE
+postgres-1  | 2026-10-10T00:13:18.702530811Z 
+postgres-1  | 2026-10-10T00:13:18.702785088Z 
+postgres-1  | 2026-10-10T00:13:18.702798759Z /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+postgres-1  | 2026-10-10T00:13:18.702801339Z 
+postgres-1  | 2026-10-10T00:13:18.703827938Z waiting for server to shut down...2026-10-10 00:13:18.703 UTC [41] LOG:  received fast shutdown request
+postgres-1  | 2026-10-10T00:13:18.706136038Z .2026-10-10 00:13:18.705 UTC [41] LOG:  aborting any active transactions
+postgres-1  | 2026-10-10T00:13:18.708782866Z 2026-10-10 00:13:18.708 UTC [41] LOG:  background worker "logical replication launcher" (PID 47) exited with exit code 1
+postgres-1  | 2026-10-10T00:13:18.708928777Z 2026-10-10 00:13:18.708 UTC [42] LOG:  shutting down
+postgres-1  | 2026-10-10T00:13:18.711077097Z 2026-10-10 00:13:18.710 UTC [42] LOG:  checkpoint starting: shutdown immediate
+postgres-1  | 2026-10-10T00:13:18.858336476Z 2026-10-10 00:13:18.858 UTC [42] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.026 s, sync=0.115 s, total=0.150 s; sync files=301, longest=0.003 s, average=0.001 s; distance=4283 kB, estimate=4283 kB; lsn=0/1925D60, redo lsn=0/1925D60
+postgres-1  | 2026-10-10T00:13:18.871866076Z 2026-10-10 00:13:18.871 UTC [41] LOG:  database system is shut down
+postgres-1  | 2026-10-10T00:13:18.904814551Z  done
+postgres-1  | 2026-10-10T00:13:18.904856744Z server stopped
+postgres-1  | 2026-10-10T00:13:18.906145025Z 
+postgres-1  | 2026-10-10T00:13:18.906160001Z PostgreSQL init process complete; ready for start up.
+postgres-1  | 2026-10-10T00:13:18.906162957Z 
+postgres-1  | 2026-10-10T00:13:18.933948591Z 2026-10-10 00:13:18.933 UTC [1] LOG:  starting PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1  | 2026-10-10T00:13:18.934849456Z 2026-10-10 00:13:18.934 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+postgres-1  | 2026-10-10T00:13:18.945295667Z 2026-10-10 00:13:18.945 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+postgres-1  | 2026-10-10T00:13:18.955854993Z 2026-10-10 00:13:18.955 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-10-10T00:13:18.962872017Z 2026-10-10 00:13:18.962 UTC [57] LOG:  database system was shut down at 2026-10-10 00:13:18 UTC
+postgres-1  | 2026-10-10T00:13:18.970973414Z 2026-10-10 00:13:18.970 UTC [1] LOG:  database system is ready to accept connections

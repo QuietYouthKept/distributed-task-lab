@@ -1,0 +1,277 @@
+MinIO upstream source tag: RELEASE.2025-10-15T17-29-55Z
+MinIO upstream commit: 9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a
+MinIO Go module version: v0.0.0-20251015172955-9e49d5e7a648
+MinIO Go module checksum: h1:6TdolSCLSs2nwm8i0PpWDqf9iX2Ty9WQK8wmr7dCnUM=
+MinIO go.mod checksum: h1:yCWDkwWO9IWpGsT4mreDDN/B/QVmK2zC666uInRAcqE=
+MinIO upstream LICENSE URL: https://raw.githubusercontent.com/minio/minio/9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a/LICENSE
+MinIO upstream LICENSE SHA256: 0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0
+License: AGPL-3.0 (upstream LICENSE included in image)
+go version go1.26.9 windows/amd64
+C:/Users/13354/AppData/Local/Temp/tasklab-minio-build.jGHW3P/bin/minio: go1.26.9
+	path	github.com/minio/minio
+	mod	github.com/minio/minio	(devel)	
+	build	-trimpath=true
+	build	CGO_ENABLED=0
+	build	GOARCH=amd64
+	build	GOOS=linux
+5d0789d5af3cc685a4aad5379176fa2755a821fa3d52050ef93293bd6691828a */tmp/tasklab-minio-build.jGHW3P/bin/minio
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from minio-ci.Dockerfile
+#1 transferring dockerfile: 697B done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load build context
+#3 transferring context: 149.83MB 3.2s done
+#3 DONE 3.4s
+
+#4 [1/2] COPY minio /usr/bin/minio
+#4 DONE 0.5s
+
+#5 [2/2] COPY LICENSE /usr/share/licenses/minio/LICENSE
+#5 DONE 0.2s
+
+#6 exporting to image
+#6 exporting layers
+#6 exporting layers 4.1s done
+#6 exporting manifest sha256:c5517c38b77d5b1b0ee487ce551243042d5bc47c5ed253b9d8ac93c68d023e14 0.0s done
+#6 exporting config sha256:e09309250b78f6ccb21b5bf5e5d4e52df895cc5a1511395a825f5919726646c7 0.0s done
+#6 exporting attestation manifest sha256:dd881912e837c26afe8d9120093a7ab2f170f0b1d2133b2d60cfdab3cbed8d6c 0.0s done
+#6 exporting manifest list sha256:ad705ce3ef181c4959d68fbfc3442da098ddc05a4dad80657038e019559c5051 0.0s done
+#6 naming to docker.io/library/tasklab-minio-ci:tasklab-e2e-a9ed5ad8597c-1 done
+#6 unpacking to docker.io/library/tasklab-minio-ci:tasklab-e2e-a9ed5ad8597c-1
+#6 unpacking to docker.io/library/tasklab-minio-ci:tasklab-e2e-a9ed5ad8597c-1 done
+#6 DONE 3.5s
+Built ephemeral MinIO image tag: tasklab-minio-ci:tasklab-e2e-a9ed5ad8597c-1
+Local image ID (not a registry digest): sha256:ad705ce3ef181c4959d68fbfc3442da098ddc05a4dad80657038e019559c5051
+ Network tasklab-e2e-a9ed5ad8597c_default  Creating
+ Network tasklab-e2e-a9ed5ad8597c_default  Created
+ Container tasklab-e2e-a9ed5ad8597c-minio-1  Creating
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Creating
+ Container tasklab-e2e-a9ed5ad8597c-minio-1  Created
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Created
+ Container tasklab-e2e-a9ed5ad8597c-minio-1  Starting
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Starting
+ Container tasklab-e2e-a9ed5ad8597c-minio-1  Started
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Started
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Waiting
+ Container tasklab-e2e-a9ed5ad8597c-minio-1  Waiting
+ Container tasklab-e2e-a9ed5ad8597c-minio-1  Healthy
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Healthy
+#1 [internal] load local bake definitions
+#1 reading from stdin 1.15kB done
+#1 DONE 0.0s
+
+#2 [api internal] load build definition from Dockerfile.api
+#2 transferring dockerfile: 718B done
+#2 DONE 0.0s
+
+#3 [worker-a internal] load build definition from Dockerfile.worker
+#3 transferring dockerfile: 1.08kB done
+#3 DONE 0.0s
+
+#4 [worker-a internal] load metadata for docker.io/library/alpine:3.19
+#4 DONE 0.0s
+
+#5 [api internal] load metadata for docker.io/library/golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
+#5 DONE 0.0s
+
+#6 [api internal] load .dockerignore
+#6 transferring context: 195B done
+#6 DONE 0.0s
+
+#7 [worker-a builder 1/6] FROM docker.io/library/golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
+#7 resolve docker.io/library/golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 0.0s done
+#7 DONE 0.0s
+
+#8 [api stage-1 1/5] FROM docker.io/library/alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
+#8 resolve docker.io/library/alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1 0.0s done
+#8 DONE 0.0s
+
+#9 [api internal] load build context
+#9 transferring context: 464.16kB 0.2s done
+#9 transferring context: 464.16kB 0.2s done
+#9 DONE 0.2s
+
+#10 [api builder 2/6] WORKDIR /app
+#10 CACHED
+
+#11 [api builder 3/6] COPY go.mod go.sum ./
+#11 CACHED
+
+#12 [worker-a builder 4/6] RUN go mod download
+#12 CACHED
+
+#13 [api builder 5/6] COPY . .
+#13 DONE 0.9s
+
+#14 [api builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -o /api ./cmd/api
+#14 ...
+
+#15 [worker-a builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -o /worker ./cmd/worker
+#15 ...
+
+#14 [api builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -o /api ./cmd/api
+#14 DONE 18.5s
+
+#15 [worker-a builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -o /worker ./cmd/worker
+#15 DONE 18.6s
+
+#16 [api stage-1 2/5] RUN apk add --no-cache ca-certificates     && addgroup -S tasklab     && adduser -S -G tasklab -h /app tasklab
+#16 CACHED
+
+#17 [api stage-1 3/3] COPY --from=builder --chown=tasklab:tasklab /api /api
+#17 CACHED
+
+#16 [worker-a stage-1 2/5] RUN apk add --no-cache ca-certificates     && addgroup -S tasklab     && adduser -S -G tasklab -h /app tasklab
+#16 CACHED
+
+#18 [worker-a stage-1 3/5] COPY --from=builder --chown=tasklab:tasklab /worker /worker
+#18 CACHED
+
+#19 [worker-a stage-1 4/5] COPY --from=builder --chown=tasklab:tasklab /app/examples/docs /app/examples/docs
+#19 CACHED
+
+#20 [worker-a stage-1 5/5] RUN mkdir -p /app/artifacts/index     && chown -R tasklab:tasklab /app
+#20 CACHED
+
+#21 [worker-a] exporting to image
+#21 exporting layers done
+#21 exporting manifest sha256:ff7612888ec932d3b690e86c8809907f93cc6a3c3e181db2e24d725bbca3435f 0.0s done
+#21 exporting config sha256:0f20494fd8bce4bea7510120e4f0be299d48760c5912692948c60bf792f9d4b1 0.0s done
+#21 exporting attestation manifest sha256:7b3d96cb9091e38abeda297baa48d18b6928cc374f88dce3cc011136e3fa6ade
+#21 exporting attestation manifest sha256:7b3d96cb9091e38abeda297baa48d18b6928cc374f88dce3cc011136e3fa6ade 0.0s done
+#21 exporting manifest list sha256:4de32c6464822cf863ecfb17a4ad7b93195c56be67014ec33bf0148fa3b6a874 0.0s done
+#21 naming to docker.io/library/tasklab-e2e-a9ed5ad8597c-worker-a:latest done
+#21 unpacking to docker.io/library/tasklab-e2e-a9ed5ad8597c-worker-a:latest
+#21 unpacking to docker.io/library/tasklab-e2e-a9ed5ad8597c-worker-a:latest 0.2s done
+#21 DONE 0.4s
+
+#22 [api] exporting to image
+#22 exporting layers done
+#22 exporting manifest sha256:f3944006818bad22bbceba07c50ea8137c1062af76548bdf4f70d20f1c7b77cd 0.0s done
+#22 exporting config sha256:39c6e8d17aaa0584e2e1a2a25e8e9777ca11abdcf5a8e7d4338c687980914168 0.0s done
+#22 exporting attestation manifest sha256:8a56c31b200ea2e2b9cf078d57ae6f0edc4e4579c68fef2955baafb64fc23172 0.0s done
+#22 exporting manifest list sha256:e624c2107ff0d779f68a9fa8e3ed98ae7f860811dc177c726577228894d66b80 0.0s done
+#22 naming to docker.io/library/tasklab-e2e-a9ed5ad8597c-api:latest 0.0s done
+#22 unpacking to docker.io/library/tasklab-e2e-a9ed5ad8597c-api:latest 0.1s done
+#22 DONE 0.3s
+
+#23 [api] resolving provenance for metadata file
+#23 DONE 0.0s
+
+#24 [worker-a] resolving provenance for metadata file
+#24 DONE 0.0s
+ tasklab-e2e-a9ed5ad8597c-api  Built
+ tasklab-e2e-a9ed5ad8597c-worker-a  Built
+ Container tasklab-e2e-a9ed5ad8597c-minio-1  Running
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Running
+ Container tasklab-e2e-a9ed5ad8597c-worker-a-1  Creating
+ Container tasklab-e2e-a9ed5ad8597c-api-1  Creating
+ Container tasklab-e2e-a9ed5ad8597c-worker-a-1  Created
+ Container tasklab-e2e-a9ed5ad8597c-api-1  Created
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Waiting
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Waiting
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Healthy
+ Container tasklab-e2e-a9ed5ad8597c-worker-a-1  Starting
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Healthy
+ Container tasklab-e2e-a9ed5ad8597c-api-1  Starting
+ Container tasklab-e2e-a9ed5ad8597c-api-1  Started
+ Container tasklab-e2e-a9ed5ad8597c-worker-a-1  Started
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Waiting
+ Container tasklab-e2e-a9ed5ad8597c-minio-1  Waiting
+ Container tasklab-e2e-a9ed5ad8597c-api-1  Waiting
+ Container tasklab-e2e-a9ed5ad8597c-worker-a-1  Waiting
+ Container tasklab-e2e-a9ed5ad8597c-minio-1  Healthy
+ Container tasklab-e2e-a9ed5ad8597c-api-1  Healthy
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Healthy
+ Container tasklab-e2e-a9ed5ad8597c-worker-a-1  Healthy
+#1 [internal] load local bake definitions
+#1 reading from stdin 628B 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile.worker
+#2 transferring dockerfile: 1.08kB done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
+#3 DONE 0.0s
+
+#4 [internal] load metadata for docker.io/library/alpine:3.19
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 195B done
+#5 DONE 0.0s
+
+#6 [stage-1 1/5] FROM docker.io/library/alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
+#6 resolve docker.io/library/alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1 0.0s done
+#6 DONE 0.0s
+
+#7 [builder 1/6] FROM docker.io/library/golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
+#7 resolve docker.io/library/golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 0.0s done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 424.00kB 0.1s done
+#8 DONE 0.1s
+
+#9 [builder 5/6] COPY . .
+#9 CACHED
+
+#10 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -o /worker ./cmd/worker
+#10 CACHED
+
+#11 [stage-1 4/5] COPY --from=builder --chown=tasklab:tasklab /app/examples/docs /app/examples/docs
+#11 CACHED
+
+#12 [builder 3/6] COPY go.mod go.sum ./
+#12 CACHED
+
+#13 [builder 4/6] RUN go mod download
+#13 CACHED
+
+#14 [stage-1 2/5] RUN apk add --no-cache ca-certificates     && addgroup -S tasklab     && adduser -S -G tasklab -h /app tasklab
+#14 CACHED
+
+#15 [builder 2/6] WORKDIR /app
+#15 CACHED
+
+#16 [stage-1 3/5] COPY --from=builder --chown=tasklab:tasklab /worker /worker
+#16 CACHED
+
+#17 [stage-1 5/5] RUN mkdir -p /app/artifacts/index     && chown -R tasklab:tasklab /app
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 exporting manifest sha256:003bd522e0ffb7a23841dd0db17b6b2c74645f1be123bfae877d2f1fceab1887 0.0s done
+#18 exporting config sha256:05638980551a424c16a4bad1549b13ef4d887d4a6ef0525ed46f5a32e066cc55 0.0s done
+#18 exporting attestation manifest sha256:b99752ac308189bb318b1b0b1f6292c3efe767b76f0501a3161808f27dd49ae6 0.0s done
+#18 exporting manifest list sha256:75fa2d44c1f56cb73f496dcb6eeecb4daee1cbae9b733f1b5f6e5508955fafa6
+#18 exporting manifest list sha256:75fa2d44c1f56cb73f496dcb6eeecb4daee1cbae9b733f1b5f6e5508955fafa6 0.0s done
+#18 naming to docker.io/library/tasklab-e2e-a9ed5ad8597c-worker-b:latest done
+#18 unpacking to docker.io/library/tasklab-e2e-a9ed5ad8597c-worker-b:latest done
+#18 DONE 0.1s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ tasklab-e2e-a9ed5ad8597c-worker-b  Built
+ Container tasklab-e2e-a9ed5ad8597c-minio-1  Running
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Running
+ Container tasklab-e2e-a9ed5ad8597c-worker-b-1  Creating
+ Container tasklab-e2e-a9ed5ad8597c-worker-b-1  Created
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Waiting
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Healthy
+ Container tasklab-e2e-a9ed5ad8597c-worker-b-1  Starting
+ Container tasklab-e2e-a9ed5ad8597c-worker-b-1  Started
+ Container tasklab-e2e-a9ed5ad8597c-minio-1  Waiting
+ Container tasklab-e2e-a9ed5ad8597c-worker-b-1  Waiting
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Waiting
+ Container tasklab-e2e-a9ed5ad8597c-postgres-1  Healthy
+ Container tasklab-e2e-a9ed5ad8597c-minio-1  Healthy
+ Container tasklab-e2e-a9ed5ad8597c-worker-b-1  Healthy

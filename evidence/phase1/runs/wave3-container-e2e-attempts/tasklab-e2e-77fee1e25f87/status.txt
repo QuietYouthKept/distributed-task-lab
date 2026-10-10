@@ -1,0 +1,4 @@
+run_id=tasklab-e2e-77fee1e25f87
+result=NOT VERIFIED
+reason=Pinned MinIO source-image preflight did not complete; no test gate ran.
+secrets_recorded=false
