@@ -1,0 +1,5 @@
+=== RUN   TestMinIOStoreContractAndConcurrentConditionalWrite
+    minio_integration_test.go:123: PASS: S3 PUT committed but response and first verification HEAD were dropped; outcome=artifact write outcome is unknown; real MinIO re-read and retry reused SHA256=fc6832d4c4bcd749c695d2b28f963bc1f50da19f1dfe5bc867da00ef3486e2d4
+--- PASS: TestMinIOStoreContractAndConcurrentConditionalWrite (3.28s)
+PASS
+ok  	github.com/fantasticyi/distributed-task-lab/internal/artifacts	5.065s

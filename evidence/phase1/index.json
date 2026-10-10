@@ -1,6 +1,6 @@
 ﻿{
     "schema_version":  1,
-    "updated_at_utc":  "2026-10-10T00:56:46.7974580Z",
+    "updated_at_utc":  "2026-10-10T01:11:54.6258777Z",
     "records":  [
                     {
                         "evidence_id":  "wave2-20261009T093214275Z-0b73ce734dcd",
@@ -163,6 +163,12 @@
                         "status":  "PASS",
                         "implementation_commit":  "3eef1603293aa0bbc45877bb8263699f09c9e2b5",
                         "manifest":  "evidence/phase1/runs/wave3-container-e2e/tasklab-e2e-d55fb468070f/manifest.json"
+                    },
+                    {
+                        "evidence_id":  "wave3-20261010T174500Z-67eb27c",
+                        "status":  "FAIL",
+                        "implementation_commit":  "67eb27c6451f5d85bb3f0f0637d950745340a6a5",
+                        "manifest":  "evidence/phase1/runs/wave3-20261010T174500Z-67eb27c/manifest.json"
                     }
                 ]
 }
