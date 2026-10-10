@@ -22,7 +22,7 @@ $environmentNames = @(
     "E2E_ADMIN_TOKEN", "E2E_ARTIFACT_PREFIX", "E2E_COMPOSE_PROJECT", "E2E_COMPOSE_FILE",
     "REQUIRE_CONTAINER_E2E", "E2E_API_URL", "E2E_DATABASE_URL", "E2E_MINIO_ENDPOINT",
     "E2E_MINIO_BUCKET", "REQUIRE_MINIO", "MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY",
-    "MINIO_SECRET_KEY", "E2E_COMPOSE_FILE"
+    "MINIO_SECRET_KEY", "E2E_COMPOSE_FILE", "GOTOOLCHAIN"
 )
 $previous = @{}
 foreach ($name in $environmentNames) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, "Process") }
@@ -42,6 +42,9 @@ function Invoke-Compose([string[]]$Arguments) {
 }
 
 try {
+    # Honor the module's Go version even when the caller has GOTOOLCHAIN=local
+    # configured with an older installed toolchain.
+    [Environment]::SetEnvironmentVariable("GOTOOLCHAIN", "auto", "Process")
     $gitPath = (Get-Command git -ErrorAction Stop).Source
     $gitRoot = Split-Path (Split-Path $gitPath -Parent) -Parent
     $gitBash = Join-Path $gitRoot "bin\bash.exe"

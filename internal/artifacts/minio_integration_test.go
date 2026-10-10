@@ -1,6 +1,7 @@
 package artifacts
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/minio/minio-go/v7"
 )
 
 func TestMinIOStoreContractAndConcurrentConditionalWrite(t *testing.T) {
@@ -63,12 +66,16 @@ func TestMinIOStoreContractAndConcurrentConditionalWrite(t *testing.T) {
 		conflictKey := key + "-conflicting-writers"
 		var wg sync.WaitGroup
 		errCh := make(chan error, 2)
-		for _, body := range [][]byte{[]byte(`{"writer":1}`), []byte(`{"writer":2}`)} {
-			body := body
+		otherStore, err := NewS3Store(cfg)
+		if err != nil {
+			t.Fatalf("configure independent concurrent MinIO client: %v", err)
+		}
+		for index, body := range [][]byte{[]byte(`{"writer":1}`), []byte(`{"writer":2}`)} {
+			body, client := body, []*S3Store{store, otherStore}[index]
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				_, err := store.PutIfAbsent(ctx, conflictKey, body, "application/json")
+				_, err := client.PutIfAbsent(ctx, conflictKey, body, "application/json")
 				errCh <- err
 			}()
 		}
@@ -87,6 +94,23 @@ func TestMinIOStoreContractAndConcurrentConditionalWrite(t *testing.T) {
 		}
 		if succeeded != 1 || conflicted != 1 {
 			t.Fatalf("concurrent different-content writes: succeeded=%d conflicts=%d, want 1/1", succeeded, conflicted)
+		}
+	}
+	{
+		corruptKey := key + "-invalid-sha-metadata"
+		corruptScopedKey, err := store.scopedKey(corruptKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		corruptBody := []byte(`{"seed":"incorrect object metadata"}`)
+		_, err = store.client.PutObject(ctx, store.bucket, corruptScopedKey, bytes.NewReader(corruptBody), int64(len(corruptBody)), minio.PutObjectOptions{
+			ContentType: "application/json", UserMetadata: map[string]string{"sha256": "not-the-content-hash"}, DisableMultipart: true,
+		})
+		if err != nil {
+			t.Fatalf("seed malformed object metadata through MinIO S3 API: %v", err)
+		}
+		if _, err := store.PutIfAbsent(ctx, corruptKey, []byte(`{"seed":"incorrect object metadata"}`), "application/json"); !errors.Is(err, ErrUnknownOutcome) || !errors.Is(err, ErrCorrupt) {
+			t.Fatalf("existing object with invalid SHA256 metadata returned %v, want both ErrUnknownOutcome and ErrCorrupt", err)
 		}
 	}
 	data, got, err := store.Get(ctx, key)
@@ -121,7 +145,16 @@ func TestMinIOStoreContractAndConcurrentConditionalWrite(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := store.PutIfAbsent(ctx, concurrentKey, body, "application/json")
+			client := store
+			if i%2 == 1 {
+				independentClient, clientErr := NewS3Store(cfg)
+				if clientErr != nil {
+					errCh <- clientErr
+					return
+				}
+				client = independentClient
+			}
+			_, err := client.PutIfAbsent(ctx, concurrentKey, body, "application/json")
 			errCh <- err
 		}()
 	}
