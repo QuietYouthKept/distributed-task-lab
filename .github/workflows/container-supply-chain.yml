@@ -43,6 +43,7 @@ jobs:
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           image: tasklab-api:${{ github.sha }}
+          syft-version: v1.54.1
           format: cyclonedx-json
           output-file: artifacts/sbom/api.cdx.json
           upload-artifact: false
@@ -53,6 +54,7 @@ jobs:
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           image: tasklab-worker:${{ github.sha }}
+          syft-version: v1.54.1
           format: cyclonedx-json
           output-file: artifacts/sbom/worker.cdx.json
           upload-artifact: false
