@@ -86,3 +86,9 @@ Latest resumable command after checking status: `git status -sb; git rev-parse H
 - Implementation commit `93f7bee8ba77e6bb65f2a71f68f6e71da8b839d4` updates `api/openapi.json` to model the `POST /v1/tasks` 201 JSON body as `CreateTaskResponse`. A test compares property names in `CreateTaskRequest`, `PayloadEnvelope`, and `CreateTaskResponse` against the corresponding Go DTO JSON tags and asserts the success response references the declared schema.
 - Validation passed: `go test ./internal/api -run '^TestOpenAPI' -count=1 -v` (5 tests), `go test ./internal/api -count=1`, and `go test -race ./internal/api -run '^TestOpenAPI' -count=10`; `git diff --check` passed.
 - This is a targeted DTO/schema drift guard, not a complete schema generation or all-operation drift solution. Queue configuration and task/list/detail/event/effect responses remain to be aligned systematically.
+
+## Package D follow-up — Worker trace continuation — 2026-10-10
+
+- Test commit `17c1fba31a7e35a76622c34bd0adafdb1b299857` verifies that persisted W3C `traceparent` is extracted by a Worker, the execution span retains the submitting trace and parent span, and internal propagation fields do not reach the task handler.
+- Validation: targeted test ×20, full `internal/worker` tests, and targeted Race ×10 passed; `git diff --check` passed.
+- This is a bounded unit-level propagation check. End-to-end API→PostgreSQL→separate Worker process→ArtifactStore/fenced ACK export through a real Collector and production alert firing remain unverified.

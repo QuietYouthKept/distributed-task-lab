@@ -37,6 +37,12 @@ The external E: artifacts are immutable run outputs; earlier failed and intermed
 |---|---|---|
 | `93f7bee8ba77e6bb65f2a71f68f6e71da8b839d4` | PASS locally | Targeted OpenAPI tests (5), full `internal/api` package, and OpenAPI Race ×10 passed. `POST /v1/tasks` success references `CreateTaskResponse`; request/payload/response property sets are checked against Go DTO JSON tags. This is not all-operation schema drift evidence. |
 
+## Package D Worker trace continuation
+
+| Implementation | Result | Scope |
+|---|---|---|
+| `17c1fba31a7e35a76622c34bd0adafdb1b299857` | PASS locally | Worker trace continuation test ×20, full `internal/worker` package, and test Race ×10 passed. Validates extracted parent context and propagation-field filtering only; it does not close the distributed persistence/Collector path. |
+
 Artifact SHA256 (uppercase hex):
 
 - `api-image.tar`: `E7179E346D9A9E0CD909E9913678875CF9A1DAA30CBD4BB077836939EBDDD46C`
