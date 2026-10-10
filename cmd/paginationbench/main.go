@@ -308,7 +308,10 @@ func cursorAt(ctx context.Context, db *sql.DB, offset int, owner string) (time.T
 }
 
 func explain(ctx context.Context, db *sql.DB, owner string, afterTime *time.Time, afterID *string) (json.RawMessage, error) {
-	query := `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id FROM tasks WHERE 1=1`
+	// Match the full task-row projection used by PostgresQueue.ListTasks. An
+	// id-only EXPLAIN can choose an index-only plan that hides the heap work of
+	// the actual API query.
+	query := `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT t.* FROM tasks AS t WHERE 1=1`
 	args := []any{}
 	if owner != "" {
 		args = append(args, owner)
@@ -479,8 +482,12 @@ func measurePaginationIndexWriteCost(ctx context.Context, db *sql.DB) (map[strin
 	ddl := []string{
 		`CREATE TEMP TABLE pagination_write_without_indexes (id text PRIMARY KEY, created_at timestamptz NOT NULL, created_by text, status text NOT NULL, next_run_at timestamptz NOT NULL, queue text NOT NULL, priority integer NOT NULL) ON COMMIT PRESERVE ROWS`,
 		`CREATE TEMP TABLE pagination_write_with_indexes (id text PRIMARY KEY, created_at timestamptz NOT NULL, created_by text, status text NOT NULL, next_run_at timestamptz NOT NULL, queue text NOT NULL, priority integer NOT NULL) ON COMMIT PRESERVE ROWS`,
+		`CREATE TEMP TABLE pagination_write_with_overlapping_owner_index (id text PRIMARY KEY, created_at timestamptz NOT NULL, created_by text, status text NOT NULL, next_run_at timestamptz NOT NULL, queue text NOT NULL, priority integer NOT NULL) ON COMMIT PRESERVE ROWS`,
 		`CREATE INDEX pagination_write_created_at_id ON pagination_write_with_indexes (created_at DESC, id DESC)`,
 		`CREATE INDEX pagination_write_owner_created_at_id ON pagination_write_with_indexes (created_by, created_at DESC, id DESC) WHERE created_by IS NOT NULL`,
+		`CREATE INDEX pagination_write_overlap_created_at_id ON pagination_write_with_overlapping_owner_index (created_at DESC, id DESC)`,
+		`CREATE INDEX pagination_write_overlap_owner_partial ON pagination_write_with_overlapping_owner_index (created_by, created_at DESC, id DESC) WHERE created_by IS NOT NULL`,
+		`CREATE INDEX pagination_write_overlap_owner_full ON pagination_write_with_overlapping_owner_index (created_by, created_at DESC, id DESC)`,
 	}
 	for _, statement := range ddl {
 		if _, err := conn.ExecContext(ctx, statement); err != nil {
@@ -520,18 +527,29 @@ func measurePaginationIndexWriteCost(ctx context.Context, db *sql.DB) (map[strin
 	if err != nil {
 		return nil, err
 	}
+	withOverlap, withOverlapBytes, err := insert("pagination_write_with_overlapping_owner_index")
+	if err != nil {
+		return nil, err
+	}
 	overhead := 0.0
 	if without.P50MS > 0 {
 		overhead = (with.P50MS/without.P50MS - 1) * 100
 	}
+	overlapOverhead := 0.0
+	if with.P50MS > 0 {
+		overlapOverhead = (withOverlap.P50MS/with.P50MS - 1) * 100
+	}
 	return map[string]any{
-		"method":          "same-session temporary tables; identical 5000-row INSERT SELECT repeated 5 times; primary key common to both; pagination indexes added only to indexed table",
+		"method":          "same-session temporary tables; identical 5000-row INSERT SELECT repeated 5 times; primary key common to all; compares no pagination indexes, global+partial-owner indexes, then an additional overlapping non-partial owner index",
 		"rows_per_sample": rowsPerSample, "samples": samples,
-		"without_pagination_indexes_latency_ms": without,
-		"with_pagination_indexes_latency_ms":    with,
-		"p50_write_latency_overhead_percent":    overhead,
-		"without_indexes_relation_bytes":        withoutBytes,
-		"with_indexes_relation_bytes":           withBytes,
+		"without_pagination_indexes_latency_ms":                    without,
+		"with_pagination_indexes_latency_ms":                       with,
+		"p50_write_latency_overhead_percent":                       overhead,
+		"without_indexes_relation_bytes":                           withoutBytes,
+		"with_indexes_relation_bytes":                              withBytes,
+		"with_overlapping_owner_index_latency_ms":                  withOverlap,
+		"with_overlapping_owner_index_relation_bytes":              withOverlapBytes,
+		"overlapping_owner_index_incremental_p50_overhead_percent": overlapOverhead,
 	}, nil
 }
 
@@ -555,6 +573,6 @@ func writeReport(path string, manifest runManifest) error {
 		latency := manifest.Latency[name]
 		content += fmt.Sprintf("| %s | %d | %.3f | %.3f | %.3f | %.3f |\n", name, latency.Samples, latency.P50MS, latency.P95MS, latency.P99MS, latency.MaxMS)
 	}
-	content += fmt.Sprintf("\n## Index write-cost sample\n\n- Method: %v\n- Without pagination indexes: P50 %.3f ms, relation %v bytes\n- With pagination indexes: P50 %.3f ms, relation %v bytes\n- Measured P50 write latency change: %.1f%%\n\nThis temporary-table comparison isolates pagination-index maintenance on this test host. It is not an index recommendation or production SLO. Existing task indexes and sizes are enumerated in the JSON manifest.\n", manifest.WriteCost["method"], manifest.WriteCost["without_pagination_indexes_latency_ms"].(latencySummary).P50MS, manifest.WriteCost["without_indexes_relation_bytes"], manifest.WriteCost["with_pagination_indexes_latency_ms"].(latencySummary).P50MS, manifest.WriteCost["with_indexes_relation_bytes"], manifest.WriteCost["p50_write_latency_overhead_percent"])
+	content += fmt.Sprintf("\n## Index write-cost sample\n\n- Method: %v\n- Without pagination indexes: P50 %.3f ms, relation %v bytes\n- With global + partial-owner pagination indexes: P50 %.3f ms, relation %v bytes\n- Measured P50 write latency change: %.1f%%\n- With an additional overlapping non-partial owner index: P50 %.3f ms, relation %v bytes\n- Additional measured P50 write change: %.1f%%\n\nThis temporary-table comparison isolates pagination-index maintenance on this test host. It is not an index recommendation or production SLO. Existing task indexes and sizes are enumerated in the JSON manifest.\n", manifest.WriteCost["method"], manifest.WriteCost["without_pagination_indexes_latency_ms"].(latencySummary).P50MS, manifest.WriteCost["without_indexes_relation_bytes"], manifest.WriteCost["with_pagination_indexes_latency_ms"].(latencySummary).P50MS, manifest.WriteCost["with_indexes_relation_bytes"], manifest.WriteCost["p50_write_latency_overhead_percent"], manifest.WriteCost["with_overlapping_owner_index_latency_ms"].(latencySummary).P50MS, manifest.WriteCost["with_overlapping_owner_index_relation_bytes"], manifest.WriteCost["overlapping_owner_index_incremental_p50_overhead_percent"])
 	return os.WriteFile(path, []byte(content), 0o644)
 }
