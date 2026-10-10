@@ -3,7 +3,9 @@ package config
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"strconv"
@@ -41,10 +43,26 @@ type Config struct {
 
 	// Optional HTTP bearer tokens. When unset the corresponding surface is
 	// intentionally unauthenticated for local development.
-	APIToken            string
-	AdminToken          string
-	MaxRequestBodyBytes int64
-	CursorSigningKey    string
+	APIToken                  string
+	AdminToken                string
+	MaxRequestBodyBytes       int64
+	CursorSigningKey          string
+	CursorRotationEnabled     bool
+	CursorActiveKeyID         string
+	CursorActiveKey           string
+	CursorTTL                 time.Duration
+	CursorPreviousKeys        []CursorPreviousKey
+	CursorPreviousKeysRaw     string
+	CursorLegacyV1Key         string
+	CursorLegacyV1AcceptUntil time.Time
+
+	// Shared API admission is a Wave 4 candidate and remains disabled unless
+	// every policy and key setting is explicitly supplied.
+	SharedRateLimitEnabled     bool
+	SharedRateLimitRate        float64
+	SharedRateLimitBurst       int
+	SharedRateLimitFailureMode string
+	SharedRateLimitHashKey     string
 
 	// OIDC is the production authentication boundary. Static bearer tokens are
 	// retained only for explicitly local development.
@@ -82,6 +100,13 @@ type Config struct {
 	EvalGatewayAPIKey  string
 
 	parseErrors []string
+}
+
+type CursorPreviousKey struct {
+	ID             string    `json:"id"`
+	Key            string    `json:"key"`
+	AcceptUntil    time.Time `json:"-"`
+	AcceptUntilRaw string    `json:"accept_until"`
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -132,6 +157,41 @@ func Load() *Config {
 	c.DefaultMaxAttempts = c.int("DEFAULT_MAX_ATTEMPTS", 3)
 	c.DefaultTimeoutSeconds = c.int("DEFAULT_TIMEOUT_SECONDS", 60)
 	c.DefaultRetryDelaySeconds = c.int("DEFAULT_RETRY_DELAY_SECONDS", 5)
+	c.SharedRateLimitEnabled = c.boolean("API_SHARED_RATE_LIMIT_ENABLED", false)
+	c.SharedRateLimitRate = c.float("API_SHARED_RATE_LIMIT_RATE_PER_SECOND", 0)
+	c.SharedRateLimitBurst = c.int("API_SHARED_RATE_LIMIT_BURST", 0)
+	c.SharedRateLimitFailureMode = os.Getenv("API_SHARED_RATE_LIMIT_FAILURE_MODE")
+	c.SharedRateLimitHashKey = os.Getenv("API_SHARED_RATE_LIMIT_HASH_KEY")
+	c.CursorRotationEnabled = c.boolean("API_CURSOR_KEY_RING_ENABLED", false)
+	c.CursorActiveKeyID = os.Getenv("API_CURSOR_ACTIVE_KEY_ID")
+	c.CursorActiveKey = os.Getenv("API_CURSOR_ACTIVE_KEY")
+	c.CursorTTL = c.duration("API_CURSOR_TTL", 0)
+	c.CursorPreviousKeysRaw = os.Getenv("API_CURSOR_PREVIOUS_KEYS")
+	c.CursorLegacyV1Key = os.Getenv("API_CURSOR_V1_LEGACY_KEY")
+	if raw := os.Getenv("API_CURSOR_V1_ACCEPT_UNTIL"); raw != "" {
+		parsed, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			c.parseErrors = append(c.parseErrors, "API_CURSOR_V1_ACCEPT_UNTIL must be RFC3339")
+		} else {
+			c.CursorLegacyV1AcceptUntil = parsed
+		}
+	}
+	if c.CursorPreviousKeysRaw != "" {
+		var previous []CursorPreviousKey
+		if err := json.Unmarshal([]byte(c.CursorPreviousKeysRaw), &previous); err != nil {
+			c.parseErrors = append(c.parseErrors, "API_CURSOR_PREVIOUS_KEYS must be a JSON array of key entries")
+		} else {
+			for i := range previous {
+				parsed, err := time.Parse(time.RFC3339, previous[i].AcceptUntilRaw)
+				if err != nil {
+					c.parseErrors = append(c.parseErrors, "API_CURSOR_PREVIOUS_KEYS accept_until must be RFC3339")
+				} else {
+					previous[i].AcceptUntil = parsed
+				}
+			}
+			c.CursorPreviousKeys = previous
+		}
+	}
 	return c
 }
 
@@ -155,6 +215,18 @@ func (c *Config) int(key string, fallback int) int {
 		n, err := strconv.Atoi(v)
 		if err != nil {
 			c.parseErrors = append(c.parseErrors, fmt.Sprintf("%s must be an integer: %q", key, v))
+			return fallback
+		}
+		return n
+	}
+	return fallback
+}
+
+func (c *Config) float(key string, fallback float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		n, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			c.parseErrors = append(c.parseErrors, fmt.Sprintf("%s must be a number: %q", key, v))
 			return fallback
 		}
 		return n
@@ -213,6 +285,29 @@ func (c *Config) Validate() error {
 	bad(c.DefaultMaxAttempts > 0, "DEFAULT_MAX_ATTEMPTS must be greater than zero")
 	bad(c.DefaultTimeoutSeconds > 0, "DEFAULT_TIMEOUT_SECONDS must be greater than zero")
 	bad(c.DefaultRetryDelaySeconds >= 0 && c.DefaultRetryDelaySeconds < c.DefaultTimeoutSeconds, "DEFAULT_RETRY_DELAY_SECONDS must be non-negative and less than DEFAULT_TIMEOUT_SECONDS")
+	if c.SharedRateLimitEnabled {
+		bad(c.SharedRateLimitRate >= 0.001 && c.SharedRateLimitRate <= 10000 && !math.IsNaN(c.SharedRateLimitRate) && !math.IsInf(c.SharedRateLimitRate, 0), "API_SHARED_RATE_LIMIT_RATE_PER_SECOND must be between 0.001 and 10000 when shared rate limiting is enabled")
+		bad(c.SharedRateLimitBurst > 0 && c.SharedRateLimitBurst <= 1000000, "API_SHARED_RATE_LIMIT_BURST must be between 1 and 1000000 when shared rate limiting is enabled")
+		bad(c.SharedRateLimitFailureMode == "open" || c.SharedRateLimitFailureMode == "closed", "API_SHARED_RATE_LIMIT_FAILURE_MODE must be explicitly set to open or closed when shared rate limiting is enabled")
+		bad(len(c.SharedRateLimitHashKey) >= 32, "API_SHARED_RATE_LIMIT_HASH_KEY must contain at least 32 bytes when shared rate limiting is enabled")
+	}
+	if c.CursorRotationEnabled {
+		bad(strings.TrimSpace(c.CursorActiveKeyID) != "", "API_CURSOR_ACTIVE_KEY_ID is required when cursor rotation is enabled")
+		bad(len(c.CursorActiveKey) >= 32, "API_CURSOR_ACTIVE_KEY must contain at least 32 bytes when cursor rotation is enabled")
+		bad(c.CursorTTL >= time.Second && c.CursorTTL <= 7*24*time.Hour, "API_CURSOR_TTL must be between 1s and 168h when cursor rotation is enabled")
+		seenKeyIDs := map[string]struct{}{c.CursorActiveKeyID: {}}
+		for _, previous := range c.CursorPreviousKeys {
+			_, duplicate := seenKeyIDs[previous.ID]
+			bad(strings.TrimSpace(previous.ID) != "" && !duplicate, "API_CURSOR_PREVIOUS_KEYS must have unique IDs distinct from the active key")
+			bad(len(previous.Key) >= 32 && !previous.AcceptUntil.IsZero(), "each previous cursor key requires at least 32 key bytes and an accept_until timestamp")
+			seenKeyIDs[previous.ID] = struct{}{}
+		}
+		if c.CursorLegacyV1Key != "" {
+			bad(len(c.CursorLegacyV1Key) >= 32 && !c.CursorLegacyV1AcceptUntil.IsZero(), "API_CURSOR_V1_LEGACY_KEY requires at least 32 bytes and API_CURSOR_V1_ACCEPT_UNTIL")
+		} else {
+			bad(c.CursorLegacyV1AcceptUntil.IsZero(), "API_CURSOR_V1_ACCEPT_UNTIL requires API_CURSOR_V1_LEGACY_KEY")
+		}
+	}
 	bad(c.EvalBackend == "deterministic" || c.EvalBackend == "gateway", "EVAL_BACKEND must be deterministic or gateway")
 	bad(c.ArtifactBackend == "local" || c.ArtifactBackend == "s3", "ARTIFACT_STORE_BACKEND must be local or s3")
 	bad(c.ArtifactMaxObjectBytes > 0 && c.ArtifactMaxObjectBytes <= 5<<30, "ARTIFACT_MAX_OBJECT_BYTES must be between 1 byte and 5 GiB")
@@ -231,7 +326,7 @@ func (c *Config) Validate() error {
 	u, urlErr := url.Parse(c.DatabaseURL)
 	bad(urlErr == nil && u.Scheme == "postgres" || urlErr == nil && u.Scheme == "postgresql", "DATABASE_URL must be a PostgreSQL URL")
 	if c.Profile == "production" {
-		bad(len(c.CursorSigningKey) >= 32, "API_CURSOR_SIGNING_KEY must contain at least 32 bytes in production")
+		bad(len(c.CursorSigningKey) >= 32 || c.CursorRotationEnabled, "API_CURSOR_SIGNING_KEY or an enabled cursor key ring is required in production")
 		issuer, issuerErr := url.Parse(c.OIDCIssuer)
 		jwks, jwksErr := url.Parse(c.OIDCJWKSURL)
 		bad(issuerErr == nil && issuer.Scheme == "https" && issuer.Host != "", "OIDC_ISSUER must be an absolute HTTPS URL in production")
@@ -314,7 +409,11 @@ func isLocalArtifactDir(value string) bool {
 // correlation with logs and deployments. Tokens and database credentials are
 // intentionally excluded.
 func (c *Config) EffectiveChecksum() string {
-	value := strings.Join([]string{c.Profile, c.DatabaseURLWithoutCredentials(), strconv.Itoa(c.APIPort), strconv.Itoa(c.Concurrency), c.PollInterval.String(), c.LeaseTimeout.String(), c.ArtifactBackend, c.ArtifactS3Endpoint, c.ArtifactS3Bucket, c.ArtifactS3Prefix, strconv.FormatInt(c.ArtifactMaxObjectBytes, 10), c.ArtifactDir, c.EvalBackend, c.EvalGatewayURL, c.EvalGatewayProfile}, "|")
+	previousIDs := make([]string, 0, len(c.CursorPreviousKeys))
+	for _, previous := range c.CursorPreviousKeys {
+		previousIDs = append(previousIDs, previous.ID+"@"+previous.AcceptUntil.Format(time.RFC3339))
+	}
+	value := strings.Join([]string{c.Profile, c.DatabaseURLWithoutCredentials(), strconv.Itoa(c.APIPort), strconv.Itoa(c.Concurrency), c.PollInterval.String(), c.LeaseTimeout.String(), c.ArtifactBackend, c.ArtifactS3Endpoint, c.ArtifactS3Bucket, c.ArtifactS3Prefix, strconv.FormatInt(c.ArtifactMaxObjectBytes, 10), c.ArtifactDir, c.EvalBackend, c.EvalGatewayURL, c.EvalGatewayProfile, strconv.FormatBool(c.SharedRateLimitEnabled), strconv.FormatFloat(c.SharedRateLimitRate, 'f', -1, 64), strconv.Itoa(c.SharedRateLimitBurst), c.SharedRateLimitFailureMode, strconv.FormatBool(c.CursorRotationEnabled), c.CursorActiveKeyID, c.CursorTTL.String(), strings.Join(previousIDs, ","), c.CursorLegacyV1AcceptUntil.Format(time.RFC3339)}, "|")
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])
 }
@@ -332,7 +431,11 @@ func (c *Config) DatabaseURLWithoutCredentials() string {
 // Callers must not persist or print the returned values.
 func (c *Config) SensitiveValues() []string {
 	values := []string{c.DatabaseURL, c.APIToken, c.AdminToken, c.CursorSigningKey,
-		c.ArtifactS3AccessKey, c.ArtifactS3SecretKey, c.EvalGatewayAPIKey}
+		c.ArtifactS3AccessKey, c.ArtifactS3SecretKey, c.EvalGatewayAPIKey, c.SharedRateLimitHashKey,
+		c.CursorActiveKey, c.CursorLegacyV1Key, c.CursorPreviousKeysRaw}
+	for _, previous := range c.CursorPreviousKeys {
+		values = append(values, previous.Key)
+	}
 	if parsed, err := url.Parse(c.DatabaseURL); err == nil && parsed.User != nil {
 		if password, ok := parsed.User.Password(); ok {
 			values = append(values, password)

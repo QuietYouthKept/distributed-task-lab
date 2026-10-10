@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tasklab
+      POSTGRES_PASSWORD: ${SMOKE_POSTGRES_PASSWORD:?set SMOKE_POSTGRES_PASSWORD}
+      POSTGRES_DB: tasklab
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tasklab -d tasklab"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile.api
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    ports:
+      - "127.0.0.1:${SMOKE_API_PORT:?set SMOKE_API_PORT}:8080"
+    environment:
+      APP_PROFILE: development
+      DATABASE_URL: postgres://tasklab:${SMOKE_POSTGRES_PASSWORD}@postgres:5432/tasklab?sslmode=disable
+      API_TOKEN: ${SMOKE_API_TOKEN:?set SMOKE_API_TOKEN}
+      ADMIN_TOKEN: ${SMOKE_ADMIN_TOKEN:?set SMOKE_ADMIN_TOKEN}
+      API_PORT: "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile.worker
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    environment:
+      APP_PROFILE: development
+      DATABASE_URL: postgres://tasklab:${SMOKE_POSTGRES_PASSWORD}@postgres:5432/tasklab?sslmode=disable
+      WORKER_ID: release-smoke-worker
+      WORKER_CONCURRENCY: "1"
+      WORKER_POLL_INTERVAL: 100ms
+      LEASE_TIMEOUT: 30s
+      CLAIM_BATCH_SIZE: "1"
+      SHUTDOWN_TIMEOUT: 15s
+      WORKER_HEALTH_PORT: "9091"
+    depends_on:
+      postgres:
+        condition: service_healthy

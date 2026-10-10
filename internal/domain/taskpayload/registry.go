@@ -4,12 +4,15 @@
 package taskpayload
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"regexp"
 	"strings"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const payloadVersion = "1"
@@ -54,21 +57,72 @@ func ValidateData(taskType domain.TaskType, data map[string]any) (map[string]any
 	for key, value := range data {
 		copy[key] = value
 	}
+	traceMetadata, err := takeTraceMetadata(copy)
+	if err != nil {
+		return nil, err
+	}
 
+	var validated map[string]any
+	var validateErr error
 	switch taskType {
 	case domain.TaskTypeRAGIngestion:
-		return validateRAG(copy)
+		validated, validateErr = validateRAG(copy)
 	case domain.TaskTypeEval:
-		return validateEval(copy)
+		validated, validateErr = validateEval(copy)
 	case domain.TaskTypeBenchmark:
-		return validateBenchmark(copy)
+		validated, validateErr = validateBenchmark(copy)
 	case domain.TaskTypeStrategyReplay:
-		return validateStrategyReplay(copy)
+		validated, validateErr = validateStrategyReplay(copy)
 	case domain.TaskTypePayment, domain.TaskTypeNotification:
-		return validateEffect(taskType, copy)
+		validated, validateErr = validateEffect(taskType, copy)
 	default:
 		return nil, fmt.Errorf("unsupported task type %q", taskType)
 	}
+	if validateErr != nil {
+		return nil, validateErr
+	}
+	for key, value := range traceMetadata {
+		validated[key] = value
+	}
+	return validated, nil
+}
+
+// takeTraceMetadata temporarily removes the API-owned propagation fields from
+// strict task-type validation, then ValidateData restores them to the
+// canonical payload. The HTTP handler discards any client values before it
+// injects its authenticated server span, so these reserved keys cannot forge
+// the producer context at the external API boundary.
+func takeTraceMetadata(data map[string]any) (map[string]any, error) {
+	metadata := make(map[string]any, 2)
+	carrier := propagation.MapCarrier{}
+	for _, field := range []struct{ key, header string }{
+		{key: "_traceparent", header: "traceparent"},
+		{key: "_tracestate", header: "tracestate"},
+	} {
+		value, exists := data[field.key]
+		if !exists {
+			continue
+		}
+		text, ok := value.(string)
+		if !ok || strings.TrimSpace(text) == "" {
+			return nil, fmt.Errorf("reserved trace metadata %s must be a non-empty string", field.key)
+		}
+		metadata[field.key] = text
+		carrier.Set(field.header, text)
+		delete(data, field.key)
+	}
+	if _, hasTraceState := metadata["_tracestate"]; hasTraceState {
+		if _, hasTraceParent := metadata["_traceparent"]; !hasTraceParent {
+			return nil, fmt.Errorf("reserved trace metadata _tracestate requires _traceparent")
+		}
+	}
+	if _, hasTraceParent := metadata["_traceparent"]; hasTraceParent {
+		extracted := propagation.TraceContext{}.Extract(context.Background(), carrier)
+		if !trace.SpanContextFromContext(extracted).IsValid() {
+			return nil, fmt.Errorf("reserved trace metadata _traceparent is invalid")
+		}
+	}
+	return metadata, nil
 }
 
 func validateRAG(data map[string]any) (map[string]any, error) {

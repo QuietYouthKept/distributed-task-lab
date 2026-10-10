@@ -13,6 +13,7 @@ import (
 
 	"github.com/fantasticyi/distributed-task-lab/internal/api/handlers"
 	"github.com/fantasticyi/distributed-task-lab/internal/auth"
+	"github.com/fantasticyi/distributed-task-lab/internal/observability"
 )
 
 type readinessStub struct{ err error }
@@ -26,6 +27,39 @@ func (s verifierStub) Verify(_ context.Context, token string) (auth.Principal, e
 		return auth.Principal{}, errors.New("invalid token")
 	}
 	return s.principal, nil
+}
+
+func TestAPIResponseMetricsUseFiniteStatusClassOnly(t *testing.T) {
+	var metrics observability.RuntimeMetrics
+	h := apiResponseMetricsMiddleware(&metrics, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "failed", http.StatusServiceUnavailable)
+	}))
+	r := httptest.NewRequest(http.MethodGet, "/v1/tasks/private-customer-id?token=secret", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d want=%d", w.Code, http.StatusServiceUnavailable)
+	}
+	var out strings.Builder
+	metrics.WritePrometheus(&out)
+	if !strings.Contains(out.String(), `tasklab_api_requests_total{status_class="5xx"} 1`) {
+		t.Fatalf("missing 5xx count: %s", out.String())
+	}
+	for _, secret := range []string{"private-customer-id", "token=secret"} {
+		if strings.Contains(out.String(), secret) {
+			t.Fatalf("metric leaked request value %q", secret)
+		}
+	}
+}
+
+type sharedAdmissionStub struct {
+	allowed bool
+	retry   int
+	err     error
+}
+
+func (s sharedAdmissionStub) Allow(context.Context, string) (bool, int, error) {
+	return s.allowed, s.retry, s.err
 }
 
 func testRouter(ready ReadinessProvider, cfg RouterConfig) http.Handler {
@@ -161,6 +195,38 @@ func TestIngressLimiterReclaimsOnlyFullyRefilledIdleBuckets(t *testing.T) {
 	}
 	if len(limiter.buckets) != 1 {
 		t.Fatalf("bucket count after reclamation = %d, want 1", len(limiter.buckets))
+	}
+}
+
+func TestSharedIngressFailureModesAndRetryAfter(t *testing.T) {
+	principal := auth.Principal{Subject: "subject-1", Roles: map[auth.Role]struct{}{auth.RoleReader: {}}}
+	request := httptest.NewRequest(http.MethodGet, "/v1/tasks", nil).WithContext(auth.WithPrincipal(context.Background(), principal))
+	nextCalls := 0
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		nextCalls++
+		w.WriteHeader(http.StatusNoContent)
+	})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	closed := newSharedIngressLimiter(sharedAdmissionStub{err: errors.New("database password=must-not-leak")}, false, logger).middleware(next)
+	closedResponse := httptest.NewRecorder()
+	closed.ServeHTTP(closedResponse, request)
+	if closedResponse.Code != http.StatusServiceUnavailable || strings.Contains(closedResponse.Body.String(), "must-not-leak") || nextCalls != 0 {
+		t.Fatalf("fail-closed response=%d body=%s next calls=%d", closedResponse.Code, closedResponse.Body.String(), nextCalls)
+	}
+
+	open := newSharedIngressLimiter(sharedAdmissionStub{err: errors.New("database unavailable")}, true, logger).middleware(next)
+	openResponse := httptest.NewRecorder()
+	open.ServeHTTP(openResponse, request)
+	if openResponse.Code != http.StatusNoContent || nextCalls != 1 {
+		t.Fatalf("fail-open response=%d next calls=%d", openResponse.Code, nextCalls)
+	}
+
+	denied := newSharedIngressLimiter(sharedAdmissionStub{allowed: false, retry: 7}, false, logger).middleware(next)
+	deniedResponse := httptest.NewRecorder()
+	denied.ServeHTTP(deniedResponse, request)
+	if deniedResponse.Code != http.StatusTooManyRequests || deniedResponse.Header().Get("Retry-After") != "7" || nextCalls != 1 {
+		t.Fatalf("denial response=%d retry-after=%q next calls=%d", deniedResponse.Code, deniedResponse.Header().Get("Retry-After"), nextCalls)
 	}
 }
 

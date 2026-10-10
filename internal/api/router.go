@@ -16,6 +16,7 @@ import (
 	"github.com/fantasticyi/distributed-task-lab/internal/api/handlers"
 	"github.com/fantasticyi/distributed-task-lab/internal/auth"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/observability"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -30,7 +31,15 @@ type RouterConfig struct {
 	RequestTimeout        time.Duration
 	IngressRatePerSecond  float64
 	IngressBurst          int
+	SharedIngressLimiter  SharedIngressAdmission
+	SharedIngressFailOpen bool
 	EffectHandler         *handlers.EffectHandler
+}
+
+// SharedIngressAdmission is an optional cross-process admission candidate.
+// It remains absent unless a deployment explicitly enables and wires it.
+type SharedIngressAdmission interface {
+	Allow(context.Context, string) (allowed bool, retryAfterSeconds int, err error)
 }
 
 func (c RouterConfig) withDefaults() RouterConfig {
@@ -114,12 +123,89 @@ func NewRouterWithConfig(taskHandler *handlers.TaskHandler, metricsHandler *hand
 
 	var h http.Handler = mux
 	h = newIngressLimiter(cfg.IngressRatePerSecond, cfg.IngressBurst).middleware(h)
+	if cfg.SharedIngressLimiter != nil {
+		h = newSharedIngressLimiter(cfg.SharedIngressLimiter, cfg.SharedIngressFailOpen, logger).middleware(h)
+	}
 	h = authMiddleware(h, cfg)
 	h = requestSafetyMiddleware(h, cfg)
 	h = loggingMiddleware(h, logger)
 	h = requestIDMiddleware(h)
+	h = apiResponseMetricsMiddleware(observability.Runtime(), h)
 	h = otelhttp.NewHandler(h, "task-lab.http")
 	return h
+}
+
+type responseStatusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *responseStatusWriter) WriteHeader(status int) {
+	if w.status != 0 {
+		return
+	}
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *responseStatusWriter) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func (w *responseStatusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func apiResponseMetricsMiddleware(metrics *observability.RuntimeMetrics, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capture := &responseStatusWriter{ResponseWriter: w}
+		next.ServeHTTP(capture, r)
+		status := capture.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		metrics.APIResponse(status)
+	})
+}
+
+type sharedIngressLimiter struct {
+	store    SharedIngressAdmission
+	failOpen bool
+	logger   *slog.Logger
+}
+
+func newSharedIngressLimiter(store SharedIngressAdmission, failOpen bool, logger *slog.Logger) *sharedIngressLimiter {
+	return &sharedIngressLimiter{store: store, failOpen: failOpen, logger: logger}
+}
+
+func (l *sharedIngressLimiter) middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := auth.PrincipalFromContext(r.Context())
+		if !ok || principal.Subject == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		allowed, retryAfter, err := l.store.Allow(r.Context(), principal.Subject)
+		if err != nil {
+			if l.failOpen {
+				if l.logger != nil {
+					l.logger.Warn("shared API admission unavailable; retaining local overload protection")
+				}
+				next.ServeHTTP(w, r)
+				return
+			}
+			contract.WriteError(w, r, domain.NewError(domain.ErrorKindUnavailable,
+				"shared_rate_limit_unavailable", "shared request admission is unavailable", nil))
+			return
+		}
+		if !allowed {
+			w.Header().Set("Retry-After", strconv.Itoa(max(1, retryAfter)))
+			contract.WriteRateLimitError(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 type ingressBucket struct {

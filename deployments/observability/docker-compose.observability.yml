@@ -1,11 +1,12 @@
 services:
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus@sha256:508729e0e2d18e11fd742a5a5ca70e557b940a93948c3c95fd0123a6fd538b69
     profiles: [observability]
     ports:
       - "9090:9090"
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/tasklab-alerts.yml:/etc/prometheus/tasklab-alerts.yml:ro
     depends_on:
       api:
         condition: service_started

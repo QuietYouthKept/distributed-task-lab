@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/api/contract"
 	"github.com/fantasticyi/distributed-task-lab/internal/application"
 	"github.com/fantasticyi/distributed-task-lab/internal/auth"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
@@ -19,7 +20,7 @@ import (
 type TaskHandler struct {
 	svc    *application.TaskService
 	logger *slog.Logger
-	cursor *cursorCodec
+	cursor taskCursorCodec
 }
 
 // NewTaskHandler creates a new task HTTP handler.
@@ -32,6 +33,16 @@ func NewTaskHandler(svc *application.TaskService, logger *slog.Logger) *TaskHand
 // deployment secret. Production callers must supply at least 32 random bytes.
 func NewTaskHandlerWithCursorKey(svc *application.TaskService, logger *slog.Logger, key []byte) (*TaskHandler, error) {
 	codec, err := newCursorCodec(key)
+	if err != nil {
+		return nil, err
+	}
+	return &TaskHandler{svc: svc, logger: logger, cursor: codec}, nil
+}
+
+// NewTaskHandlerWithCursorKeyRing explicitly opts into expiring v2 cursors.
+// NewTaskHandlerWithCursorKey remains the compatibility-preserving default.
+func NewTaskHandlerWithCursorKeyRing(svc *application.TaskService, logger *slog.Logger, config CursorKeyRingConfig) (*TaskHandler, error) {
+	codec, err := newRotatingCursorCodec(config)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +196,7 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 		next = h.cursor.encode(taskCursor{Version: 1, CreatedAt: last.CreatedAt.UTC().Format(time.RFC3339Nano), ID: last.ID,
 			Filter: taskFilterFingerprint(status, taskType, queueName, principal.Subject), PageSize: pageSize, Subject: principal.Subject})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tasks": tasks, "next_cursor": next, "has_more": hasMore})
+	writeJSON(w, http.StatusOK, contract.TaskListResponse{Tasks: tasks, NextCursor: next, HasMore: hasMore})
 }
 
 // ListDLQ handles GET /tasks?status=dlq (also supports /dlq for convenience).
@@ -214,9 +225,9 @@ func (h *TaskHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Emit every known status so the JSON shape stays stable for callers.
-	out := make(map[string]int64, len(domain.ValidTaskStatuses))
+	out := make(contract.TaskStatsResponse, len(domain.ValidTaskStatuses))
 	for st := range domain.ValidTaskStatuses {
-		out[string(st)] = counts[st]
+		out[st] = counts[st]
 	}
 
 	writeJSON(w, http.StatusOK, out)
@@ -230,9 +241,7 @@ func (h *TaskHandler) Requeue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var body struct {
-		Reason string `json:"reason"`
-	}
+	var body contract.OptionalReasonRequest
 	if err := decodeOptionalRequest(r, &body); err != nil {
 		writeMalformedRequest(w, r, "invalid_json", "request body must be valid JSON")
 		return
@@ -248,7 +257,7 @@ func (h *TaskHandler) Requeue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.Info("task requeued", "task_id", id)
-	writeJSON(w, http.StatusOK, map[string]string{"status": "requeued", "task_id": id})
+	writeJSON(w, http.StatusOK, contract.TaskActionResponse{Status: "requeued", TaskID: id})
 }
 
 // Cancel handles POST /tasks/{id}/cancel — cancels a pending or running task.
@@ -259,9 +268,7 @@ func (h *TaskHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var body struct {
-		Reason string `json:"reason"`
-	}
+	var body contract.OptionalReasonRequest
 	if err := decodeOptionalRequest(r, &body); err != nil {
 		writeMalformedRequest(w, r, "invalid_json", "request body must be valid JSON")
 		return
@@ -277,7 +284,7 @@ func (h *TaskHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.Info("task cancelled", "task_id", id)
-	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled", "task_id": id})
+	writeJSON(w, http.StatusOK, contract.TaskActionResponse{Status: "cancelled", TaskID: id})
 }
 
 // GetTaskEvents handles GET /tasks/{id}/events — returns the task audit log.
@@ -310,7 +317,7 @@ func (h *TaskHandler) PauseQueue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "paused", "queue": name})
+	writeJSON(w, http.StatusOK, contract.QueueActionResponse{Status: "paused", Queue: name})
 }
 
 // ResumeQueue handles POST /queues/{name}/resume.
@@ -325,7 +332,7 @@ func (h *TaskHandler) ResumeQueue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "resumed", "queue": name})
+	writeJSON(w, http.StatusOK, contract.QueueActionResponse{Status: "resumed", Queue: name})
 }
 
 // ListQueues handles GET /queues.
@@ -346,13 +353,7 @@ func (h *TaskHandler) SetQueueConfig(w http.ResponseWriter, r *http.Request) {
 		writeInvalidRequest(w, r, "missing_queue", "queue name is required")
 		return
 	}
-	var body struct {
-		MaxConcurrency     int     `json:"max_concurrency"`
-		RateLimitPerSecond float64 `json:"rate_limit_per_second"`
-		Burst              int     `json:"burst"`
-		AgingAfterSeconds  int     `json:"aging_after_seconds"`
-		AgingPriorityBoost int     `json:"aging_priority_boost"`
-	}
+	var body contract.QueueConfigRequest
 	if err := decodeOptionalRequest(r, &body); err != nil {
 		writeMalformedRequest(w, r, "invalid_json", "request body must be valid JSON")
 		return
@@ -371,7 +372,7 @@ func (h *TaskHandler) SetQueueConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "configured", "queue": name})
+	writeJSON(w, http.StatusOK, contract.QueueActionResponse{Status: "configured", Queue: name})
 }
 
 func applyIdempotencyKey(r *http.Request, req *application.CreateTaskRequest) error {

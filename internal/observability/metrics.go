@@ -25,6 +25,9 @@ type RuntimeMetrics struct {
 	renewFailures       atomic.Int64
 	fencingRejections   atomic.Int64
 	effectUnknown       atomic.Int64
+	taskRetries         atomic.Int64
+	artifactErrors      atomic.Int64
+	apiResponses        [6]atomic.Int64
 }
 
 var runtimeMetrics RuntimeMetrics
@@ -58,6 +61,15 @@ func (m *RuntimeMetrics) LeaseRenewed(ok bool) {
 }
 func (m *RuntimeMetrics) FencingRejected() { m.fencingRejections.Add(1) }
 func (m *RuntimeMetrics) EffectUnknown()   { m.effectUnknown.Add(1) }
+func (m *RuntimeMetrics) TaskRetried()     { m.taskRetries.Add(1) }
+func (m *RuntimeMetrics) ArtifactError()   { m.artifactErrors.Add(1) }
+func (m *RuntimeMetrics) APIResponse(status int) {
+	class := status / 100
+	if class < 1 || class > 5 {
+		class = 5
+	}
+	m.apiResponses[class].Add(1)
+}
 
 func (m *RuntimeMetrics) WritePrometheus(w io.Writer) {
 	values := []struct {
@@ -75,9 +87,15 @@ func (m *RuntimeMetrics) WritePrometheus(w io.Writer) {
 		{"tasklab_lease_renew_failure_total", "Failed lease renewals.", "counter", m.renewFailures.Load()},
 		{"tasklab_fencing_rejection_total", "Stale ownership writes or renewals rejected.", "counter", m.fencingRejections.Load()},
 		{"tasklab_effect_unknown_total", "External effects with uncertain provider outcome.", "counter", m.effectUnknown.Load()},
+		{"tasklab_retry_total", "Tasks scheduled for another attempt after a retryable failure.", "counter", m.taskRetries.Load()},
+		{"tasklab_artifact_error_total", "Unexpected artifact store operation errors.", "counter", m.artifactErrors.Load()},
 	}
 	for _, v := range values {
 		fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s %s\n%s %d\n", v.name, v.help, v.name, v.kind, v.name, v.value)
+	}
+	fmt.Fprint(w, "# HELP tasklab_api_requests_total API HTTP responses by status class.\n# TYPE tasklab_api_requests_total counter\n")
+	for class := 1; class <= 5; class++ {
+		fmt.Fprintf(w, "tasklab_api_requests_total{status_class=\"%dxx\"} %d\n", class, m.apiResponses[class].Load())
 	}
 	claimCount := m.claimLatencyCount.Load()
 	if claimCount > 0 {

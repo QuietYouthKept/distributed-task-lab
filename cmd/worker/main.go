@@ -159,7 +159,11 @@ func newArtifactStore(cfg *config.Config) (artifacts.Store, error) {
 		if err := store.EnsureBucket(ctx); err != nil {
 			return nil, fmt.Errorf("verify artifact bucket: %w", err)
 		}
-		return store, nil
+		return artifacts.WithMetrics(store, observability.Runtime()), nil
 	}
-	return artifacts.NewLocalStore(cfg.ArtifactDir, "", cfg.ArtifactMaxObjectBytes)
+	store, err := artifacts.NewLocalStore(cfg.ArtifactDir, "", cfg.ArtifactMaxObjectBytes)
+	if err != nil {
+		return nil, err
+	}
+	return artifacts.WithMetrics(store, observability.Runtime()), nil
 }

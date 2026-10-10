@@ -1,4 +1,12 @@
 services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib@sha256:89107a3a8f4636a396927edf7025bb9614b8da2d92f4cc3f43109e8d115736e2
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "127.0.0.1:${E2E_OTEL_HEALTH_PORT:-43133}:13133"
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -46,6 +54,8 @@ services:
       API_TOKEN: ${E2E_API_TOKEN:?required}
       ADMIN_TOKEN: ${E2E_ADMIN_TOKEN:?required}
       LOG_LEVEL: error
+      OTEL_ENABLED: ${E2E_TRACING_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     ports:
       - "127.0.0.1:${E2E_API_PORT:?required}:8080"
     depends_on:
@@ -76,6 +86,8 @@ services:
       ARTIFACT_ALLOW_HTTP: "true"
       ARTIFACT_ALLOW_BUCKET_CREATE: "true"
       LOG_LEVEL: error
+      OTEL_ENABLED: ${E2E_TRACING_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       postgres:
         condition: service_healthy

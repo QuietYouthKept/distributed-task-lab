@@ -12,7 +12,6 @@ import (
 	"github.com/fantasticyi/distributed-task-lab/internal/queue"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -338,6 +337,7 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 		carrier.Set("tracestate", tracestate)
 	}
 	execCtx = otel.GetTextMapPropagator().Extract(execCtx, carrier)
+	producerContext := trace.SpanContextFromContext(execCtx)
 	execCtx = WithExecutionMetadata(execCtx, ExecutionMetadata{TaskID: job.ID, TaskType: job.Type, Generation: job.LeaseVersion, Attempt: job.Attempt})
 	handlerPayload := make(map[string]any, len(job.Payload))
 	for key, value := range job.Payload {
@@ -345,9 +345,8 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 			handlerPayload[key] = value
 		}
 	}
-	execCtx, workerSpan := otel.Tracer("distributed-task-lab/worker").Start(
-		execCtx,
-		"task.execute "+job.Type,
+	spanOptions := []trace.SpanStartOption{
+		trace.WithNewRoot(),
 		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
 			attribute.String("task.id", job.ID),
@@ -358,6 +357,14 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 			attribute.String("task.claim_reason", job.ClaimReason),
 			attribute.String("worker.id", p.workerID),
 		),
+	}
+	if producerContext.IsValid() {
+		spanOptions = append(spanOptions, trace.WithLinks(trace.Link{SpanContext: producerContext}))
+	}
+	execCtx, workerSpan := otel.Tracer("distributed-task-lab/worker").Start(
+		execCtx,
+		"task.execute "+job.Type,
+		spanOptions...,
 	)
 	defer workerSpan.End()
 	handlerStart := time.Now()
@@ -375,11 +382,12 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 	default:
 	}
 
-	writeCtx, writeCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Preserve the worker execution span while detaching the task's expired or
+	// canceled deadline so a bounded final ACK can still be recorded.
+	writeCtx, writeCancel := context.WithTimeout(context.WithoutCancel(execCtx), 5*time.Second)
 	defer writeCancel()
 	if execErr != nil {
-		workerSpan.RecordError(execErr)
-		workerSpan.SetStatus(codes.Error, "handler failed")
+		observability.RecordSpanFailure(workerSpan, execErr, "handler failed")
 		errType, retryable := domain.ErrorTypeExecution, true
 		var classified *ExecutionError
 		if errors.As(execErr, &classified) {
@@ -404,8 +412,7 @@ func (p *Pool) executeTask(job taskJob, workerNum int) {
 		domResult = domain.TaskResult{Summary: result.Summary, Artifacts: result.Artifacts, Metrics: result.Metrics}
 	}
 	if err := p.q.MarkSuccess(writeCtx, job.ID, p.workerID, job.LeaseVersion, domResult); err != nil {
-		workerSpan.RecordError(err)
-		workerSpan.SetStatus(codes.Error, "completion write failed")
+		observability.RecordSpanFailure(workerSpan, err, "completion write failed")
 		if errors.Is(err, domain.ErrTaskNotClaimed) {
 			observability.Runtime().FencingRejected()
 		}

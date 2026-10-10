@@ -5,66 +5,458 @@
     "version": "1.0.0",
     "description": "Stable v1 contract for the single-tenant task queue laboratory."
   },
-  "servers": [{"url": "/"}],
-  "security": [{"bearerAuth": []}],
+  "servers": [{ "url": "/" }],
+  "security": [{ "bearerAuth": [] }],
   "paths": {
     "/v1/tasks": {
-      "get": {"operationId": "listTasks", "x-required-role": "reader", "parameters": [
-        {"name": "status", "in": "query", "schema": {"$ref": "#/components/schemas/TaskStatus"}},
-        {"name": "type", "in": "query", "schema": {"$ref": "#/components/schemas/TaskType"}},
-        {"name": "queue", "in": "query", "schema": {"type": "string", "maxLength": 128}},
-        {"name": "page_size", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50}},
-        {"name": "cursor", "in": "query", "schema": {"type": "string", "maxLength": 2048}}
-      ], "responses": {"200": {"description": "Cursor page with tasks, has_more and an optional next_cursor"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "422": {"$ref": "#/components/responses/InvalidArgument"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}},
-      "post": {"operationId": "createTask", "x-required-role": "operator", "parameters": [
-        {"name": "Idempotency-Key", "in": "header", "required": false, "schema": {"type": "string", "minLength": 1, "maxLength": 256}}
-      ], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateTaskRequest"}}}},
-      "responses": {"201": {"description": "Created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateTaskResponse"}}}}, "400": {"$ref": "#/components/responses/MalformedRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "422": {"$ref": "#/components/responses/InvalidArgument"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}}
+      "get": {
+        "operationId": "listTasks",
+        "x-required-role": "reader",
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "$ref": "#/components/schemas/TaskStatus" } },
+          { "name": "type", "in": "query", "schema": { "$ref": "#/components/schemas/TaskType" } },
+          { "name": "queue", "in": "query", "schema": { "type": "string", "maxLength": 128 } },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 } },
+          { "name": "cursor", "in": "query", "schema": { "type": "string", "maxLength": 2048 } }
+        ],
+        "responses": {
+          "200": { "description": "Cursor page with tasks, has_more and an optional next_cursor", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskListResponse" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "422": { "$ref": "#/components/responses/InvalidArgument" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      },
+      "post": {
+        "operationId": "createTask",
+        "x-required-role": "operator",
+        "parameters": [
+          { "name": "Idempotency-Key", "in": "header", "required": false, "schema": { "type": "string", "minLength": 1, "maxLength": 256 } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateTaskRequest" } } } },
+        "responses": {
+          "201": { "description": "Created or existing idempotent task", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateTaskResponse" } } } },
+          "400": { "$ref": "#/components/responses/MalformedRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "422": { "$ref": "#/components/responses/InvalidArgument" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
     },
-    "/v1/tasks/{id}": {"get": {"operationId": "getTask", "x-required-role": "reader", "parameters": [{"$ref": "#/components/parameters/TaskID"}], "responses": {"200": {"description": "Task"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/v1/tasks/{id}/events": {"get": {"operationId": "getTaskEvents", "x-required-role": "reader", "parameters": [{"$ref": "#/components/parameters/TaskID"}], "responses": {"200": {"description": "Task events"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/v1/tasks/{id}/cancel": {"post": {"operationId": "cancelTask", "x-required-role": "operator", "parameters": [{"$ref": "#/components/parameters/TaskID"}], "requestBody": {"$ref": "#/components/requestBodies/OptionalReason"}, "responses": {"200": {"description": "Cancelled"}, "400": {"$ref": "#/components/responses/MalformedRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "409": {"$ref": "#/components/responses/Conflict"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/v1/tasks/{id}/requeue": {"post": {"operationId": "requeueTask", "x-required-role": "operator", "parameters": [{"$ref": "#/components/parameters/TaskID"}], "requestBody": {"$ref": "#/components/requestBodies/OptionalReason"}, "responses": {"200": {"description": "Requeued"}, "400": {"$ref": "#/components/responses/MalformedRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "409": {"$ref": "#/components/responses/Conflict"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/v1/dlq": {"get": {"operationId": "listDLQ", "x-required-role": "operator", "responses": {"200": {"description": "Dead-letter tasks"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/v1/stats": {"get": {"operationId": "getStats", "x-required-role": "operator", "responses": {"200": {"description": "Task counts"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/v1/metrics": {"get": {"operationId": "getMetrics", "x-required-role": "operator", "responses": {"200": {"description": "Prometheus metrics", "content": {"text/plain": {"schema": {"type": "string"}}}}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "429": {"$ref": "#/components/responses/RateLimited"}}}},
-    "/v1/queues": {"get": {"operationId": "listQueues", "x-required-role": "operator", "responses": {"200": {"description": "Queues"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/v1/queues/{name}": {"put": {"operationId": "setQueueConfig", "x-required-role": "admin", "parameters": [{"$ref": "#/components/parameters/QueueName"}], "requestBody": {"required": false, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/QueueConfigRequest"}}}}, "responses": {"200": {"description": "Configured"}, "400": {"$ref": "#/components/responses/MalformedRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "422": {"$ref": "#/components/responses/InvalidArgument"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/v1/queues/{name}/pause": {"post": {"operationId": "pauseQueue", "x-required-role": "admin", "parameters": [{"$ref": "#/components/parameters/QueueName"}], "responses": {"200": {"description": "Paused"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/v1/queues/{name}/resume": {"post": {"operationId": "resumeQueue", "x-required-role": "admin", "parameters": [{"$ref": "#/components/parameters/QueueName"}], "responses": {"200": {"description": "Resumed"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/v1/effects": {"get": {"operationId": "listUnresolvedEffects", "x-required-role": "operator", "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100}}], "responses": {"200": {"description": "Unresolved effect records for operator reconciliation"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "429": {"$ref": "#/components/responses/RateLimited"}, "503": {"$ref": "#/components/responses/Unavailable"}}}},
-    "/v1/effects/{id}/resolve": {"post": {"operationId": "resolveEffectManually", "x-required-role": "admin", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["reason"], "properties": {"reason": {"type": "string", "minLength": 1, "maxLength": 1024}}}}}}, "responses": {"200": {"description": "Manually resolved and audited"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "409": {"$ref": "#/components/responses/Conflict"}, "429": {"$ref": "#/components/responses/RateLimited"}}}}
+    "/v1/tasks/{id}": {
+      "get": {
+        "operationId": "getTask",
+        "x-required-role": "reader",
+        "parameters": [{ "$ref": "#/components/parameters/TaskID" }],
+        "responses": {
+          "200": { "description": "Task", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/v1/tasks/{id}/events": {
+      "get": {
+        "operationId": "getTaskEvents",
+        "x-required-role": "reader",
+        "parameters": [{ "$ref": "#/components/parameters/TaskID" }],
+        "responses": {
+          "200": { "description": "Task transition history (not an immutable compliance audit log)", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/TaskEvent" } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/v1/tasks/{id}/cancel": {
+      "post": {
+        "operationId": "cancelTask",
+        "x-required-role": "operator",
+        "parameters": [{ "$ref": "#/components/parameters/TaskID" }],
+        "requestBody": { "$ref": "#/components/requestBodies/OptionalReason" },
+        "responses": {
+          "200": { "description": "Cancelled", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskActionResponse" } } } },
+          "400": { "$ref": "#/components/responses/MalformedRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/v1/tasks/{id}/requeue": {
+      "post": {
+        "operationId": "requeueTask",
+        "x-required-role": "operator",
+        "parameters": [{ "$ref": "#/components/parameters/TaskID" }],
+        "requestBody": { "$ref": "#/components/requestBodies/OptionalReason" },
+        "responses": {
+          "200": { "description": "Requeued", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskActionResponse" } } } },
+          "400": { "$ref": "#/components/responses/MalformedRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/v1/dlq": {
+      "get": {
+        "operationId": "listDLQ",
+        "x-required-role": "operator",
+        "responses": {
+          "200": { "description": "Dead-letter tasks", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/v1/stats": {
+      "get": {
+        "operationId": "getStats",
+        "x-required-role": "operator",
+        "responses": {
+          "200": { "description": "Task counts for every known status", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskStatsResponse" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/v1/metrics": {
+      "get": {
+        "operationId": "getMetrics",
+        "x-required-role": "operator",
+        "responses": {
+          "200": { "description": "Prometheus exposition format", "content": { "text/plain": { "schema": { "type": "string" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/MetricsFailure" }
+        }
+      }
+    },
+    "/v1/queues": {
+      "get": {
+        "operationId": "listQueues",
+        "x-required-role": "operator",
+        "responses": {
+          "200": { "description": "Queue governance configuration", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/QueueConfig" } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/v1/queues/{name}": {
+      "put": {
+        "operationId": "setQueueConfig",
+        "x-required-role": "admin",
+        "parameters": [{ "$ref": "#/components/parameters/QueueName" }],
+        "requestBody": { "required": false, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QueueConfigRequest" } } } },
+        "responses": {
+          "200": { "description": "Configured", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QueueActionResponse" } } } },
+          "400": { "$ref": "#/components/responses/MalformedRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "422": { "$ref": "#/components/responses/InvalidArgument" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/v1/queues/{name}/pause": {
+      "post": {
+        "operationId": "pauseQueue",
+        "x-required-role": "admin",
+        "parameters": [{ "$ref": "#/components/parameters/QueueName" }],
+        "responses": {
+          "200": { "description": "Paused", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QueueActionResponse" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/v1/queues/{name}/resume": {
+      "post": {
+        "operationId": "resumeQueue",
+        "x-required-role": "admin",
+        "parameters": [{ "$ref": "#/components/parameters/QueueName" }],
+        "responses": {
+          "200": { "description": "Resumed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QueueActionResponse" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/v1/effects": {
+      "get": {
+        "operationId": "listUnresolvedEffects",
+        "x-required-role": "operator",
+        "parameters": [{ "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 500, "default": 100 } }],
+        "responses": {
+          "200": { "description": "Unresolved effect records for operator reconciliation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EffectsListResponse" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "422": { "$ref": "#/components/responses/InvalidArgument" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/v1/effects/{id}/resolve": {
+      "post": {
+        "operationId": "resolveEffectManually",
+        "x-required-role": "admin",
+        "parameters": [{ "$ref": "#/components/parameters/EffectID" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EffectResolutionRequest" } } } },
+        "responses": {
+          "200": { "description": "Manually resolved and audited", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EffectResolutionResponse" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "422": { "$ref": "#/components/responses/InvalidArgument" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "500": { "$ref": "#/components/responses/InternalError" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    }
   },
   "components": {
-    "securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}},
+    "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer" } },
     "parameters": {
-      "TaskID": {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "minLength": 1}},
-      "QueueName": {"name": "name", "in": "path", "required": true, "schema": {"type": "string", "minLength": 1, "maxLength": 128}}
+      "TaskID": { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1 } },
+      "EffectID": { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+      "QueueName": { "name": "name", "in": "path", "required": true, "schema": { "type": "string", "minLength": 1, "maxLength": 128 } }
     },
     "requestBodies": {
-      "OptionalReason": {"required": false, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "properties": {"reason": {"type": "string"}}}}}}
+      "OptionalReason": { "required": false, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OptionalReasonRequest" } } } }
     },
     "schemas": {
-      "TaskStatus": {"type": "string", "enum": ["pending", "running", "success", "failed", "dlq"]},
-      "TaskType": {"type": "string", "enum": ["rag_ingestion", "eval", "benchmark", "strategy_replay", "payment", "notification"]},
-      "PayloadEnvelope": {"type": "object", "additionalProperties": false, "required": ["version", "kind", "data"], "properties": {"version": {"type": "string"}, "kind": {"type": "string"}, "data": {"type": "object"}}},
-      "CreateTaskRequest": {"type": "object", "additionalProperties": false, "required": ["type", "payload"], "properties": {
-        "type": {"$ref": "#/components/schemas/TaskType"}, "queue": {"type": "string", "maxLength": 128}, "payload": {"$ref": "#/components/schemas/PayloadEnvelope"}, "priority": {"type": "integer"}, "max_attempts": {"type": "integer", "minimum": 0}, "timeout_seconds": {"type": "integer", "minimum": 0}, "retry_delay_seconds": {"type": "integer", "minimum": 0}, "retry_max_delay_seconds": {"type": "integer", "minimum": 0}, "retry_backoff_multiplier": {"type": "number", "minimum": 0}, "retry_jitter": {"type": "boolean"}, "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 256}
-      }},
-      "CreateTaskResponse": {"type": "object", "additionalProperties": false, "required": ["id", "status"], "properties": {"id": {"type": "string", "format": "uuid"}, "status": {"$ref": "#/components/schemas/TaskStatus"}}},
-      "QueueConfigRequest": {"type": "object", "additionalProperties": false, "properties": {"max_concurrency": {"type": "integer", "minimum": 0}, "rate_limit_per_second": {"type": "number", "minimum": 0}, "burst": {"type": "integer", "minimum": 0}, "aging_after_seconds": {"type": "integer", "minimum": 0}, "aging_priority_boost": {"type": "integer", "minimum": 0}}},
-      "APIError": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"type": "string"}, "message": {"type": "string"}}},
-      "ErrorResponse": {"type": "object", "additionalProperties": false, "required": ["error", "request_id"], "properties": {"error": {"$ref": "#/components/schemas/APIError"}, "request_id": {"type": "string"}}}
+      "TaskStatus": { "type": "string", "enum": ["pending", "running", "success", "failed", "dlq"] },
+      "TaskType": { "type": "string", "enum": ["rag_ingestion", "eval", "benchmark", "strategy_replay", "payment", "notification"] },
+      "TaskEventType": { "type": "string", "enum": ["submitted", "claimed", "succeeded", "failed", "retried", "moved_to_dlq", "cancelled", "requeued", "priority_promoted"] },
+      "PayloadEnvelope": {
+        "type": "object", "additionalProperties": false, "required": ["version", "kind", "data"],
+        "properties": {
+          "version": { "type": "string" },
+          "kind": { "type": "string" },
+          "data": { "type": "object", "additionalProperties": true, "description": "Task-type-specific JSON data; service-owned _traceparent and _tracestate fields may be present." }
+        }
+      },
+      "TaskResult": {
+        "type": "object", "additionalProperties": false, "required": ["summary"],
+        "properties": {
+          "summary": { "type": "string" },
+          "artifacts": { "type": "object", "additionalProperties": { "type": "string" } },
+          "metrics": { "type": "object", "additionalProperties": { "type": "number" } }
+        }
+      },
+      "Task": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "type", "status", "queue", "payload", "priority", "max_attempts", "attempt", "timeout_seconds", "retry_delay_seconds", "retry_max_delay_seconds", "retry_backoff_multiplier", "retry_jitter", "lease_version", "next_run_at", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "$ref": "#/components/schemas/TaskType" },
+          "status": { "$ref": "#/components/schemas/TaskStatus" },
+          "queue": { "type": "string" },
+          "payload": { "$ref": "#/components/schemas/PayloadEnvelope" },
+          "result": { "$ref": "#/components/schemas/TaskResult" },
+          "priority": { "type": "integer" },
+          "max_attempts": { "type": "integer" },
+          "attempt": { "type": "integer" },
+          "timeout_seconds": { "type": "integer" },
+          "retry_delay_seconds": { "type": "integer" },
+          "retry_max_delay_seconds": { "type": "integer" },
+          "retry_backoff_multiplier": { "type": "number" },
+          "retry_jitter": { "type": "boolean" },
+          "leased_by": { "type": "string" },
+          "lease_expires_at": { "type": "string", "format": "date-time" },
+          "lease_version": { "type": "integer" },
+          "next_run_at": { "type": "string", "format": "date-time" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "started_at": { "type": "string", "format": "date-time" },
+          "finished_at": { "type": "string", "format": "date-time" },
+          "last_error": { "type": "string" },
+          "dlq_reason": { "type": "string" },
+          "idempotency_key": { "type": "string" },
+          "created_by": { "type": "string" }
+        }
+      },
+      "TaskEvent": {
+        "type": "object", "additionalProperties": false, "required": ["id", "task_id", "event_type", "message", "created_at"],
+        "properties": {
+          "id": { "type": "integer" },
+          "task_id": { "type": "string" },
+          "event_type": { "$ref": "#/components/schemas/TaskEventType" },
+          "worker_id": { "type": "string" },
+          "message": { "type": "string" },
+          "metadata": { "type": "object", "additionalProperties": true },
+          "created_at": { "type": "string" }
+        }
+      },
+      "CreateTaskRequest": {
+        "type": "object", "additionalProperties": false, "required": ["payload"],
+        "properties": {
+          "type": { "type": ["string", "null"], "enum": ["", "rag_ingestion", "eval", "benchmark", "strategy_replay", "payment", "notification", null], "default": "rag_ingestion", "description": "Optional; omitted, null, or empty defaults to rag_ingestion." },
+          "queue": { "type": ["string", "null"], "maxLength": 128, "default": "default", "description": "Omitted, null, or empty selects the default queue." },
+          "payload": { "$ref": "#/components/schemas/PayloadEnvelope" },
+          "priority": { "type": ["integer", "null"], "default": 0 },
+          "max_attempts": { "type": ["integer", "null"], "minimum": 0, "default": 3 },
+          "timeout_seconds": { "type": ["integer", "null"], "minimum": 0, "default": 60 },
+          "retry_delay_seconds": { "type": ["integer", "null"], "minimum": 0, "default": 5 },
+          "retry_max_delay_seconds": { "type": ["integer", "null"], "minimum": 0, "default": 0 },
+          "retry_backoff_multiplier": { "type": ["number", "null"], "minimum": 0, "default": 2 },
+          "retry_jitter": { "type": ["boolean", "null"], "default": true },
+          "idempotency_key": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 }
+        }
+      },
+      "CreateTaskResponse": {
+        "type": "object", "additionalProperties": false, "required": ["id", "status"],
+        "properties": { "id": { "type": "string" }, "status": { "$ref": "#/components/schemas/TaskStatus" } }
+      },
+      "TaskListResponse": {
+        "type": "object", "additionalProperties": false, "required": ["tasks", "next_cursor", "has_more"],
+        "properties": {
+          "tasks": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } },
+          "next_cursor": { "type": "string", "description": "Empty when there is no next page." },
+          "has_more": { "type": "boolean" }
+        }
+      },
+      "TaskActionResponse": {
+        "type": "object", "additionalProperties": false, "required": ["status", "task_id"],
+        "properties": { "status": { "type": "string", "enum": ["cancelled", "requeued"] }, "task_id": { "type": "string" } }
+      },
+      "OptionalReasonRequest": {
+        "type": "object", "additionalProperties": false,
+        "properties": { "reason": { "type": ["string", "null"], "description": "Optional; omitted, null, or empty defaults to the operation-specific manual reason." } }
+      },
+      "QueueConfigRequest": {
+        "type": "object", "additionalProperties": false,
+        "properties": {
+          "max_concurrency": { "type": ["integer", "null"], "minimum": 0 },
+          "rate_limit_per_second": { "type": ["number", "null"], "minimum": 0 },
+          "burst": { "type": ["integer", "null"], "minimum": 0 },
+          "aging_after_seconds": { "type": ["integer", "null"], "minimum": 0 },
+          "aging_priority_boost": { "type": ["integer", "null"], "minimum": 0 }
+        }
+      },
+      "QueueConfig": {
+        "type": "object", "additionalProperties": false, "required": ["name", "max_concurrency", "rate_limit_per_second", "burst", "aging_after_seconds", "aging_priority_boost", "paused"],
+        "properties": {
+          "name": { "type": "string" },
+          "max_concurrency": { "type": "integer" },
+          "rate_limit_per_second": { "type": "number" },
+          "burst": { "type": "integer" },
+          "aging_after_seconds": { "type": "integer" },
+          "aging_priority_boost": { "type": "integer" },
+          "paused": { "type": "boolean" }
+        }
+      },
+      "QueueActionResponse": {
+        "type": "object", "additionalProperties": false, "required": ["status", "queue"],
+        "properties": { "status": { "type": "string", "enum": ["configured", "paused", "resumed"] }, "queue": { "type": "string" } }
+      },
+      "TaskStatsResponse": {
+        "type": "object", "additionalProperties": false, "required": ["pending", "running", "success", "failed", "dlq"],
+        "properties": {
+          "pending": { "type": "integer", "format": "int64", "minimum": 0 },
+          "running": { "type": "integer", "format": "int64", "minimum": 0 },
+          "success": { "type": "integer", "format": "int64", "minimum": 0 },
+          "failed": { "type": "integer", "format": "int64", "minimum": 0 },
+          "dlq": { "type": "integer", "format": "int64", "minimum": 0 }
+        }
+      },
+      "EffectRecord": {
+        "type": "object", "additionalProperties": false,
+        "required": ["EffectID", "TaskID", "OperationKey", "Kind", "Policy", "Status", "ProviderRequestID", "RequestHash", "ResponseHash", "ResolutionNote", "Generation", "Attempt", "CreatedAt", "ReconciledAt"],
+        "description": "Existing Go JSON encoding uses exported field names for effects.Record; these names are retained for v1 compatibility.",
+        "properties": {
+          "EffectID": { "type": "string", "format": "uuid" },
+          "TaskID": { "type": "string" },
+          "OperationKey": { "type": "string" },
+          "Kind": { "type": "string" },
+          "Policy": { "type": "string", "enum": ["pure", "idempotent", "provider-idempotent", "reconcilable", "non-retriable"] },
+          "Status": { "type": "string", "enum": ["intent", "applied", "unknown", "manual_resolution"] },
+          "ProviderRequestID": { "type": "string" },
+          "RequestHash": { "type": "string" },
+          "ResponseHash": { "type": "string" },
+          "ResolutionNote": { "type": "string" },
+          "Generation": { "type": "integer" },
+          "Attempt": { "type": "integer" },
+          "CreatedAt": { "type": ["string", "null"], "format": "date-time" },
+          "ReconciledAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "EffectsListResponse": {
+        "type": "object", "additionalProperties": false, "required": ["effects"],
+        "properties": { "effects": { "type": "array", "items": { "$ref": "#/components/schemas/EffectRecord" } } }
+      },
+      "EffectResolutionRequest": {
+        "type": "object", "additionalProperties": false, "required": ["reason"],
+        "properties": { "reason": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?!\\s)(?:[\\s\\S]*\\S)?$", "description": "Must not have surrounding whitespace; resolution is auditable and non-destructive." } }
+      },
+      "EffectResolutionResponse": {
+        "type": "object", "additionalProperties": false, "required": ["effect_id", "status"],
+        "properties": { "effect_id": { "type": "string", "format": "uuid" }, "status": { "type": "string", "const": "manual_resolution" } }
+      },
+      "APIError": {
+        "type": "object", "additionalProperties": false, "required": ["code", "message"],
+        "properties": { "code": { "type": "string" }, "message": { "type": "string" } }
+      },
+      "ErrorResponse": {
+        "type": "object", "additionalProperties": false, "required": ["error", "request_id"],
+        "properties": { "error": { "$ref": "#/components/schemas/APIError" }, "request_id": { "type": "string" } }
+      }
     },
     "responses": {
-      "MalformedRequest": {"description": "Malformed JSON or request framing", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-      "InvalidArgument": {"description": "Valid request with invalid domain values", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-      "Unauthorized": {"description": "Authentication required", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-      "Forbidden": {"description": "Authenticated principal lacks the required role", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-      "RateLimited": {"description": "Authenticated principal exceeded the process-local ingress quota; Retry-After is present", "headers": {"Retry-After": {"schema": {"type": "integer", "minimum": 1}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-      "NotFound": {"description": "Resource not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-      "Conflict": {"description": "State conflict", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-      "Unavailable": {"description": "Database temporarily unavailable", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
+      "MalformedRequest": { "description": "Malformed JSON or request framing", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }, "headers": { "X-Request-ID": { "schema": { "type": "string" } } } },
+      "InvalidArgument": { "description": "Valid request with invalid domain values", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }, "headers": { "X-Request-ID": { "schema": { "type": "string" } } } },
+      "Unauthorized": { "description": "Authentication required", "headers": { "WWW-Authenticate": { "schema": { "type": "string", "example": "Bearer" }, "required": true }, "X-Request-ID": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Forbidden": { "description": "Authenticated principal lacks the required role", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }, "headers": { "X-Request-ID": { "schema": { "type": "string" } } } },
+      "NotFound": { "description": "Resource not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }, "headers": { "X-Request-ID": { "schema": { "type": "string" } } } },
+      "Conflict": { "description": "State conflict", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }, "headers": { "X-Request-ID": { "schema": { "type": "string" } } } },
+      "RateLimited": { "description": "Authenticated principal exceeded the process-local ingress quota; Retry-After is present", "headers": { "Retry-After": { "schema": { "type": "integer", "minimum": 1 }, "required": true }, "X-Request-ID": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "InternalError": { "description": "Unexpected internal error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }, "headers": { "X-Request-ID": { "schema": { "type": "string" } } } },
+      "Unavailable": { "description": "Required database or reconciliation dependency is temporarily unavailable", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }, "headers": { "X-Request-ID": { "schema": { "type": "string" } } } },
+      "MetricsFailure": { "description": "Metrics provider failed; this endpoint retains its existing plain-text error response", "content": { "text/plain": { "schema": { "type": "string" } } } }
     }
   }
 }

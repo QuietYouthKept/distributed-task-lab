@@ -14,6 +14,9 @@ func TestRuntimeMetricsPrometheusTypesAndCompletedLatency(t *testing.T) {
 	metrics.HandlerFinished(7*time.Millisecond, true)
 	metrics.LeaseRenewed(false)
 	metrics.EffectUnknown()
+	metrics.TaskRetried()
+	metrics.ArtifactError()
+	metrics.APIResponse(503)
 	var out bytes.Buffer
 	metrics.WritePrometheus(&out)
 	text := out.String()
@@ -21,6 +24,8 @@ func TestRuntimeMetricsPrometheusTypesAndCompletedLatency(t *testing.T) {
 		"# TYPE tasklab_claim_total counter", "# TYPE tasklab_active_handlers gauge",
 		"# TYPE tasklab_claim_latency_seconds histogram", "# TYPE tasklab_handler_latency_seconds histogram",
 		"tasklab_handler_latency_seconds_count 1", "tasklab_effect_unknown_total 1",
+		"tasklab_retry_total 1", "tasklab_artifact_error_total 1",
+		"tasklab_api_requests_total{status_class=\"5xx\"} 1",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("scrape missing %q:\n%s", want, text)

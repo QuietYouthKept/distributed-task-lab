@@ -1,6 +1,6 @@
 # ADR-0006: Shared ingress quota and cursor signing-key rotation
 
-- Status: Proposed; no cluster-wide quota or key-ring behavior is enabled.
+- Status: Proposed; implementation is an opt-in candidate. No cluster-wide quota or key-ring behavior is enabled by default, and no product policy approval is implied.
 - Date: 2026-10-10.
 
 ## Context
@@ -18,19 +18,20 @@ Keep the existing per-process limiter as an explicitly named local overload guar
 3. Backend outage: fail-open preserves availability but loses global enforcement; fail-closed preserves quota but can turn a dependency incident into API outage. The choice must be explicit per use case.
 4. Layering: local limiter may reject early for overload even when a shared quota permits the call; `Retry-After` must identify the delay relevant to the rejecting layer.
 
-Candidate verification before enabling a shared mode: two independent API instances; same/different subjects; burst/refill; concurrent atomic admission; backend outage and recovery; bounded state; Retry-After; and measured P95/DB or Redis contention. Record the benchmark environment and do not promote the local result to an SLO.
+Implemented candidate: optional PostgreSQL token bucket with a fixed 10,000-slot table, HMAC-SHA256 principal digests (raw subject is not stored), database `statement_timestamp()` for refill, row locking/`SKIP LOCKED`, and local process limiter retained as an overload guard. When all slots are occupied by partially depleted buckets, admission is denied with a one-second retry. Shared-store errors are explicitly configured fail-open or fail-closed; fail-open still keeps the local overload limiter. The mode is disabled by default. A two-container local E2E verified a shared burst of 16 across two independently built API containers (16 admitted, 48 rate-limited under concurrent requests). A separate PostgreSQL integration test verifies independent limiter objects, principal isolation, 10,000 bounded rows, and no raw subject storage. Backend outage/recovery and production contention SLOs remain unverified.
 
 ## Decision proposal — cursor key rotation
 
-Do not change the current version-1 token or acceptance policy in this change. A future opt-in key-ring format should carry an explicit key ID and signed `issued_at`/`expires_at`, bind every token to Principal/filter/page size as today, and accept a historical key only through the earlier of its configured `accept_until` and the cursor expiry. The key set should identify one issuing key and bounded verification-only keys. Unknown key IDs, expired tokens, tampering, principal/filter/page-size changes must fail closed.
+Do not change the current version-1 token or acceptance policy by default. An opt-in version-2 key-ring candidate now carries a key ID and signed `issued_at`/`expires_at`, binds every token to Principal/filter/page size, and accepts a historical key only through its configured `accept_until` and the token expiry. The key set identifies one issuing key and bounded verification-only keys. Unknown key IDs, expired tokens, tampering, principal/filter/page-size changes fail closed. HMAC comparison uses constant-time verification. The default constructor continues to issue and accept the compatible v1 cursor format as before.
 
 Stateless list-cursor replay remains allowed within the TTL; one-time replay protection would require server-side state and is not justified for a read-only pagination cursor. Version-1 migration must be an explicit choice: either immediate invalidation when rotation is enabled or a configured, finite legacy-key overlap. No historical key may be accepted indefinitely. Rotation overlap and TTL are configuration/owner decisions, not assumed defaults.
 
-Before implementation, decide maximum cursor lifetime, rotation overlap, rollout order across API replicas, secret-distribution source, and behavior for clients presenting an old cursor after the overlap. Tests must cover current-key issuance, old-key overlap acceptance/rejection, unknown key, expiry, tampering, principal/filter/page-size binding, concurrent rotation, and explicit version-1 compatibility.
+The candidate validates a maximum seven-day TTL and finite `accept_until` boundaries. Tests cover current-key issuance, old-key overlap acceptance/rejection, unknown key, expiry, tampering, principal/filter/page-size binding, concurrent decode, and explicit v1 compatibility cutoff. Before enabling it, decide TTL/overlap, rollout order across replicas, secret-distribution source, and client behavior after overlap. A configured finite v1 legacy acceptance window is required if old v1 cursors must survive opt-in; otherwise enabling the candidate intentionally rejects v1 tokens. No default was changed.
 
 ## Consequences and status
 
-- Wave 3 only fixes local bucket reclamation after full refill; shared quota semantics and production configuration are unchanged.
-- Cursor version 1 and one-key production configuration remain unchanged. Rotation is not implemented or verified.
+- The shared PostgreSQL candidate and cursor key ring are implemented and locally tested, but both remain explicitly opt-in. The product quota/failure policy has not been approved.
+- Production configuration remains unchanged; cursor v1 remains the default. The key ring has unit/Race compatibility-boundary tests, but production secret distribution and a rolling multi-version deployment have not been exercised.
+- Candidate source and evidence are documented in `docs/wave4/WAVE4_PACKAGE_D_GLOBAL_ADMISSION.md`; local run evidence is stored under `E:\\distributed-task-lab-temp\\wave4-artifacts\\shared-admission-e2e-runs`.
 - `EXTERNAL_IDP_NOT_VERIFIED` and production identity key distribution remain separate gates.
 - A production rollout requires an accepted decision and corresponding integration/operational evidence; this ADR alone is not implementation evidence.

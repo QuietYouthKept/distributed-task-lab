@@ -14,6 +14,7 @@ import (
 	"github.com/fantasticyi/distributed-task-lab/internal/api/contract"
 	"github.com/fantasticyi/distributed-task-lab/internal/auth"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/observability"
 	"github.com/fantasticyi/distributed-task-lab/internal/queue"
 	"github.com/lib/pq"
 	"go.opentelemetry.io/otel"
@@ -65,11 +66,11 @@ func taskColumnsAliased(alias string) string {
 // Enqueue inserts a new task in pending state. It is idempotent on the task's
 // idempotency_key: if a task with the same key already exists, that task is
 // returned instead of inserting a duplicate.
-func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain.Task, error) {
+func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (taskResult *domain.Task, resultErr error) {
 	ctx, span := otel.Tracer("distributed-task-lab/postgres").Start(ctx, "task.enqueue",
 		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(attribute.String("task.type", string(task.Type)), attribute.String("queue", task.Queue)))
-	defer span.End()
+		trace.WithAttributes(attribute.String("task.id", task.ID), attribute.String("task.type", string(task.Type)), attribute.String("queue", task.Queue)))
+	defer func() { observability.RecordSpanFailure(span, resultErr, "task enqueue failed"); span.End() }()
 	ctx, cancel := q.operationContext(ctx)
 	defer cancel()
 	payloadJSON, err := json.Marshal(task.Payload)
@@ -135,6 +136,7 @@ func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain
 		if existing == nil {
 			return nil, domain.NewError(domain.ErrorKindConflict, "idempotency_key_conflict", "idempotency key is already used by another principal", domain.ErrTaskStateConflict)
 		}
+		span.SetAttributes(attribute.String("task.id", existing.ID), attribute.Bool("task.idempotent_reuse", true))
 		return existing, nil
 	}
 	if err != nil {
@@ -147,6 +149,8 @@ func (q *PostgresQueue) Enqueue(ctx context.Context, task *domain.Task) (*domain
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("enqueue: commit: %w", err)
 	}
+	span.AddEvent("db.transaction.commit")
+	span.SetAttributes(attribute.Bool("task.idempotent_reuse", false))
 	return task, nil
 }
 
@@ -247,11 +251,11 @@ func (q *PostgresQueue) ListTasks(ctx context.Context, filter domain.TaskFilter)
 // ClaimTasks atomically claims tasks for a worker using a transaction with
 // row-level locking (FOR UPDATE SKIP LOCKED). Each claim increments the
 // lease_version fencing token so stale workers cannot write back results.
-func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit int, leaseTimeout time.Duration) ([]domain.Task, error) {
+func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit int, leaseTimeout time.Duration) (claimedTasks []domain.Task, resultErr error) {
 	ctx, span := otel.Tracer("distributed-task-lab/postgres").Start(ctx, "claim.transaction",
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(attribute.String("worker_id", workerID), attribute.Int("claim.limit", limit)))
-	defer span.End()
+	defer func() { observability.RecordSpanFailure(span, resultErr, "task claim failed"); span.End() }()
 	ctx, cancel := q.operationContext(ctx)
 	defer cancel()
 	if limit <= 0 || leaseTimeout <= 0 {
@@ -532,17 +536,29 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("claim: commit: %w", err)
 	}
+	span.SetAttributes(attribute.Int("claim.count", len(accepted)))
+	var reclaimCount int
+	for _, task := range accepted {
+		if task.ClaimReason == "expired_lease" {
+			reclaimCount++
+		}
+	}
+	span.SetAttributes(attribute.Int("claim.reclaim_count", reclaimCount))
+	span.AddEvent("db.transaction.commit")
 	return accepted, nil
 }
 
 // MarkSuccess marks a task as successfully completed in a single transaction.
 // The lease_version fencing token must match, preventing stale workers from
 // writing results after their lease was reclaimed.
-func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID string, leaseVersion int, result domain.TaskResult) error {
+func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID string, leaseVersion int, result domain.TaskResult) (resultErr error) {
 	ctx, span := otel.Tracer("distributed-task-lab/postgres").Start(ctx, "task.mark_success",
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(attribute.String("task.id", taskID), attribute.String("worker_id", workerID), attribute.Int("lease_version", leaseVersion)))
-	defer span.End()
+	defer func() {
+		observability.RecordSpanFailure(span, resultErr, "task success acknowledgement failed")
+		span.End()
+	}()
 	ctx, cancel := q.operationContext(ctx)
 	defer cancel()
 	resultJSON, err := json.Marshal(result)
@@ -575,6 +591,7 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 
 	n, _ := res.RowsAffected()
 	if n == 0 {
+		span.SetAttributes(attribute.Bool("task.fencing_rejected", true))
 		return fmt.Errorf("mark success: task %s: %w", taskID, domain.ErrTaskNotClaimed)
 	}
 	if err := q.insertEvent(ctx, tx, taskID, domain.EventSucceeded, workerID, "task completed", map[string]any{"summary": result.Summary}); err != nil {
@@ -583,6 +600,8 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("mark success: commit: %w", err)
 	}
+	span.SetAttributes(attribute.String("task.final_status", "success"))
+	span.AddEvent("db.transaction.commit")
 	return nil
 }
 
@@ -590,11 +609,11 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 // (FOR UPDATE) to read the current attempt without a TOCTOU race, then applies
 // retry-with-backoff or moves the task to the DLQ, recording the event in the
 // same transaction.
-func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID string, leaseVersion int, failure domain.TaskFailure) error {
+func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID string, leaseVersion int, failure domain.TaskFailure) (resultErr error) {
 	ctx, span := otel.Tracer("distributed-task-lab/postgres").Start(ctx, "task.mark_failure",
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(attribute.String("task.id", taskID), attribute.String("worker_id", workerID), attribute.Int("lease_version", leaseVersion)))
-	defer span.End()
+	defer func() { observability.RecordSpanFailure(span, resultErr, "task failure transition failed"); span.End() }()
 	ctx, cancel := q.operationContext(ctx)
 	defer cancel()
 	tx, err := q.db.BeginTx(ctx, nil)
@@ -614,6 +633,7 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 		FOR UPDATE
 	`, taskID, workerID, leaseVersion).Scan(&attempt, &maxAttempts, &retryDelaySeconds, &retryMaxDelaySeconds, &backoffMultiplier, &jitter)
 	if err == sql.ErrNoRows {
+		span.SetAttributes(attribute.Bool("task.fencing_rejected", true))
 		return fmt.Errorf("mark failure: task %s: %w", taskID, domain.ErrTaskNotClaimed)
 	}
 	if err != nil {
@@ -649,6 +669,8 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("mark failure: commit: %w", err)
 		}
+		span.SetAttributes(attribute.String("task.final_status", "dlq"), attribute.String("task.failure_class", failure.ErrorType))
+		span.AddEvent("db.transaction.commit")
 		return nil
 	}
 
@@ -674,6 +696,8 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("mark failure: commit: %w", err)
 		}
+		span.SetAttributes(attribute.String("task.final_status", "dlq"), attribute.String("task.failure_class", failure.ErrorType))
+		span.AddEvent("db.transaction.commit")
 		return nil
 	}
 
@@ -706,6 +730,9 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("mark failure: commit: %w", err)
 	}
+	observability.Runtime().TaskRetried()
+	span.SetAttributes(attribute.String("task.final_status", "pending"), attribute.String("task.failure_class", failure.ErrorType), attribute.Int64("task.retry_delay_ms", retryAt.Sub(now).Milliseconds()))
+	span.AddEvent("db.transaction.commit")
 	return nil
 }
 
@@ -1038,11 +1065,11 @@ func (q *PostgresQueue) Heartbeat(ctx context.Context, workerID string) error {
 // RenewLease extends a live lease only when the complete ownership credential
 // (task, worker, fencing generation) still matches. An already expired lease
 // cannot be resurrected, even if no replacement worker has claimed it yet.
-func (q *PostgresQueue) RenewLease(ctx context.Context, taskID string, workerID string, leaseVersion int, leaseTimeout time.Duration) error {
+func (q *PostgresQueue) RenewLease(ctx context.Context, taskID string, workerID string, leaseVersion int, leaseTimeout time.Duration) (resultErr error) {
 	ctx, span := otel.Tracer("distributed-task-lab/postgres").Start(ctx, "lease.renew",
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(attribute.String("task.id", taskID), attribute.String("worker_id", workerID), attribute.Int("lease_version", leaseVersion)))
-	defer span.End()
+	defer func() { observability.RecordSpanFailure(span, resultErr, "lease renewal failed"); span.End() }()
 	ctx, cancel := q.operationContext(ctx)
 	defer cancel()
 	res, err := q.db.ExecContext(ctx, `
@@ -1060,8 +1087,10 @@ func (q *PostgresQueue) RenewLease(ctx context.Context, taskID string, workerID 
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
+		span.SetAttributes(attribute.Bool("task.fencing_rejected", true))
 		return fmt.Errorf("renew lease: task %s: %w", taskID, domain.ErrTaskNotClaimed)
 	}
+	span.AddEvent("db.lease.renewed")
 	return nil
 }
 
@@ -1088,7 +1117,7 @@ func (q *PostgresQueue) DetectStaleWorkers(ctx context.Context, threshold time.D
 	return ids, nil
 }
 
-const latestSchemaVersion int64 = 11
+const latestSchemaVersion int64 = 12
 
 func (q *PostgresQueue) HealthCheck(ctx context.Context) error {
 	var version sql.NullInt64

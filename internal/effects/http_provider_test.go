@@ -170,8 +170,11 @@ func TestHTTPProviderReconciliationStates(t *testing.T) {
 		want   ReconciliationState
 	}{
 		{name: "pending", status: http.StatusOK, body: `{"state":"pending"}`, want: ReconciliationPending},
-		{name: "completed", status: http.StatusOK, body: `{"state":"completed","receipt":{"receipt_id":"receipt-1"}}`, want: ReconciliationCompleted},
-		{name: "provider failed", status: http.StatusOK, body: `{"state":"failed","receipt":{"receipt_id":"receipt-2"}}`, want: ReconciliationFailed},
+		{name: "completed", status: http.StatusOK, body: `{"state":"completed","receipt":{"operation_id":"op-1","receipt_id":"receipt-1","status":"completed"}}`, want: ReconciliationCompleted},
+		{name: "provider failed", status: http.StatusOK, body: `{"state":"failed","receipt":{"operation_id":"op-1","receipt_id":"receipt-2","status":"failed"}}`, want: ReconciliationFailed},
+		{name: "completed missing receipt identity", status: http.StatusOK, body: `{"state":"completed","receipt":{"receipt_id":"receipt-3","status":"completed"}}`, want: ReconciliationUnknown},
+		{name: "completed receipt has inconsistent status", status: http.StatusOK, body: `{"state":"completed","receipt":{"operation_id":"op-1","receipt_id":"receipt-4","status":"pending"}}`, want: ReconciliationUnknown},
+		{name: "failed receipt has inconsistent status", status: http.StatusOK, body: `{"state":"failed","receipt":{"operation_id":"op-1","receipt_id":"receipt-5","status":"completed"}}`, want: ReconciliationUnknown},
 		{name: "missing", status: http.StatusNotFound, want: ReconciliationNotFound},
 		{name: "uncertain", status: http.StatusOK, body: `{"state":"unknown"}`, want: ReconciliationUnknown},
 		{name: "query unavailable", status: http.StatusServiceUnavailable, body: `unavailable`, want: ReconciliationUnknown},

@@ -36,6 +36,48 @@ func TestValidateProductionTaskPayloads(t *testing.T) {
 	}
 }
 
+func TestValidateDataPreservesValidServiceTraceMetadata(t *testing.T) {
+	data := map[string]any{
+		"execution_mode": "mock",
+		"document_id":    "doc-1",
+		"_traceparent":   "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+		"_tracestate":    "vendor=value",
+	}
+	got, err := ValidateData(domain.TaskTypeRAGIngestion, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]string{
+		"_traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+		"_tracestate":  "vendor=value",
+	} {
+		if got[key] != want {
+			t.Errorf("%s = %v, want %q", key, got[key], want)
+		}
+		if data[key] != want {
+			t.Errorf("ValidateData mutated caller field %s", key)
+		}
+	}
+}
+
+func TestValidateDataRejectsMalformedTraceMetadataAndUnknownFields(t *testing.T) {
+	tests := []struct {
+		name string
+		data map[string]any
+	}{
+		{"invalid traceparent", map[string]any{"execution_mode": "mock", "document_id": "doc-1", "_traceparent": "not-a-traceparent"}},
+		{"tracestate without traceparent", map[string]any{"execution_mode": "mock", "document_id": "doc-1", "_tracestate": "vendor=value"}},
+		{"unknown business field", map[string]any{"execution_mode": "mock", "document_id": "doc-1", "_traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", "unexpected": true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := ValidateData(domain.TaskTypeRAGIngestion, tt.data); err == nil {
+				t.Fatal("ValidateData() unexpectedly succeeded")
+			}
+		})
+	}
+}
+
 func TestValidateRejectsMismatchedAndUnsafePayloads(t *testing.T) {
 	tests := []struct {
 		name    string

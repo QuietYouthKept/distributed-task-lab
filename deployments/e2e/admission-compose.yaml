@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${E2E_POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: tasklab
+    ports:
+      - "127.0.0.1:${E2E_POSTGRES_PORT:?required}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tasklab"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api-a:
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.api
+    environment: &api_environment
+      APP_PROFILE: development
+      DATABASE_URL: postgres://postgres:${E2E_POSTGRES_PASSWORD}@postgres:5432/tasklab?sslmode=disable
+      API_PORT: "8080"
+      API_TOKEN: ${E2E_API_TOKEN:?required}
+      ADMIN_TOKEN: ${E2E_ADMIN_TOKEN:?required}
+      LOG_LEVEL: error
+      API_SHARED_RATE_LIMIT_ENABLED: "true"
+      API_SHARED_RATE_LIMIT_RATE_PER_SECOND: ${E2E_SHARED_RATE_LIMIT_RATE:?required}
+      API_SHARED_RATE_LIMIT_BURST: ${E2E_SHARED_RATE_LIMIT_BURST:?required}
+      API_SHARED_RATE_LIMIT_FAILURE_MODE: closed
+      API_SHARED_RATE_LIMIT_HASH_KEY: ${E2E_SHARED_RATE_LIMIT_HASH_KEY:?required}
+    ports:
+      - "127.0.0.1:${E2E_API_A_PORT:?required}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api-b:
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.api
+    environment:
+      <<: *api_environment
+    ports:
+      - "127.0.0.1:${E2E_API_B_PORT:?required}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy

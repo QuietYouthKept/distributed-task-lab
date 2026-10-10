@@ -22,11 +22,12 @@ func TestSensitiveValuesIncludesConfiguredCredentialsForLogRedaction(t *testing.
 	t.Setenv("API_TOKEN", "api-token-secret")
 	t.Setenv("ADMIN_TOKEN", "admin-token-secret")
 	t.Setenv("API_CURSOR_SIGNING_KEY", "cursor-signing-secret")
+	t.Setenv("API_SHARED_RATE_LIMIT_HASH_KEY", "shared-rate-limit-hash-secret")
 	t.Setenv("ARTIFACT_S3_ACCESS_KEY", "object-access-secret")
 	t.Setenv("ARTIFACT_S3_SECRET_KEY", "object-secret-value")
 	t.Setenv("EVAL_GATEWAY_API_KEY", "provider-secret-value")
 	values := Load().SensitiveValues()
-	for _, expected := range []string{"database-secret", "api-token-secret", "admin-token-secret", "cursor-signing-secret", "object-access-secret", "object-secret-value", "provider-secret-value"} {
+	for _, expected := range []string{"database-secret", "api-token-secret", "admin-token-secret", "cursor-signing-secret", "shared-rate-limit-hash-secret", "object-access-secret", "object-secret-value", "provider-secret-value"} {
 		if !containsString(values, expected) {
 			t.Fatalf("configured credential of length %d was absent from the redaction set", len(expected))
 		}
@@ -95,6 +96,7 @@ func TestValidateProductionAcceptsStrictConfiguration(t *testing.T) {
 	t.Setenv("EVAL_GATEWAY_URL", "https://eval.example")
 	t.Setenv("EVAL_GATEWAY_PROFILE", "production-eval")
 	t.Setenv("EVAL_GATEWAY_API_KEY", "secret-key")
+	t.Setenv("API_SHARED_RATE_LIMIT_ENABLED", "false")
 	cfg := Load()
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() = %v", err)
@@ -104,6 +106,60 @@ func TestValidateProductionAcceptsStrictConfiguration(t *testing.T) {
 	}
 	if err := cfg.ValidateWorker(); err == nil || !strings.Contains(err.Error(), "production execution allowlist is empty") {
 		t.Fatalf("production worker must fail closed until a task type passes acceptance, got %v", err)
+	}
+}
+
+func TestSharedRateLimitCandidateRequiresExplicitPolicyAndSecrets(t *testing.T) {
+	t.Setenv("API_SHARED_RATE_LIMIT_ENABLED", "")
+	t.Setenv("API_SHARED_RATE_LIMIT_RATE_PER_SECOND", "")
+	t.Setenv("API_SHARED_RATE_LIMIT_BURST", "")
+	t.Setenv("API_SHARED_RATE_LIMIT_FAILURE_MODE", "")
+	t.Setenv("API_SHARED_RATE_LIMIT_HASH_KEY", "")
+	if cfg := Load(); cfg.SharedRateLimitEnabled {
+		t.Fatal("shared rate limit candidate must be disabled by default")
+	}
+
+	t.Setenv("API_SHARED_RATE_LIMIT_ENABLED", "true")
+	t.Setenv("API_SHARED_RATE_LIMIT_RATE_PER_SECOND", "2")
+	t.Setenv("API_SHARED_RATE_LIMIT_BURST", "20")
+	cfg := Load()
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "FAILURE_MODE") || !strings.Contains(err.Error(), "HASH_KEY") {
+		t.Fatalf("enabled candidate without explicit failure/key policy should fail closed, got %v", err)
+	}
+
+	t.Setenv("API_SHARED_RATE_LIMIT_FAILURE_MODE", "closed")
+	t.Setenv("API_SHARED_RATE_LIMIT_HASH_KEY", strings.Repeat("k", 32))
+	if err := Load().Validate(); err != nil {
+		t.Fatalf("fully specified disabled-by-default candidate config should validate: %v", err)
+	}
+}
+
+func TestCursorKeyRingIsOptInAndRequiresFiniteCompatibilityBoundaries(t *testing.T) {
+	for _, name := range []string{"API_CURSOR_KEY_RING_ENABLED", "API_CURSOR_ACTIVE_KEY_ID", "API_CURSOR_ACTIVE_KEY", "API_CURSOR_TTL", "API_CURSOR_PREVIOUS_KEYS", "API_CURSOR_V1_LEGACY_KEY", "API_CURSOR_V1_ACCEPT_UNTIL"} {
+		t.Setenv(name, "")
+	}
+	if cfg := Load(); cfg.CursorRotationEnabled {
+		t.Fatal("cursor key ring must be disabled by default")
+	}
+	t.Setenv("API_CURSOR_KEY_RING_ENABLED", "true")
+	if err := Load().Validate(); err == nil || !strings.Contains(err.Error(), "ACTIVE_KEY_ID") || !strings.Contains(err.Error(), "API_CURSOR_TTL") {
+		t.Fatalf("incomplete key ring config should fail closed, got %v", err)
+	}
+	t.Setenv("API_CURSOR_ACTIVE_KEY_ID", "active-2026-10")
+	t.Setenv("API_CURSOR_ACTIVE_KEY", strings.Repeat("a", 32))
+	t.Setenv("API_CURSOR_TTL", "1h")
+	t.Setenv("API_CURSOR_PREVIOUS_KEYS", `[{"id":"previous-2026-09","key":"`+strings.Repeat("p", 32)+`","accept_until":"`+time.Now().UTC().Add(time.Hour).Format(time.RFC3339)+`"}]`)
+	t.Setenv("API_CURSOR_V1_LEGACY_KEY", strings.Repeat("v", 32))
+	t.Setenv("API_CURSOR_V1_ACCEPT_UNTIL", time.Now().UTC().Add(time.Minute).Format(time.RFC3339))
+	cfg := Load()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("explicit cursor key ring config should validate: %v", err)
+	}
+	for _, secret := range []string{strings.Repeat("a", 32), strings.Repeat("p", 32), strings.Repeat("v", 32)} {
+		if !containsString(cfg.SensitiveValues(), secret) {
+			t.Fatal("cursor key was not added to the sensitive-value redaction list")
+		}
 	}
 }
 

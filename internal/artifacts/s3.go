@@ -14,6 +14,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type S3Config struct {
@@ -94,7 +95,10 @@ func (s *S3Store) EnsureBucket(ctx context.Context) error {
 	return s.client.MakeBucket(ctx, s.bucket, minio.MakeBucketOptions{})
 }
 
-func (s *S3Store) PutIfAbsent(ctx context.Context, key string, data []byte, contentType string) (ObjectInfo, error) {
+func (s *S3Store) PutIfAbsent(ctx context.Context, key string, data []byte, contentType string) (result ObjectInfo, resultErr error) {
+	ctx, span := startArtifactSpan(ctx, "put")
+	span.SetAttributes(attribute.Int64("artifact.size_bytes", int64(len(data))))
+	defer func() { finishArtifactSpan(span, resultErr) }()
 	if err := ctx.Err(); err != nil {
 		return ObjectInfo{}, err
 	}
@@ -187,7 +191,9 @@ func (s *S3Store) Get(ctx context.Context, key string) ([]byte, ObjectInfo, erro
 	return data, expected, nil
 }
 
-func (s *S3Store) Head(ctx context.Context, key string) (ObjectInfo, error) {
+func (s *S3Store) Head(ctx context.Context, key string) (result ObjectInfo, resultErr error) {
+	ctx, span := startArtifactSpan(ctx, "head")
+	defer func() { finishArtifactSpan(span, resultErr) }()
 	if err := ctx.Err(); err != nil {
 		return ObjectInfo{}, err
 	}

@@ -24,15 +24,23 @@ func (l *EffectLedger) RecordIntent(ctx context.Context, in effects.Intent) erro
 	if in.EffectID == "" || in.TaskID == "" || in.OperationKey == "" || in.Kind == "" || in.Policy == "" || in.Generation <= 0 || in.Attempt <= 0 {
 		return fmt.Errorf("effect intent has missing identity or execution metadata")
 	}
-	_, err := l.db.ExecContext(ctx, `
+	result, err := l.db.ExecContext(ctx, `
 		INSERT INTO effects (effect_id, task_id, operation_key, kind, policy, status, request_hash, generation, attempt)
 		VALUES ($1, $2, $3, $4, $5, 'intent', $6, $7, $8)
 		ON CONFLICT (task_id, operation_key, generation) DO UPDATE
-		SET attempt = GREATEST(effects.attempt, EXCLUDED.attempt),
-		    request_hash = EXCLUDED.request_hash
+		SET attempt = GREATEST(effects.attempt, EXCLUDED.attempt)
+		WHERE effects.effect_id = EXCLUDED.effect_id
+		  AND effects.kind = EXCLUDED.kind
+		  AND effects.policy = EXCLUDED.policy
+		  AND effects.request_hash = EXCLUDED.request_hash
 	`, in.EffectID, in.TaskID, in.OperationKey, in.Kind, string(in.Policy), in.RequestHash, in.Generation, in.Attempt)
 	if err != nil {
 		return fmt.Errorf("record effect intent: %w", err)
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return fmt.Errorf("record effect intent: inspect affected rows: %w", err)
+	} else if affected == 0 {
+		return fmt.Errorf("record effect intent: stable identity conflicts with persisted effect")
 	}
 	return nil
 }
@@ -41,13 +49,20 @@ func (l *EffectLedger) RecordReceipt(ctx context.Context, effectID string, recei
 	result, err := l.db.ExecContext(ctx, `
 		UPDATE effects
 		SET status = 'applied', provider_request_id = NULLIF($2, ''), response_hash = NULLIF($3, ''), reconciled_at = clock_timestamp()
-		WHERE effect_id = $1 AND status IN ('intent', 'unknown', 'applied')
+		WHERE effect_id = $1 AND (
+			status IN ('intent', 'unknown') OR
+			(status = 'applied'
+			 AND COALESCE(provider_request_id, '') = COALESCE(NULLIF($2, ''), '')
+			 AND COALESCE(response_hash, '') = COALESCE(NULLIF($3, ''), ''))
+		)
 	`, effectID, receipt.ProviderRequestID, receipt.ResponseHash)
 	if err != nil {
 		return fmt.Errorf("record effect receipt: %w", err)
 	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		return fmt.Errorf("record effect receipt: %s is not pending", effectID)
+	if n, err := result.RowsAffected(); err != nil {
+		return fmt.Errorf("record effect receipt: inspect affected rows: %w", err)
+	} else if n == 0 {
+		return fmt.Errorf("record effect receipt: effect is not unresolved or receipt conflicts with durable evidence")
 	}
 	return nil
 }
