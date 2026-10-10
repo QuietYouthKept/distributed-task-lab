@@ -53,8 +53,15 @@ try {
     [Environment]::SetEnvironmentVariable("GITHUB_RUN_ATTEMPT", "1", "Process")
     [Environment]::SetEnvironmentVariable("GITHUB_WORKSPACE", $repoRoot, "Process")
     [Environment]::SetEnvironmentVariable("GITHUB_ENV", $null, "Process")
-    & docker image inspect $image --format "{{.Id}}" *> $null
-    if ($LASTEXITCODE -eq 0) { throw "Temporary MinIO image tag $image already exists; refusing to overwrite it." }
+    # A missing random tag is the expected preflight result. Keep PowerShell
+    # from promoting Docker's stderr for that probe into a terminating error.
+    $savedErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $existingImage = & docker image inspect $image --format "{{.Id}}" 2>$null
+        $imageInspectExitCode = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $savedErrorActionPreference }
+    if ($imageInspectExitCode -eq 0 -and $existingImage) { throw "Temporary MinIO image tag $image already exists; refusing to overwrite it." }
     Push-Location $repoRoot
     try {
         & $gitBash (Join-Path $repoRoot "scripts\evidence\build-minio-ci-image.sh")
