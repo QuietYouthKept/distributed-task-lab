@@ -83,8 +83,14 @@ try {
     $healthy = $false
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
         # Health probes target our own loopback container, never the user's proxy.
-        $healthStatus = & curl.exe --noproxy "*" --fail --silent --show-error --max-time 2 --output NUL --write-out "%{http_code}" ($endpoint + "/minio/health/live") 2>$null
-        $healthExit = $LASTEXITCODE
+        # Startup connection failures are expected until MinIO is ready. Keep
+        # their stderr from aborting this bounded retry loop under PowerShell.
+        $savedErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            $healthStatus = & curl.exe --noproxy "*" --fail --silent --max-time 2 --output NUL --write-out "%{http_code}" ($endpoint + "/minio/health/live") 2>$null
+            $healthExit = $LASTEXITCODE
+        } finally { $ErrorActionPreference = $savedErrorActionPreference }
         if ($healthExit -eq 0 -and $healthStatus -eq "200") { $healthy = $true; break }
         Start-Sleep -Seconds 1
     }
