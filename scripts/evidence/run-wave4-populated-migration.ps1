@@ -24,20 +24,29 @@ New-Item -ItemType Directory -Path $binaryDir | Out-Null
 $suffix = [Guid]::NewGuid().ToString('N').Substring(0, 10)
 $pgName = "tasklab-w4-populated-pg-$suffix"
 $minioName = "tasklab-w4-populated-minio-$suffix"
+$restoreMinioName = "tasklab-w4-restore-minio-$suffix"
 $createdContainers = [System.Collections.Generic.List[string]]::new()
 $processes = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
 $pgID = $null
 $minioID = $null
+$restoreMinioID = $null
 $password = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(24)).ToLowerInvariant()
 $apiToken = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLowerInvariant()
 $adminToken = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLowerInvariant()
 $minioAccess = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(20)).ToLowerInvariant()
 $minioSecret = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLowerInvariant()
+$restoreMinioAccess = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(20)).ToLowerInvariant()
+$restoreMinioSecret = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLowerInvariant()
 $credentialFile = Join-Path $EvidenceDir 'temporary-minio.env'
-$envNames = @('APP_PROFILE','DATABASE_URL','LOG_LEVEL','API_PORT','API_TOKEN','ADMIN_TOKEN','WORKER_HEALTH_PORT','WORKER_ID','WORKER_CONCURRENCY','WORKER_POLL_INTERVAL','CLAIM_BATCH_SIZE','LEASE_TIMEOUT','DB_OPERATION_TIMEOUT','SHUTDOWN_TIMEOUT','RAG_ARTIFACT_DIR','ARTIFACT_STORE_BACKEND','ARTIFACT_S3_ENDPOINT','ARTIFACT_S3_BUCKET','ARTIFACT_S3_PREFIX','ARTIFACT_S3_ACCESS_KEY','ARTIFACT_S3_SECRET_KEY','ARTIFACT_ALLOW_HTTP','ARTIFACT_ALLOW_BUCKET_CREATE','W4_MIGRATION_FIXTURE','W4_MIGRATION_ARTIFACT_MODE','W4_MIGRATION_ARTIFACT_KEY','W4_MIGRATION_ARTIFACT_SHA256','MINIO_ENDPOINT','MINIO_BUCKET','MINIO_ACCESS_KEY','MINIO_SECRET_KEY','GOCACHE','GOMODCACHE','NO_PROXY','no_proxy')
+$restoreCredentialFile = Join-Path $EvidenceDir 'temporary-restore-minio.env'
+$envNames = @('APP_PROFILE','DATABASE_URL','LOG_LEVEL','API_PORT','API_TOKEN','ADMIN_TOKEN','WORKER_HEALTH_PORT','WORKER_ID','WORKER_CONCURRENCY','WORKER_POLL_INTERVAL','CLAIM_BATCH_SIZE','LEASE_TIMEOUT','DB_OPERATION_TIMEOUT','SHUTDOWN_TIMEOUT','RAG_ARTIFACT_DIR','ARTIFACT_STORE_BACKEND','ARTIFACT_S3_ENDPOINT','ARTIFACT_S3_BUCKET','ARTIFACT_S3_PREFIX','ARTIFACT_S3_ACCESS_KEY','ARTIFACT_S3_SECRET_KEY','ARTIFACT_ALLOW_HTTP','ARTIFACT_ALLOW_BUCKET_CREATE','W4_MIGRATION_FIXTURE','W4_MIGRATION_ARTIFACT_MODE','W4_MIGRATION_ARTIFACT_KEY','W4_MIGRATION_ARTIFACT_SHA256','W4_MIGRATION_ARTIFACT_KEYS','W4_MIGRATION_TARGET_ENDPOINT','W4_MIGRATION_TARGET_BUCKET','W4_MIGRATION_TARGET_ACCESS_KEY','W4_MIGRATION_TARGET_SECRET_KEY','MINIO_ENDPOINT','MINIO_BUCKET','MINIO_ACCESS_KEY','MINIO_SECRET_KEY','GOCACHE','GOMODCACHE','NO_PROXY','no_proxy')
 $previousEnv = @{}
 foreach ($name in $envNames) { $previousEnv[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
 $started = [DateTime]::UtcNow
+$activeArtifactEndpoint = $null
+$activeArtifactBucket = "migration-$suffix"
+$activeArtifactAccess = $minioAccess
+$activeArtifactSecret = $minioSecret
 $run = [ordered]@{
     run_id = $suffix
     wave3_commit = $Wave3Commit
@@ -72,9 +81,9 @@ function New-Database([string]$Name) {
 function Set-CommonEnv([string]$DatabaseURL) {
     $env:APP_PROFILE = 'development'; $env:DATABASE_URL = $DatabaseURL; $env:LOG_LEVEL = 'error'
     $env:API_TOKEN = $apiToken; $env:ADMIN_TOKEN = $adminToken
-    $env:ARTIFACT_STORE_BACKEND = 's3'; $env:ARTIFACT_S3_ENDPOINT = $run.minio_endpoint
-    $env:ARTIFACT_S3_BUCKET = "migration-$suffix"; $env:ARTIFACT_S3_PREFIX = "migration-$suffix"
-    $env:ARTIFACT_S3_ACCESS_KEY = $minioAccess; $env:ARTIFACT_S3_SECRET_KEY = $minioSecret
+    $env:ARTIFACT_STORE_BACKEND = 's3'; $env:ARTIFACT_S3_ENDPOINT = $activeArtifactEndpoint
+    $env:ARTIFACT_S3_BUCKET = $activeArtifactBucket; $env:ARTIFACT_S3_PREFIX = "migration-$suffix"
+    $env:ARTIFACT_S3_ACCESS_KEY = $activeArtifactAccess; $env:ARTIFACT_S3_SECRET_KEY = $activeArtifactSecret
     $env:ARTIFACT_ALLOW_HTTP = 'true'; $env:ARTIFACT_ALLOW_BUCKET_CREATE = 'true'; $env:CLAIM_BATCH_SIZE = '1'
     $env:DB_OPERATION_TIMEOUT = '1s'
     $env:RAG_ARTIFACT_DIR = (Join-Path $EvidenceDir 'worker-artifacts')
@@ -163,6 +172,7 @@ try {
     $minioPort = ((& docker port $minioID '9000/tcp').Trim() -split ':')[-1]
     $pgPort = ((& docker port $pgID '5432/tcp').Trim() -split ':')[-1]
     $run.minio_endpoint = "http://127.0.0.1:$minioPort"; $run.postgres = @{ port=[int]$pgPort; version=(docker exec $pgID postgres --version).Trim() }
+    $activeArtifactEndpoint = $run.minio_endpoint
     $ready = $false
     for ($i=0; $i -lt 60; $i++) { docker exec $pgID pg_isready -U postgres -d postgres *> $null; if ($LASTEXITCODE -eq 0) { $ready=$true; break }; Start-Sleep -Seconds 1 }
     if (-not $ready) { throw 'PostgreSQL health check timed out.' }
@@ -325,12 +335,47 @@ try {
     if ($restored.status -ne 'pending') { throw 'Wave 3 could not read pending task after complete pre-migration restore.' }
     $restoredArtifactResult = Invoke-Psql $restoreDB "SELECT result::text FROM tasks WHERE id='$($artifactTask.id)'"
     if ($restoredArtifactResult -ne $artifactResult) { throw 'Restored task artifact reference differs from the schema11 snapshot.' }
+
+    # Restore the complete set of fixture objects referenced by this isolated DB
+    # into a second MinIO service, rather than merely relying on the source store.
+    @("MINIO_ROOT_USER=$restoreMinioAccess", "MINIO_ROOT_PASSWORD=$restoreMinioSecret") | Set-Content -LiteralPath $restoreCredentialFile -Encoding ascii
+    $restoreMinioID = (& docker run --detach --name $restoreMinioName --env-file $restoreCredentialFile --publish '127.0.0.1::9000' $MinIOImage server /data --console-address ':9001').Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $restoreMinioID) { throw 'Could not start separate isolated restore MinIO.' }
+    $createdContainers.Add($restoreMinioID); Remove-Item -LiteralPath $restoreCredentialFile -Force
+    $restoreMinioPort = ((& docker port $restoreMinioID '9000/tcp').Trim() -split ':')[-1]
+    $restoreMinioEndpoint = "http://127.0.0.1:$restoreMinioPort"
+    $restoreMinioHealthy = $false
+    for ($i=0; $i -lt 60; $i++) { try { if ((Invoke-WebRequest -UseBasicParsing -Uri "$restoreMinioEndpoint/minio/health/live" -TimeoutSec 2).StatusCode -eq 200) { $restoreMinioHealthy=$true; break } } catch {}; Start-Sleep -Seconds 1 }
+    if (-not $restoreMinioHealthy) { throw 'Separate restore MinIO health check timed out.' }
+    $env:W4_MIGRATION_FIXTURE='1'; $env:W4_MIGRATION_ARTIFACT_MODE='copy-to-target'
+    $env:W4_MIGRATION_ARTIFACT_KEYS=[string]::Join([Environment]::NewLine, @($artifactSourceKey, $artifactKey))
+    $env:W4_MIGRATION_TARGET_ENDPOINT=$restoreMinioEndpoint; $env:W4_MIGRATION_TARGET_BUCKET="migration-$suffix"
+    $env:W4_MIGRATION_TARGET_ACCESS_KEY=$restoreMinioAccess; $env:W4_MIGRATION_TARGET_SECRET_KEY=$restoreMinioSecret
+    $env:MINIO_ENDPOINT=$run.minio_endpoint; $env:MINIO_BUCKET="migration-$suffix"; $env:MINIO_ACCESS_KEY=$minioAccess; $env:MINIO_SECRET_KEY=$minioSecret
+    $env:ARTIFACT_S3_PREFIX="migration-$suffix"
+    go test ./internal/e2e -run '^TestMigrationArtifactFixture$' -count=1 -v *> (Join-Path $EvidenceDir 'artifact-restore-copy.log')
+    if ($LASTEXITCODE -ne 0) { throw 'Could not restore the database-referenced objects into separate MinIO.' }
+
+    $artifactRestoreTask = New-Task $restoreURL "$queue-artifact-restore" @{ execution_mode='real'; document_id="migration-$suffix"; object_key=$artifactSourceKey }
+    $run.task_ids.artifact_restore = $artifactRestoreTask.id
     Invoke-RestMethod -Method Post -Uri "$($restoreURL)queues/$queue-pending/resume" -Headers $adminHeaders -ContentType 'application/json' -Body '{}' | Out-Null
     [void](Invoke-Psql $restoreDB "UPDATE tasks SET next_run_at=clock_timestamp() WHERE id='$($unknown.id)' AND status='pending' AND attempt=1")
+    $activeArtifactEndpoint = $restoreMinioEndpoint; $activeArtifactBucket = "migration-$suffix"
+    $activeArtifactAccess = $restoreMinioAccess; $activeArtifactSecret = $restoreMinioSecret
     $restoreWorker = Start-App 'worker' $oldWorker $restoredURL 'wave3-worker-restored-target'; Wait-Ready $restoreWorker 'Wave 3 Worker restored schema11'
     [void](Wait-Task $restoreDB $pending.id 'success|1|1' 30)
     [void](Wait-Task $restoreDB $unknown.id 'success|2|2' 60)
-    $run.checkpoints.Add(@{ name='Complete restore to separate isolated target'; outcome='PASS'; restored_schema='11'; source_snapshot_sha256=$preSnapshotHash; restored_snapshot_sha256=$restoreHash; old_api='ready and read restored pending task'; post_upgrade_write_loss='restoring pre-migration snapshot intentionally omits all schema12-era writes; this is expected data-loss boundary, not rollback.' })
+    [void](Wait-Task $restoreDB $artifactRestoreTask.id 'success|1|1' 60)
+    $restoredEffect = Invoke-Psql $restoreDB "SELECT COUNT(*) FROM effects WHERE task_id='$($unknown.id)' AND status='applied'"
+    if ($restoredEffect -eq '0') { throw 'Restored Wave 3 Worker did not reconcile the persisted unknown effect.' }
+    $artifactRestoreResult = Invoke-Psql $restoreDB "SELECT result::text FROM tasks WHERE id='$($artifactRestoreTask.id)'"
+    if ($artifactRestoreResult -notmatch '"idempotent_reused"\s*:\s*"true"') { throw 'Restored Wave 3 Worker did not reuse the restored artifact object.' }
+    $env:MINIO_ENDPOINT=$restoreMinioEndpoint; $env:MINIO_BUCKET="migration-$suffix"; $env:MINIO_ACCESS_KEY=$restoreMinioAccess; $env:MINIO_SECRET_KEY=$restoreMinioSecret
+    $env:W4_MIGRATION_ARTIFACT_MODE='verify-output'; $env:W4_MIGRATION_ARTIFACT_KEY=$artifactKey; $env:W4_MIGRATION_ARTIFACT_SHA256=$artifactSHA
+    go test ./internal/e2e -run '^TestMigrationArtifactFixture$' -count=1 -v *> (Join-Path $EvidenceDir 'artifact-restore-verify.log')
+    if ($LASTEXITCODE -ne 0) { throw 'Separate restored MinIO output object failed its SHA256 read-back.' }
+    $run.artifact_restore = @{ result='PASS'; source_object_key=$artifactSourceKey; output_object_key=$artifactKey; output_sha256=$artifactSHA; target='separate isolated MinIO service'; target_image=$MinIOImage }
+    $run.checkpoints.Add(@{ name='Complete pre-migration database and artifact restore to separate isolated targets'; outcome='PASS'; restored_schema='11'; source_snapshot_sha256=$preSnapshotHash; restored_snapshot_sha256=$restoreHash; old_api='ready and read restored pending task'; old_worker='claimed and completed restored pending task; reconciled unknown effect; reran RAG against restored artifact store and reused object'; restored_effect_count=$restoredEffect; artifact_key=$artifactKey; artifact_sha256=$artifactSHA; post_upgrade_write_loss='restoring pre-migration snapshots intentionally omits schema12-era DB writes and objects; this is the expected data recovery boundary, not an in-place rollback.' })
     Stop-App $restoreWorker; $restoreWorker=$null; Stop-App $restoreAPI; $restoreAPI=$null
 
     $run.conclusions.Add('SCHEMA11_TO_12_POPULATED_UPGRADE_PASS')
@@ -346,14 +391,15 @@ catch {
 finally {
     foreach ($p in $processes) { try { Stop-App $p } catch { "process cleanup: $($_.Exception.Message)" | Add-Content -LiteralPath (Join-Path $EvidenceDir 'cleanup-errors.log') } }
     if (Test-Path -LiteralPath $credentialFile) { Remove-Item -LiteralPath $credentialFile -Force }
+    if (Test-Path -LiteralPath $restoreCredentialFile) { Remove-Item -LiteralPath $restoreCredentialFile -Force }
     foreach ($id in $createdContainers) {
-        try { $logs = (docker logs $id 2>&1 | Out-String).Replace($password,'[REDACTED]').Replace($apiToken,'[REDACTED]').Replace($adminToken,'[REDACTED]').Replace($minioAccess,'[REDACTED]').Replace($minioSecret,'[REDACTED]'); $logs | Set-Content -LiteralPath (Join-Path $EvidenceDir "container-$id.log") } catch { }
+        try { $logs = (docker logs $id 2>&1 | Out-String).Replace($password,'[REDACTED]').Replace($apiToken,'[REDACTED]').Replace($adminToken,'[REDACTED]').Replace($minioAccess,'[REDACTED]').Replace($minioSecret,'[REDACTED]').Replace($restoreMinioAccess,'[REDACTED]').Replace($restoreMinioSecret,'[REDACTED]'); $logs | Set-Content -LiteralPath (Join-Path $EvidenceDir "container-$id.log") } catch { }
         try { docker rm --force $id *> $null } catch { }
     }
     foreach ($name in $envNames) { [Environment]::SetEnvironmentVariable($name, $previousEnv[$name], 'Process') }
     Get-ChildItem -LiteralPath $EvidenceDir -File -Recurse -Filter '*.log' | ForEach-Object {
         $content = [string](Get-Content -LiteralPath $_.FullName -Raw)
-        if (-not [string]::IsNullOrEmpty($content)) { $content = $content.Replace($password,'[REDACTED]').Replace($apiToken,'[REDACTED]').Replace($adminToken,'[REDACTED]').Replace($minioAccess,'[REDACTED]').Replace($minioSecret,'[REDACTED]') }
+        if (-not [string]::IsNullOrEmpty($content)) { $content = $content.Replace($password,'[REDACTED]').Replace($apiToken,'[REDACTED]').Replace($adminToken,'[REDACTED]').Replace($minioAccess,'[REDACTED]').Replace($minioSecret,'[REDACTED]').Replace($restoreMinioAccess,'[REDACTED]').Replace($restoreMinioSecret,'[REDACTED]') }
         Set-Content -LiteralPath $_.FullName -Value $content -Encoding utf8
     }
     $run.completed_utc = [DateTime]::UtcNow.ToString('o')

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,6 +55,36 @@ func TestMigrationArtifactFixture(t *testing.T) {
 			t.Fatalf("source checksum mismatch: store=%s local=%s", info.SHA256, digest(body))
 		}
 		t.Logf("MIGRATION_ARTIFACT_SOURCE key=%s sha256=%s size=%d", info.Key, info.SHA256, info.Size)
+	case "copy-to-target":
+		target, err := artifacts.NewS3Store(artifacts.S3Config{
+			Endpoint: os.Getenv("W4_MIGRATION_TARGET_ENDPOINT"), Bucket: os.Getenv("W4_MIGRATION_TARGET_BUCKET"), Prefix: os.Getenv("ARTIFACT_S3_PREFIX"),
+			AccessKey: os.Getenv("W4_MIGRATION_TARGET_ACCESS_KEY"), SecretKey: os.Getenv("W4_MIGRATION_TARGET_SECRET_KEY"), Region: "us-east-1", AllowHTTP: true,
+			AllowBucketCreate: true, MaxBytes: 1 << 20,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := target.EnsureBucket(ctx); err != nil {
+			t.Fatal(err)
+		}
+		keys := strings.FieldsFunc(os.Getenv("W4_MIGRATION_ARTIFACT_KEYS"), func(r rune) bool { return r == '\n' || r == '\r' })
+		if len(keys) == 0 {
+			t.Fatal("W4_MIGRATION_ARTIFACT_KEYS must contain at least one referenced object key")
+		}
+		for _, objectKey := range keys {
+			body, sourceInfo, err := store.Get(ctx, objectKey)
+			if err != nil {
+				t.Fatalf("read source object %q: %v", objectKey, err)
+			}
+			targetInfo, err := target.PutIfAbsent(ctx, objectKey, body, sourceInfo.ContentType)
+			if err != nil {
+				t.Fatalf("restore target object %q: %v", objectKey, err)
+			}
+			if targetInfo.SHA256 != sourceInfo.SHA256 || targetInfo.Size != sourceInfo.Size {
+				t.Fatalf("restored object %q metadata differs: source=%+v target=%+v", objectKey, sourceInfo, targetInfo)
+			}
+			t.Logf("MIGRATION_ARTIFACT_RESTORED key=%s sha256=%s size=%d", objectKey, targetInfo.SHA256, targetInfo.Size)
+		}
 	case "verify-output":
 		body, info, err := store.Get(ctx, key)
 		if err != nil {
