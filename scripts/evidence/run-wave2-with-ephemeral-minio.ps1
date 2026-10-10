@@ -22,7 +22,7 @@ $environmentFile = Join-Path $temporaryDirectory "minio.env"
 $collectorOutput = Join-Path $temporaryDirectory "collector.stdout.log"
 $createdContainer = $false
 $createdImage = $false
-$names = @("MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_CONTAINER", "REQUIRE_TEST_DATABASE", "TEST_DATABASE_URL", "PG_BACKUP_CONTAINER", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_WORKSPACE", "GITHUB_ENV")
+$names = @("MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_CONTAINER", "REQUIRE_TEST_DATABASE", "TEST_DATABASE_URL", "PG_BACKUP_CONTAINER", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_WORKSPACE", "GITHUB_ENV", "GOTOOLCHAIN")
 $previous = @{}
 foreach ($name in $names) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, "Process") }
 
@@ -70,6 +70,9 @@ try {
     [Environment]::SetEnvironmentVariable("MINIO_ACCESS_KEY", $accessKey, "Process")
     [Environment]::SetEnvironmentVariable("MINIO_SECRET_KEY", $secretKey, "Process")
     [Environment]::SetEnvironmentVariable("MINIO_CONTAINER", $containerName, "Process")
+    # Honor the go.mod toolchain directive even when the workstation's Go
+    # installation is older and has GOTOOLCHAIN=local configured globally.
+    [Environment]::SetEnvironmentVariable("GOTOOLCHAIN", "auto", "Process")
     if (-not [Environment]::GetEnvironmentVariable("TEST_DATABASE_URL", "Process")) {
         [Environment]::SetEnvironmentVariable("TEST_DATABASE_URL", "postgres://postgres:postgres@127.0.0.1:5433/postgres?sslmode=disable", "Process")
     }

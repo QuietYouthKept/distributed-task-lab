@@ -50,6 +50,8 @@ The exact clean implementation run `tasklab-e2e-980f3ba036b3` passed both target
 
 Earlier failed fixture runs and one pre-commit diagnostic pass remain preserved under their original paths and statuses; none is edited to PASS. Remaining package-A work: inject the response-loss fault inside the Worker container execution path (current real S3 response-loss contract is a separate test), verify malformed object metadata recovery, and run same-case simultaneous writes from two Worker containers. This remains at-least-once processing and does not imply end-to-end exactly-once execution.
 
+The first full Wave 3 Evidence collector attempt at `962ec4e` failed before all Go commands could load packages because the host set `GOTOOLCHAIN=local` with Go 1.26.6 while the module requires Go 1.26.9. The 13 matching failures are an environment/toolchain gate, not package-test outcomes; the benchmark was not run. The immutable run and logs are retained. The wrapper now temporarily selects `GOTOOLCHAIN=auto`, honoring the module directive, and restores the prior environment; a full rerun is required before claiming those gates.
+
 ## Other packages
 
 Package A is locally verified for its stated two checks but remains partial against the entire Wave 3 acceptance list. Remaining parts of D/E include full asynchronous trace continuity and actionable alert firing, retention/GC safety, image SBOM and vulnerability scan, and release/rollback smoke. Package B remains a provider-independent HTTP contract only; no real payment/notification Provider or reconciliation authority was supplied. Package C still has no shared limiter or cursor-key rotation. No production/staging claims are inferred from local results; see `WAVE3_REMAINING_GAPS.md`.
