@@ -71,10 +71,14 @@ $checks += Invoke-RecordedCheck "full-race" "go" @("test", "-race", "./cmd/...",
 $checks += Invoke-RecordedCheck "postgres-race-five" "go" @("test", "-race", "./internal/storage/postgres", "-count=5") $requiredDB $logDir
 $checks += Invoke-RecordedCheck "retry-backoff-race-twenty" "go" @("test", "-race", "./internal/storage/postgres", "-run", "^TestRetryBackoff$", "-count=20", "-v") $requiredDB $logDir
 $checks += Invoke-RecordedCheck "failurelab" "go" @("run", "./cmd/failurelab") @{} $logDir
-$existingChaosRuns = @((Get-ChildItem -LiteralPath (Join-Path $repoRoot "benchmarks\chaos") -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }))
-$checks += Invoke-RecordedCheck "chaosmatrix" "go" @("run", "./cmd/chaosmatrix") @{} $logDir
-$existingPaginationRuns = @((Get-ChildItem -LiteralPath (Join-Path $repoRoot "benchmarks\pagination") -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }))
-$checks += Invoke-RecordedCheck "pagination-benchmark-100k" "go" @("run", "./cmd/paginationbench") $requiredDB $logDir
+$chaosOutputRoot = [Environment]::GetEnvironmentVariable("CHAOS_OUTPUT_DIR", "Process")
+if (-not $chaosOutputRoot) { $chaosOutputRoot = Join-Path $repoRoot "benchmarks\chaos" }
+$existingChaosRuns = @((Get-ChildItem -LiteralPath $chaosOutputRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }))
+$checks += Invoke-RecordedCheck "chaosmatrix" "go" @("run", "./cmd/chaosmatrix") @{ CHAOS_OUTPUT_DIR = $chaosOutputRoot } $logDir
+$paginationOutputRoot = [Environment]::GetEnvironmentVariable("PAGINATION_BENCH_OUTPUT_DIR", "Process")
+if (-not $paginationOutputRoot) { $paginationOutputRoot = Join-Path $repoRoot "benchmarks\pagination" }
+$existingPaginationRuns = @((Get-ChildItem -LiteralPath $paginationOutputRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }))
+$checks += Invoke-RecordedCheck "pagination-benchmark-100k" "go" @("run", "./cmd/paginationbench") @{ REQUIRE_TEST_DATABASE = "1"; PAGINATION_BENCH_OUTPUT_DIR = $paginationOutputRoot } $logDir
 $checks += Invoke-RecordedCheck "vet" "go" @("vet", "./...") @{} $logDir
 $checks += Invoke-RecordedCheck "external-client-race" "go" @("test", "-race", "./...", "-count=1", "-v") @{} $logDir (Join-Path $repoRoot "test\external-client")
 $checks += Invoke-RecordedCheck "otlp-receiver-race" "go" @("test", "-race", "./internal/observability", "-run", "^TestSetupTracingExportsSpanToOTLPHTTPReceiver$", "-count=1", "-v") @{} $logDir
@@ -83,7 +87,7 @@ $chaosSource = $null
 $chaosFiles = @()
 $chaosState = "NOT VERIFIED"
 $chaosRunID = $null
-$newChaosRuns = @((Get-ChildItem -LiteralPath (Join-Path $repoRoot "benchmarks\chaos") -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notin $existingChaosRuns } | Sort-Object LastWriteTimeUtc))
+$newChaosRuns = @((Get-ChildItem -LiteralPath $chaosOutputRoot -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notin $existingChaosRuns } | Sort-Object LastWriteTimeUtc))
 if ($newChaosRuns.Count -eq 1) {
     $chaosSource = $newChaosRuns[0].FullName
     $chaosRunID = $newChaosRuns[0].Name
@@ -111,7 +115,7 @@ if ($newChaosRuns.Count -eq 1) {
 $paginationFiles = @()
 $paginationState = "NOT VERIFIED"
 $paginationRunID = $null
-$newPaginationRuns = @((Get-ChildItem -LiteralPath (Join-Path $repoRoot "benchmarks\pagination") -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notin $existingPaginationRuns } | Sort-Object LastWriteTimeUtc))
+$newPaginationRuns = @((Get-ChildItem -LiteralPath $paginationOutputRoot -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notin $existingPaginationRuns } | Sort-Object LastWriteTimeUtc))
 if ($newPaginationRuns.Count -eq 1) {
     $paginationSource = $newPaginationRuns[0].FullName
     $paginationRunID = $newPaginationRuns[0].Name
