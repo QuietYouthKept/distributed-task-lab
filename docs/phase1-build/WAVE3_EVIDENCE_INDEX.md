@@ -31,6 +31,12 @@ The Evidence directory and `evidence/phase1/index.json` are append-only. Do not 
 
 The external E: artifacts are immutable run outputs; earlier failed and intermediate image scan reports remain in their original sibling directories.
 
+## Package C OpenAPI schema alignment
+
+| Implementation | Result | Scope |
+|---|---|---|
+| `93f7bee8ba77e6bb65f2a71f68f6e71da8b839d4` | PASS locally | Targeted OpenAPI tests (5), full `internal/api` package, and OpenAPI Race ×10 passed. `POST /v1/tasks` success references `CreateTaskResponse`; request/payload/response property sets are checked against Go DTO JSON tags. This is not all-operation schema drift evidence. |
+
 Artifact SHA256 (uppercase hex):
 
 - `api-image.tar`: `E7179E346D9A9E0CD909E9913678875CF9A1DAA30CBD4BB077836939EBDDD46C`

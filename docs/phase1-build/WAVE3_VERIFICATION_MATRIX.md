@@ -34,5 +34,6 @@
 | SBOM / image vulnerability scan | Exact-source local API/Worker build, CycloneDX and full-severity Trivy | PASS locally at `75bce219fb329d1960bc66e25fcda37b3898f099`; remote workflow NOT VERIFIED | Reports and image archives: `E:\distributed-task-lab-temp\wave3-artifacts\package-e-75bce21`. API 0 findings; Worker 1 UNKNOWN `GO-2026-5932` module-level advisory (govulncheck found no imported vulnerable call); HIGH/CRITICAL=0. |
 | Release / rollback smoke | RC migration, rollout/drain, rollback and recovery | NOT VERIFIED | No staging deployment or release approval. |
 | Package D API + Worker Prometheus scrape | Exact-commit Compose overlay at `f5974777a452c2e455a0c9b03bffa2df88ed989f`; bounded wait for active targets | PASS, both targets `up` | API Bearer token supplied through Compose runtime secret; Worker target stays internal. Local dev only; no alert or production discovery proof. |
+| OpenAPI CreateTask DTO schema alignment | `api/openapi.json`; `internal/api/openapi_contract_test.go` | PASS locally: `go test ./internal/api -count=1`; OpenAPI Race ×10 | Exact CreateTask request, nested PayloadEnvelope and response property names match Go DTO JSON tags. Other operation bodies remain uncovered; not whole-API drift validation. |
 
 No Wave 2 Evidence is relabeled to cover Wave 3 code.

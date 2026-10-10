@@ -14,7 +14,7 @@
 
 ## P1 — API consistency and security
 
-- Complete OpenAPI request/response schema drift checks beyond route, auth, errors and local reference validity.
+- OpenAPI now declares the `POST /v1/tasks` 201 response schema and checks the create request, nested payload envelope, and create response property sets against their Go DTO JSON tags. Other request/response bodies are still not covered by systematic DTO/schema drift checks; no whole-API generated drift gate is claimed.
 - Cursor HMAC rotation needs key IDs, bounded old-key acceptance windows, TTL and compatibility decision. Do not enable indefinite historical key acceptance or change production defaults before an owner-approved ADR.
 - Current ingress rate limiting is per process. Decide global quota semantics, shared store, partition behavior, Retry-After and whether local overload protection remains layered; no shared implementation is yet enabled.
 - Process-local limiter bucket reclamation now removes only inactive buckets whose tokens would already have fully refilled, preventing the 10,000-subject capacity from staying saturated until restart. This does not verify cross-instance fairness or outage policy.
