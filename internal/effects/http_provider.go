@@ -178,8 +178,14 @@ func (p *HTTPProvider) Reconcile(ctx context.Context, idempotencyKey string) Rec
 	case ReconciliationPending, ReconciliationUnknown:
 		return ReconciliationResult{State: reply.State}
 	case ReconciliationCompleted, ReconciliationFailed:
-		if reply.Receipt.ReceiptID == "" {
-			return ReconciliationResult{State: ReconciliationUnknown, Err: errors.New("provider reconciliation response omitted receipt identity")}
+		if reply.Receipt.OperationID == "" || reply.Receipt.ReceiptID == "" {
+			return ReconciliationResult{State: ReconciliationUnknown, Err: errors.New("provider reconciliation response omitted operation or receipt identity")}
+		}
+		if reply.State == ReconciliationCompleted && reply.Receipt.Status != "completed" {
+			return ReconciliationResult{State: ReconciliationUnknown, Err: errors.New("completed reconciliation response has a non-completed receipt")}
+		}
+		if reply.State == ReconciliationFailed && reply.Receipt.Status != "failed" {
+			return ReconciliationResult{State: ReconciliationUnknown, Err: errors.New("failed reconciliation response has a non-failed receipt")}
 		}
 		return ReconciliationResult{State: reply.State, Receipt: &reply.Receipt}
 	default:
