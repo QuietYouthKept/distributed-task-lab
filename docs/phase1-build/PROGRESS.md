@@ -1,5 +1,12 @@
 # Phase 1 build progress
 
+## Wave 3 final closeout — 2026-10-10
+
+- Implementation snapshot `0a5482d657ae431751c205abdf01632ebe89cee6`; local full 14-gate regression and four live cross-container gates pass from clean E: worktrees. Detailed source binding, commands and limits are in `WAVE3_VERIFICATION_MATRIX.md`.
+- The remaining local changes were CI runner/action maintenance and bounded PowerShell test-runner behavior; no production Go/schema change. E: contains final raw Evidence and hash manifests.
+- Hosted CI for the updated workflow snapshot is pending: normal push failed at the configured proxy TLS handshake. Baseline runs at `49c275c` remain historical and are not relabeled.
+- Current closeout is partial pending hosted verification. Production remains not approved; external IdP/Provider/cloud S3, full distributed trace/alerts, DR/RPO/RTO and release approval remain external gates.
+
 Updated: 2026-10-09 (Asia/Shanghai)
 
 ## Wave 3 continuation update — 2026-10-10

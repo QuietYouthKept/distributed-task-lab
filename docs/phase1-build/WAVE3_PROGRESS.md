@@ -1,5 +1,13 @@
 # Wave 3 progress
 
+## Final closeout status — 2026-10-10
+
+- Frozen implementation snapshot: `0a5482d657ae431751c205abdf01632ebe89cee6` (tree `91940cda4428026b4ab360b3aa00bcaab491dda7`). Final clean-worktree Evidence: `wave3-final-0a5482d-20261010`, PASS 14/14. Separate live cross-container run: `tasklab-e2e-50ff56931d69`, PASS 4/4 at this exact checked-out snapshot.
+- Local implementation changes in this closeout are limited to GitHub Actions maintenance pins and two PowerShell evidence-runner fixes that preserve bounded image/health checks under PowerShell native stderr behavior. No production Go code or schema changed.
+- New full run manifests and logs are on E:. Original and review MinIO logs are ACL-restricted and hash-linked. The stopped local MinIO instance has rotated credentials; the named data volume remains intact.
+- Normal push failed due proxy/TLS EOF. The prior remote CI/Security/Supply Chain successes remain bound to `49c275c`; the updated workflow snapshot is `REMOTE_CI_PENDING`. No PR merge, release, tag movement, production allowlist or Wave 4 work occurred.
+- Overall state: `WAVE3_ENGINEERING_CLOSEOUT_PARTIAL`; production state: `PRODUCTION_NOT_APPROVED`. See `WAVE3_CLOSEOUT.md`, `WAVE3_VERIFICATION_MATRIX.md`, `WAVE3_REMAINING_GAPS.md` and `WAVE3_RELEASE_READINESS.md`.
+
 Updated: 2026-10-10 (Asia/Shanghai)
 
 ## Recovery point

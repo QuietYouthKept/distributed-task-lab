@@ -1,27 +1,21 @@
-# Wave 3 release-readiness gate
+# Wave 3 release-readiness decision
 
-Statuses are deliberately independent; a local test does not imply remote, staging, or production acceptance.
+Snapshot: implementation `0a5482d657ae431751c205abdf01632ebe89cee6`; documentation freeze will follow separately. A green local suite or older hosted run does not imply staging or production acceptance.
 
-| Gate | Code Implemented | Local Verified | Remote CI Verified | Staging Verified | Production Approved |
+| Gate | Implementation complete | Local verified | Hosted CI verified for final snapshot | Staging verified | Production approved |
 |---|---|---|---|---|---|
-| PostgreSQL queue, lease and fencing | Yes (prior work) | Yes (Wave 2 and Wave 3 Evidence) | Yes for required CI checks at `9b360f5` | No | No production workload certification |
-| Shared ArtifactStore | Yes (S3 adapter) | Yes against MinIO in Wave 3 Evidence | Yes against source-built MinIO at `9b360f5` | No | No: provider, TLS/CA, IAM, KMS, policy and retention not approved |
-| Cross-container crash recovery and response loss | Yes, disposable Compose harness at `3eef160` | Targeted Race PASS in clean run `tasklab-e2e-d55fb468070f`; separate Evidence commit pending | No remote run for this topology | No | Partial package acceptance: worker-path response loss and dual-worker same-case test remain |
-| Worker execution allowlist | Production admission remains empty | Fail-closed validation tested | Not a permission grant | No | No task type approved |
-| Identity and RBAC | OIDC verifier and local controls exist | Local issuer/JWKS and PostgreSQL tests | CodeQL and unit/integration jobs pass at `9b360f5` | No external IdP exercise | No: issuer, audience, JWKS/claim policy operational approval absent |
-| External side-effect Provider | HTTP contract prototype only; not wired | Full and targeted HTTP Race tests in Evidence `wave3-20261010T171000Z-9b360f5952bb` | CI at `9b360f5` passed unit/full Race; no real external service | No | No: `REAL_PROVIDER_NOT_VERIFIED` |
-| API cursor rotation / global rate limit | ADR-0006 proposal; local limiter full-refill bucket reclamation implemented at `cedbdc1` | Clean Evidence 14/14, targeted Race ×100 | CI `37965020508` and Security `37965020486` pass for `cedbdc1`; no shared/global limiter or key ring | No | No decision on quota outage policy, cursor TTL/overlap |
-| Full async trace / production alerts | Partial local OTLP and API metrics | Prior local receiver only | Not full path | No Collector/Alertmanager exercise | No SLO/on-call ownership |
-| Backup and recovery | Local automation/rehearsal exists | PostgreSQL + MinIO restore verified in Wave 3 Evidence | Backup/restore CI passed at `9b360f5` | No cloud DR exercise | No production RPO/RTO |
-| Build, SBOM and release | CI source-pinned MinIO test dependency; application release work partial | MinIO build and clean Evidence verified | CI and security jobs pass at `9b360f5` | No deployment | No release approval or signed production image |
+| PostgreSQL queue, leases, retry and fencing | Implemented for the current platform scope | PASS: full integration, Race, PostgreSQL ×5, RetryBackoff ×20, Failure Lab and backup/restore | NOT VERIFIED at `0a5482d`; baseline `49c275c` passed | No | No production workload certification |
+| MinIO ArtifactStore and cross-container recovery | Implemented/test harness available | PASS: real MinIO contract and four API/two-Worker container gates | Prior MinIO/host-process CI passed at `49c275c`; revised workflow not rerun | No | No: cloud provider, IAM, TLS/CA, KMS, lifecycle and policy remain open |
+| Provider / effect reconciliation | Contract prototype and ledger paths exist | PASS: local HTTP contract Race ×10 and full suite | Generic suite passed at `49c275c`; final workflow pending | No provider sandbox | No: `REAL_PROVIDER_NOT_VERIFIED`; production admission remains disabled |
+| API identity, RBAC and audit | Local boundary and tests exist | PASS: final unit/integration/Race; v1 route/auth OpenAPI Race ×20 | CodeQL/unit checks passed at `49c275c`; latest run pending | No external IdP | No issuer/claim/JWKS operations approval |
+| OpenAPI | CreateTask DTO schema alignment; route/auth set enumerated | PASS for present tests; full drift is not complete | Prior contract test CI passed at `49c275c`; latest pending | No | No full API contract certification |
+| Metrics and tracing | Metrics/trace propagation components exist | PASS for Worker continuation, OTLP receiver, and prior exact-file-set Prometheus scrape | Generic unit/Race at `49c275c`; no full trace workflow | No real collector chain | No alert/SLO/on-call evidence |
+| Backup and recovery | Local drill exists | PASS for disposable PostgreSQL restore + MinIO object checksum | Backup/restore job passed at `49c275c`; latest run pending | No cloud restore | No measured production RPO/RTO |
+| CI / security / supply chain | Workflows pinned and statically validated locally | PASS: actionlint and script syntax checks | `NOT VERIFIED`: push failed; prior three workflows passed at `49c275c` | No | No signing, registry publication or release approval |
+| Production Worker admission | Deliberately fail-closed | Empty production allowlist validated | CI result is not an allowlist grant | No | No task type approved |
 
-## Blockers before any production release
+## Decision
 
-- Production IdP/JWKS choice, claim mapping, key rotation and operator ownership.
-- Approved production Worker task types and complete execution/reconciliation acceptance.
-- Real Provider selection and sandbox evidence; no real payment/notification transaction was sent.
-- Production object-store vendor, TLS/CA, workload identity, KMS, lifecycle and retention policy.
-- Cloud backup encryption/offsite retention and approved, measured RPO/RTO.
-- Actionable SLO/alert thresholds, Alertmanager routing, on-call owner and incident runbooks.
-- Staging deployment, migration compatibility and rollback rehearsal.
-- Release owner approval; no tag, merge, production deployment, or production permission change occurred.
+Wave 3 local engineering closeout is **PARTIAL** until the final implementation/workflow snapshot is pushed and the three required hosted workflows complete successfully. No local P0 correctness issue was found in the executed tests. `PRODUCTION_NOT_APPROVED` remains the production decision.
+
+Do not merge PR #1, create a milestone/release tag, publish production images, enable a Worker allowlist or begin Wave 4 as part of this closeout. A future stage requires current hosted CI, external IdP/provider/cloud decisions, staging deployment and rollback, backup/RPO/RTO evidence, alert/on-call ownership and explicit release approval.

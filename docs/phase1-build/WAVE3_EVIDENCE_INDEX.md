@@ -31,6 +31,21 @@ The Evidence directory and `evidence/phase1/index.json` are append-only. Do not 
 
 The external E: artifacts are immutable run outputs; earlier failed and intermediate image scan reports remain in their original sibling directories.
 
+## Final closeout snapshot — 2026-10-10
+
+| Evidence | Exact snapshot | Result | Pointer |
+|---|---|---|---|
+| Final 14-gate clean-worktree regression | `0a5482d657ae431751c205abdf01632ebe89cee6` | PASS, 14/14, all exit codes 0 | Run `wave3-final-0a5482d-20261010`; manifest and hash-verified logs/artifacts in `E:\distributed-task-lab-temp\wave3-artifacts\final-closeout-20261010-0a5482d\evidence\wave3-final-0a5482d-20261010`. Source tree SHA `91940cda4428026b4ab360b3aa00bcaab491dda7`. |
+| Final API/two-Worker-container E2E | Tested snapshot `0a5482d657ae431751c205abdf01632ebe89cee6`; the manifest's `implementation_commit` field identifies the latest commit touching its E2E source files (`e74e59f`) | PASS, 4/4; `worktree_dirty_at_test=false` | Compose project `tasklab-e2e-50ff56931d69`; copied manifest and SHA-verified logs in `E:\distributed-task-lab-temp\wave3-artifacts\final-closeout-20261010-0a5482d\evidence\cross-container\tasklab-e2e-50ff56931d69`. Credentials are not recorded. |
+| Provider contract repeated Race | `0a5482d657ae431751c205abdf01632ebe89cee6` | PASS ×10 | E: `logs/provider-and-side-effect-race-x10.stdout.log`; HTTP test server only, no real external provider. |
+| OpenAPI contract repeated Race | `0a5482d657ae431751c205abdf01632ebe89cee6` | PASS ×20 | E: `logs/openapi-contract-race-x20.stdout.log`; only CreateTask DTO/schema parity is complete. |
+| Final workflow static checks | `0a5482d657ae431751c205abdf01632ebe89cee6` | PASS | E: actionlint stdout/stderr logs; updated workflows are still hosted-unverified. |
+| Worker advisory package analysis | `0a5482d657ae431751c205abdf01632ebe89cee6` | No `openpgp` package/symbol found in Linux Worker build; module-level UNKNOWN retained | E: Linux/amd64 Worker binary SHA256 `B38DE39013A4EB3504FEEDFB132453A25C58E5784B7EC6A07CE07EBF779CD72B`; blocked local govulncheck diagnostic preserved. See `WAVE3_VULNERABILITY_TRIAGE.md`. |
+| Final local MinIO credential rotation | Local-only `tasklab-wave2-minio` test instance | PASS: real S3 contract passed; container stopped after test; named data volume preserved | ACL-restricted raw/review logs and hashes in `E:\distributed-task-lab-temp\wave3-artifacts\final-closeout-20261010-0a5482d\security\logs`; random replacement credentials are outside Git in `E:\distributed-task-lab-temp\local-secrets\tasklab-wave2-minio-20261010`. |
+| Implementation push | `0a5482d657ae431751c205abdf01632ebe89cee6` | BLOCKED, no remote update confirmed | Normal push via `127.0.0.1:7897` failed with Schannel TLS handshake EOF; raw failure preserved under E: `logs/push-implementation-attempt-01.log`. No force-push or alternate remote write. |
+
+Older rows above remain immutable historical evidence; do not relabel them as results for this final snapshot.
+
 ## Package C OpenAPI schema alignment
 
 | Implementation | Result | Scope |

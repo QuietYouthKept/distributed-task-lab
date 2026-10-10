@@ -1,36 +1,33 @@
 # Wave 3 remaining gaps
 
-## P0 — cross-container storage and recovery
+This list is current as of implementation snapshot `0a5482d657ae431751c205abdf01632ebe89cee6`. It supersedes earlier progress bullets; historical implementation and failure records remain in the evidence index.
 
-- A disposable Compose topology exercises PostgreSQL, source-built MinIO, API and two separately built Worker containers on a run-scoped network with independent worker filesystems. Final clean implementation-bound run `tasklab-e2e-10de3fd9335c` passed four live gates at `e74e59f`: response loss in the S3 contract and actual Worker PUT path, API/two-Worker crash recovery, and simultaneous same-key writes by two Worker containers. Per-log SHA256 values are recorded; credentials are excluded.
-- Remaining: validate other S3-compatible/cloud implementations and real network/storage fault behavior; current results are local Docker/MinIO evidence only. Preserve exact object bytes/hash and DB result-reference checks. No exactly-once claim is made; remote CI recovery is host-process based and does not replace local container topology evidence.
+## P0 — no locally reproduced blocker identified
 
-## P0 — external side effects
+The final 14-gate clean-worktree suite and four live cross-container gates passed. No local data-loss, stale-fencing, duplicate-completion or known P0 failure reproduced in this verification. This is a bounded local result, not a claim that all production failure modes are covered.
 
-- New provider-independent HTTP contract client and tests are local-verified but need clean-commit full suite and Evidence.
-- Integrate only after selecting a provider and documenting provider-specific idempotency, retry, signature, timeout, receipt, and reconciliation behavior. Keep `REAL_PROVIDER_NOT_VERIFIED` until an approved sandbox E2E.
-- Add PostgreSQL integration coverage proving unknown-outcome persistence failure is visible and cannot be mistaken for a recorded reconciliation state.
-- Admin manual resolution still needs end-to-end authenticated HTTP authorization, tenant/owner isolation, request-ID audit and concurrent update tests.
+## P1 — required before calling Wave 3 fully closed
 
-## P1 — API consistency and security
+- **Hosted verification of current workflow snapshot:** local branch implementation SHA `0a5482d` is not pushed. CI, Security and Supply Chain runs at `49c275c` passed but predate the final action pins/evidence runner fixes. Retry a normal push and verify current head SHA, run attempt and every required job. Current-commit govulncheck/SBOM scans remain pending.
+- **Credential incident scope:** the local MinIO credential was rotated and container data volume retained. User-saved terminal logs were not located, and external reuse cannot be ruled out. Rotate any reuse and review any copies outside the inspected repository/E: folders. Do not claim past logs or chat disclosures were withdrawn.
+- **External identity operations:** production IdP/JWKS issuer, audience/claim mapping, key rotation, outage behavior and operator ownership need a real configured provider. Local verifier/JWKS tests are not an IdP staging exercise (`EXTERNAL_IDP_NOT_VERIFIED`).
+- **External side effects:** choose a payment/notification provider and obtain an approved sandbox. Verify provider-specific signatures, idempotency, response-loss recovery, reconciliation and manual resolution authorization. Keep `REAL_PROVIDER_NOT_VERIFIED`; no production effect is enabled.
+- **Production Worker allowlist:** production task execution remains fail-closed/empty until task types and side-effect policies are reviewed and approved.
+- **Storage and recovery:** choose cloud S3 vendor/region, TLS/CA, workload identity, KMS, bucket policy and retention. MinIO tests do not establish other S3 implementations. Build protected offsite backup/restore and measure approved RPO/RTO in isolated cloud staging.
+- **End-to-end observability:** connect API request → DB-persisted context → separate Worker → MinIO/fenced ACK → actual OTLP Collector and verify a received Trace ID with redaction. The Worker continuation test and local OTLP receiver are separate tests. Production alert rules, Alertmanager delivery, runbooks, SLO and on-call ownership remain unverified.
+- **API drift:** 15 stable v1 operations are route/auth enumerated. Only CreateTask request/payload/response field parity is checked against Go DTOs. Thirteen operations lack response-body schemas: `GET /v1/tasks`, `GET /v1/tasks/{id}`, `GET /v1/tasks/{id}/events`, `POST /v1/tasks/{id}/cancel`, `POST /v1/tasks/{id}/requeue`, `GET /v1/dlq`, `GET /v1/stats`, `GET /v1/queues`, `PUT /v1/queues/{name}`, `POST /v1/queues/{name}/pause`, `POST /v1/queues/{name}/resume`, `GET /v1/effects`, and `POST /v1/effects/{id}/resolve`. Legacy unversioned and health aliases are intentionally outside the v1 operation set but should be documented if they remain public.
+- **Pagination key rotation and global rate limiting:** cursor key IDs, old-key overlap/TTL and revocation semantics need a decision. Ingress limiting is process-local; cross-instance quota semantics, shared-store failure policy and Retry-After behavior need approval and implementation. Existing per-process bucket reclamation is not global fairness.
+- **Supply-chain acceptance:** revised Node 24 action pins and `ubuntu-24.04` runner are locally actionlint-validated only. Current hosted workflow must pass before treating these changes as accepted. Signing, registry publication, deploy/rollback rehearsal and production image approval remain out of scope.
 
-- OpenAPI now declares the `POST /v1/tasks` 201 response schema and checks the create request, nested payload envelope, and create response property sets against their Go DTO JSON tags. Other request/response bodies are still not covered by systematic DTO/schema drift checks; no whole-API generated drift gate is claimed.
-- Cursor HMAC rotation needs key IDs, bounded old-key acceptance windows, TTL and compatibility decision. Do not enable indefinite historical key acceptance or change production defaults before an owner-approved ADR.
-- Current ingress rate limiting is per process. Decide global quota semantics, shared store, partition behavior, Retry-After and whether local overload protection remains layered; no shared implementation is yet enabled.
-- Process-local limiter bucket reclamation now removes only inactive buckets whose tokens would already have fully refilled, preventing the 10,000-subject capacity from staying saturated until restart. This does not verify cross-instance fairness or outage policy.
-- Production IdP/JWKS operations, production role mapping, and external issuer rotation remain unverified (`EXTERNAL_IDP_NOT_VERIFIED`).
+## P2 — operational maturity
 
-## P1 — observability and operations
+- Perform representative high/low owner-selectivity `EXPLAIN ANALYZE BUFFERS`, index write-cost and retention-size measurements before changing database indexes.
+- Design dry-run-first retention/GC with reference checks, bounded batches, audit, resumability and concurrent-worker safety.
+- Pin local Prometheus/Grafana overlay images, add alert rules and test firing/recovery; establish production service discovery, TLS/authentication and on-call routes.
+- Add migration compatibility, rolling worker drain, rollback and recovery smoke in staging.
+- Review image hardening (read-only root, capability drops, health/drain behavior), provenance/signing and reproducible release inputs.
+- Establish production SLO, capacity target and workload/resource evidence. The final local pagination and Chaos latency samples are not production SLOs.
 
-- A deterministic Worker test now proves persisted W3C `traceparent` extraction, parent/trace continuity into the execution span, and removal of internal propagation fields from handler payload. The local OTLP receiver separately proves span export. Still missing: API → PostgreSQL persisted context → separate Worker process → ArtifactStore/fenced ACK → real Collector end-to-end trace evidence, including secret redaction.
-- Optional local Compose observability now scrapes API and Worker successfully; API scraping retains Bearer auth via a runtime secret file. It uses a single named development Worker and mutable Prometheus/Grafana tags. Production replica/service discovery, TLS/authentication, pinned images, alert thresholds, actual alert firing/recovery, and Alertmanager/on-call ownership remain unverified.
-- Owner-filtered pagination plan needs representative high/low owner-selectivity EXPLAIN ANALYZE, buffers and write-cost comparison before index changes.
-- Backup/restore is a local rehearsal only. Automate protected/offsite backups and isolated recovery checks; cloud DR and RPO/RTO remain unverified.
-- Retention/GC remains to be designed as dry-run first with reference checks, bounded batches, audit and resumability.
+## External dependency / approval boundary
 
-## P2 — release and supply chain
-
-- Build API/Worker images with source commit metadata, least privilege, read-only-root feasibility, health checks, signal/drain tests and reproducible dependency inputs.
-- Local source/image-linked CycloneDX SBOM generation and full-severity Trivy scanning are implemented and verified at `75bce219fb329d1960bc66e25fcda37b3898f099`; exact artifacts/reports are preserved at `E:\distributed-task-lab-temp\wave3-artifacts\package-e-75bce21`. API reported zero findings; Worker retains one `UNKNOWN` module advisory (`GO-2026-5932`, `golang.org/x/crypto/openpgp` v0.57.0) that govulncheck classifies as not apparently called by imported code. No HIGH/CRITICAL findings were present. Remote Actions execution is NOT VERIFIED because the commits are unpushed. Signing/publication, release/rollback smoke, and production approval remain open.
-- Add RC, migration compatibility, rolling/worker drain, rollback and recovery smoke procedures. Staging and production approvals remain separate states.
-- Maintain `Production Worker Fail-Closed`; no production task allowlist, real provider, hosted S3/KMS, external IdP, or release approval is granted here.
+Production IdP/JWKS; real Provider sandbox and reconciliation authority; cloud S3/KMS/IAM; offsite backup; production deployment and staging credentials; approved Worker task types; SLO/RPO/RTO and on-call owner; release approval. Until those are supplied and verified, keep `PRODUCTION_NOT_APPROVED` and do not open the production Worker allowlist.
