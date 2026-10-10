@@ -6,6 +6,7 @@ Statuses are deliberately independent; a local test does not imply remote, stagi
 |---|---|---|---|---|---|
 | PostgreSQL queue, lease and fencing | Yes (prior work) | Yes (Wave 2 and Wave 3 Evidence) | Yes for required CI checks at `9b360f5` | No | No production workload certification |
 | Shared ArtifactStore | Yes (S3 adapter) | Yes against MinIO in Wave 3 Evidence | Yes against source-built MinIO at `9b360f5` | No | No: provider, TLS/CA, IAM, KMS, policy and retention not approved |
+| Cross-container crash recovery and response loss | Yes, disposable Compose harness at `9b81e96` | Targeted Race PASS in clean run `tasklab-e2e-980f3ba036b3`; separate evidence commit pending | No remote run for this topology | No | Partial package acceptance: worker-path response loss, malformed metadata and dual-writer same-case tests remain |
 | Worker execution allowlist | Production admission remains empty | Fail-closed validation tested | Not a permission grant | No | No task type approved |
 | Identity and RBAC | OIDC verifier and local controls exist | Local issuer/JWKS and PostgreSQL tests | CodeQL and unit/integration jobs pass at `9b360f5` | No external IdP exercise | No: issuer, audience, JWKS/claim policy operational approval absent |
 | External side-effect Provider | HTTP contract prototype only; not wired | Full and targeted HTTP Race tests in Evidence `wave3-20261010T171000Z-9b360f5952bb` | CI at `9b360f5` passed unit/full Race; no real external service | No | No: `REAL_PROVIDER_NOT_VERIFIED` |
