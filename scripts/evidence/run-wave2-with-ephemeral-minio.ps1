@@ -6,6 +6,8 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $containerName = "tasklab-wave2-evidence-minio"
 $endpoint = "http://127.0.0.1:19002"
 $bucket = "tasklab-wave2-evidence"
+$temporaryRoot = 'E:\distributed-task-lab-temp'
+New-Item -ItemType Directory -Path $temporaryRoot -Force | Out-Null
 $portInUse = Test-NetConnection 127.0.0.1 -Port 19002 -InformationLevel Quiet
 if ($portInUse) { throw "Port 19002 is already in use; refusing to alter an existing service." }
 if (@(& docker ps -a --filter "name=^$containerName$" --format "{{.Names}}") -contains $containerName) {
@@ -16,13 +18,13 @@ $random = [guid]::NewGuid().ToString("N")
 $image = "tasklab-minio-ci:wave2-$random-1"
 $accessKey = $random
 $secretKey = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
-$temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) ("tasklab-evidence-" + [guid]::NewGuid().ToString("N"))
+$temporaryDirectory = Join-Path $temporaryRoot ("tasklab-evidence-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $temporaryDirectory | Out-Null
 $environmentFile = Join-Path $temporaryDirectory "minio.env"
 $collectorOutput = Join-Path $temporaryDirectory "collector.stdout.log"
 $createdContainer = $false
 $createdImage = $false
-$names = @("MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_CONTAINER", "REQUIRE_TEST_DATABASE", "TEST_DATABASE_URL", "PG_BACKUP_CONTAINER", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_WORKSPACE", "GITHUB_ENV", "GOTOOLCHAIN")
+$names = @("MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_CONTAINER", "REQUIRE_TEST_DATABASE", "TEST_DATABASE_URL", "PG_BACKUP_CONTAINER", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_WORKSPACE", "GITHUB_ENV", "GOTOOLCHAIN", "RUNNER_TEMP", "TMPDIR")
 $previous = @{}
 foreach ($name in $names) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, "Process") }
 
@@ -31,6 +33,10 @@ try {
     $gitRoot = Split-Path (Split-Path $gitPath -Parent) -Parent
     $gitBash = Join-Path $gitRoot "bin\bash.exe"
     if (-not (Test-Path -LiteralPath $gitBash)) { throw "Git Bash was not found at $gitBash; install Git for Windows to build pinned MinIO from source." }
+    $gitTempRoot = (& $gitBash -lc "cygpath -u '$temporaryRoot'").Trim()
+    if (-not $gitTempRoot.StartsWith("/")) { throw "Could not map the E: temporary directory into Git Bash." }
+    [Environment]::SetEnvironmentVariable("RUNNER_TEMP", $gitTempRoot, "Process")
+    [Environment]::SetEnvironmentVariable("TMPDIR", $gitTempRoot, "Process")
     [Environment]::SetEnvironmentVariable("GITHUB_RUN_ID", "wave2-$random", "Process")
     [Environment]::SetEnvironmentVariable("GITHUB_RUN_ATTEMPT", "1", "Process")
     [Environment]::SetEnvironmentVariable("GITHUB_WORKSPACE", $repoRoot, "Process")
@@ -57,10 +63,10 @@ try {
 
     $healthy = $false
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
-        try {
-            $response = Invoke-WebRequest -Uri ($endpoint + "/minio/health/live") -TimeoutSec 2 -UseBasicParsing
-            if ($response.StatusCode -eq 200) { $healthy = $true; break }
-        } catch { }
+        # Health probes target our own loopback container, never the user's proxy.
+        $healthStatus = & curl.exe --noproxy "*" --fail --silent --show-error --max-time 2 --output NUL --write-out "%{http_code}" ($endpoint + "/minio/health/live") 2>$null
+        $healthExit = $LASTEXITCODE
+        if ($healthExit -eq 0 -and $healthStatus -eq "200") { $healthy = $true; break }
         Start-Sleep -Seconds 1
     }
     if (-not $healthy) { throw "Temporary MinIO did not become healthy within 60 seconds." }
@@ -97,5 +103,11 @@ try {
     if ($createdImage) { & docker image rm $image | Out-Null }
     if (Test-Path -LiteralPath $collectorOutput) { Remove-Item -LiteralPath $collectorOutput -Force }
     if (Test-Path -LiteralPath $environmentFile) { Remove-Item -LiteralPath $environmentFile -Force }
-    if (Test-Path -LiteralPath $temporaryDirectory) { Remove-Item -LiteralPath $temporaryDirectory -Force -ErrorAction SilentlyContinue }
+    $resolvedTemporary = (Resolve-Path -LiteralPath $temporaryDirectory -ErrorAction SilentlyContinue).Path
+    $resolvedTemporaryRoot = (Resolve-Path -LiteralPath $temporaryRoot).Path
+    if ($resolvedTemporary -and
+        $resolvedTemporary.StartsWith($resolvedTemporaryRoot, [StringComparison]::OrdinalIgnoreCase) -and
+        (Split-Path $resolvedTemporary -Leaf).StartsWith("tasklab-evidence-", [StringComparison]::OrdinalIgnoreCase)) {
+        Remove-Item -LiteralPath $resolvedTemporary -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
