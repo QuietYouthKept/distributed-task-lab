@@ -11,15 +11,19 @@ $createdImage = $false
 $composeStarted = $false
 $composeAttempted = $false
 $testExit = $null
-$temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) $project
+$temporaryRoot = 'E:\distributed-task-lab-temp'
+New-Item -ItemType Directory -Path $temporaryRoot -Force | Out-Null
+$temporaryDirectory = Join-Path $temporaryRoot $project
 New-Item -ItemType Directory -Path $temporaryDirectory | Out-Null
 $composeLog = Join-Path $temporaryDirectory "compose.log"
 $testLog = Join-Path $temporaryDirectory "test.log"
 $environmentNames = @(
     "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_WORKSPACE", "GITHUB_ENV",
+    "RUNNER_TEMP", "TMPDIR",
     "MINIO_CI_IMAGE", "E2E_POSTGRES_PASSWORD", "E2E_POSTGRES_PORT", "E2E_MINIO_PORT",
     "E2E_API_PORT", "E2E_S3_ACCESS_KEY", "E2E_S3_SECRET_KEY", "E2E_API_TOKEN",
     "E2E_ADMIN_TOKEN", "E2E_ARTIFACT_PREFIX", "E2E_COMPOSE_PROJECT", "E2E_COMPOSE_FILE",
+    "E2E_PROXY_ADMIN_PORT", "E2E_S3_PROXY_TOKEN", "E2E_S3_PROXY_ADMIN_URL",
     "REQUIRE_CONTAINER_E2E", "E2E_API_URL", "E2E_DATABASE_URL", "E2E_MINIO_ENDPOINT",
     "E2E_MINIO_BUCKET", "REQUIRE_MINIO", "MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY",
     "MINIO_SECRET_KEY", "E2E_COMPOSE_FILE", "GOTOOLCHAIN"
@@ -35,8 +39,17 @@ function Get-FreeLoopbackPort {
 }
 
 function Invoke-Compose([string[]]$Arguments) {
-    $output = & docker compose --project-name $project --file $composeFile @Arguments 2>&1
-    $code = $LASTEXITCODE
+	$savedErrorActionPreference = $ErrorActionPreference
+	try {
+		# Docker Compose writes normal lifecycle progress to stderr. Capture it
+		# without treating it as a PowerShell exception; the process exit code is
+	# the authoritative result.
+		$ErrorActionPreference = "Continue"
+		$output = & docker compose --project-name $project --file $composeFile @Arguments 2>&1
+		$code = $LASTEXITCODE
+	} finally {
+		$ErrorActionPreference = $savedErrorActionPreference
+	}
     $output | Out-File -LiteralPath $composeLog -Append -Encoding utf8
     if ($code -ne 0) { throw "Docker Compose command failed (exit=$code): docker compose $($Arguments -join ' ')" }
 }
@@ -49,6 +62,10 @@ try {
     $gitRoot = Split-Path (Split-Path $gitPath -Parent) -Parent
     $gitBash = Join-Path $gitRoot "bin\bash.exe"
     if (-not (Test-Path -LiteralPath $gitBash)) { throw "Git Bash is required to build the pinned MinIO test image." }
+    $gitTempRoot = (& $gitBash -lc "cygpath -u '$temporaryRoot'").Trim()
+    if (-not $gitTempRoot.StartsWith("/")) { throw "Could not map the E: temporary directory into Git Bash." }
+    [Environment]::SetEnvironmentVariable("RUNNER_TEMP", $gitTempRoot, "Process")
+    [Environment]::SetEnvironmentVariable("TMPDIR", $gitTempRoot, "Process")
 
     [Environment]::SetEnvironmentVariable("GITHUB_RUN_ID", $runID, "Process")
     [Environment]::SetEnvironmentVariable("GITHUB_RUN_ATTEMPT", "1", "Process")
@@ -57,8 +74,17 @@ try {
     [Environment]::SetEnvironmentVariable("MINIO_CI_IMAGE", $minioImage, "Process")
     Push-Location $repoRoot
     try {
-        & $gitBash (Join-Path $repoRoot "scripts\evidence\build-minio-ci-image.sh") *> $composeLog
-        if ($LASTEXITCODE -ne 0) { throw "Pinned MinIO source build failed (exit=$LASTEXITCODE); see temporary diagnostics." }
+        $savedErrorActionPreference = $ErrorActionPreference
+        try {
+            # BuildKit emits progress on stderr even on success. Capture both
+            # streams, then trust only the shell process exit code.
+            $ErrorActionPreference = "Continue"
+            & $gitBash (Join-Path $repoRoot "scripts\evidence\build-minio-ci-image.sh") *> $composeLog
+            $minioBuildExit = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $savedErrorActionPreference
+        }
+        if ($minioBuildExit -ne 0) { throw "Pinned MinIO source build failed (exit=$minioBuildExit); see E: temporary diagnostics." }
     } finally { Pop-Location }
     $imageID = & docker image inspect $minioImage --format "{{.Id}}"
     if ($LASTEXITCODE -ne 0 -or -not $imageID) { throw "Pinned MinIO source image was not created." }
@@ -67,16 +93,19 @@ try {
     $postgresPort = Get-FreeLoopbackPort
     $minioPort = Get-FreeLoopbackPort
     $apiPort = Get-FreeLoopbackPort
+    $proxyAdminPort = Get-FreeLoopbackPort
     $secret = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
     $values = @{
         E2E_POSTGRES_PASSWORD = $secret
         E2E_POSTGRES_PORT = [string]$postgresPort
         E2E_MINIO_PORT = [string]$minioPort
         E2E_API_PORT = [string]$apiPort
+        E2E_PROXY_ADMIN_PORT = [string]$proxyAdminPort
         E2E_S3_ACCESS_KEY = "e2e" + [guid]::NewGuid().ToString("N")
         E2E_S3_SECRET_KEY = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
         E2E_API_TOKEN = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
         E2E_ADMIN_TOKEN = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
+        E2E_S3_PROXY_TOKEN = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
         E2E_ARTIFACT_PREFIX = "container-e2e/" + $project
         E2E_COMPOSE_PROJECT = $project
         E2E_COMPOSE_FILE = $composeFile
@@ -88,10 +117,11 @@ try {
     $composeStarted = $true
     $minioHealthy = $false
     for ($attempt = 0; $attempt -lt 90; $attempt++) {
-        try {
-            $healthResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$minioPort/minio/health/live" -TimeoutSec 2 -UseBasicParsing
-            if ($healthResponse.StatusCode -eq 200) { $minioHealthy = $true; break }
-        } catch { }
+        # This is a loopback probe, not an internet request. Explicitly bypass
+        # the caller's HTTP proxy so local health checks cannot be sent to it.
+        $healthStatus = & curl.exe --noproxy "*" --fail --silent --show-error --max-time 2 --output NUL --write-out "%{http_code}" "http://127.0.0.1:$minioPort/minio/health/live" 2>$null
+        $healthExit = $LASTEXITCODE
+        if ($healthExit -eq 0 -and $healthStatus -eq "200") { $minioHealthy = $true; break }
         Start-Sleep -Seconds 1
     }
     if (-not $minioHealthy) { throw "MinIO HTTP health endpoint did not return 200 within 90 seconds." }
@@ -102,6 +132,7 @@ try {
     [Environment]::SetEnvironmentVariable("E2E_API_URL", "http://127.0.0.1:$apiPort", "Process")
     [Environment]::SetEnvironmentVariable("E2E_DATABASE_URL", "postgres://postgres:$secret@127.0.0.1:$postgresPort/tasklab?sslmode=disable", "Process")
     [Environment]::SetEnvironmentVariable("E2E_MINIO_ENDPOINT", "http://127.0.0.1:$minioPort", "Process")
+    [Environment]::SetEnvironmentVariable("E2E_S3_PROXY_ADMIN_URL", "http://127.0.0.1:$proxyAdminPort", "Process")
     [Environment]::SetEnvironmentVariable("E2E_MINIO_BUCKET", "tasklab-e2e", "Process")
     [Environment]::SetEnvironmentVariable("REQUIRE_MINIO", "1", "Process")
     [Environment]::SetEnvironmentVariable("MINIO_ENDPOINT", "http://127.0.0.1:$minioPort", "Process")
@@ -116,26 +147,34 @@ try {
         $artifactExit = $LASTEXITCODE
         & go test -race ./internal/e2e -run '^TestAPIWorkerContainersRecoverSharedArtifact$' -count=1 -v *> (Join-Path $temporaryDirectory "container-recovery.log")
         $containerExit = $LASTEXITCODE
-        $testExit = if ($artifactExit -eq 0 -and $containerExit -eq 0) { 0 } else { 1 }
+        & go test -race ./internal/e2e -run '^TestAPIWorkerContainerRecoversLostPutResponse$' -count=1 -v *> (Join-Path $temporaryDirectory "lost-put-response.log")
+        $faultExit = $LASTEXITCODE
+        & go test -race ./internal/e2e -run '^TestTwoWorkerContainersRaceForSameArtifact$' -count=1 -v *> (Join-Path $temporaryDirectory "same-artifact-race.log")
+        $sameCaseExit = $LASTEXITCODE
+        $testExit = if ($artifactExit -eq 0 -and $containerExit -eq 0 -and $faultExit -eq 0 -and $sameCaseExit -eq 0) { 0 } else { 1 }
     } finally { Pop-Location }
     Get-Content -LiteralPath $testLog
     Get-Content -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log")
+    Get-Content -LiteralPath (Join-Path $temporaryDirectory "lost-put-response.log")
+    Get-Content -LiteralPath (Join-Path $temporaryDirectory "same-artifact-race.log")
     if ($testExit -ne 0) { throw "Cross-container E2E failed with exit code $testExit." }
     $successDirectory = Join-Path $repoRoot ("evidence\phase1\runs\wave3-container-e2e\" + $project)
     New-Item -ItemType Directory -Path (Join-Path $successDirectory "logs") -Force | Out-Null
     Copy-Item -LiteralPath $testLog -Destination (Join-Path $successDirectory "logs\minio-response-loss-contract.log")
     Copy-Item -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log") -Destination (Join-Path $successDirectory "logs\container-recovery.log")
+    Copy-Item -LiteralPath (Join-Path $temporaryDirectory "lost-put-response.log") -Destination (Join-Path $successDirectory "logs\container-put-response-loss.log")
+    Copy-Item -LiteralPath (Join-Path $temporaryDirectory "same-artifact-race.log") -Destination (Join-Path $successDirectory "logs\two-worker-same-artifact-race.log")
     $serviceLogs = & docker compose --project-name $project --file $composeFile logs --no-color --timestamps 2>&1
     $redactedServiceLogs = ($serviceLogs -join "`n")
-    foreach ($name in @("E2E_POSTGRES_PASSWORD", "E2E_S3_ACCESS_KEY", "E2E_S3_SECRET_KEY", "E2E_API_TOKEN", "E2E_ADMIN_TOKEN")) {
+    foreach ($name in @("E2E_POSTGRES_PASSWORD", "E2E_S3_ACCESS_KEY", "E2E_S3_SECRET_KEY", "E2E_API_TOKEN", "E2E_ADMIN_TOKEN", "E2E_S3_PROXY_TOKEN")) {
         $value = [Environment]::GetEnvironmentVariable($name, "Process")
         if ($value) { $redactedServiceLogs = $redactedServiceLogs.Replace($value, "[REDACTED]") }
     }
     $redactedServiceLogs | Set-Content -LiteralPath (Join-Path $successDirectory "logs\services.redacted.log") -Encoding utf8
-    $implementationCommit = (& git log -1 --format=%H -- internal/artifacts/minio_integration_test.go internal/e2e/container_recovery_test.go internal/e2e/worker_recovery_test.go deployments/e2e/compose.yaml scripts/e2e/run-cross-container.ps1).Trim()
+    $implementationCommit = (& git log -1 --format=%H -- cmd/e2e-s3-proxy/main.go internal/artifacts/minio_integration_test.go internal/e2e/container_recovery_test.go internal/e2e/worker_recovery_test.go deployments/Dockerfile.e2e-s3-proxy deployments/e2e/compose.yaml scripts/e2e/run-cross-container.ps1).Trim()
     if (-not $implementationCommit) { throw "Could not resolve the commit that introduced the cross-container E2E implementation." }
     $files = @()
-    foreach ($relativePath in @("logs/minio-response-loss-contract.log", "logs/container-recovery.log", "logs/services.redacted.log")) {
+    foreach ($relativePath in @("logs/minio-response-loss-contract.log", "logs/container-recovery.log", "logs/container-put-response-loss.log", "logs/two-worker-same-artifact-race.log", "logs/services.redacted.log")) {
         $fullPath = Join-Path $successDirectory ($relativePath -replace '/', '\')
         $hash = Get-FileHash -LiteralPath $fullPath -Algorithm SHA256
         $files += [ordered]@{ path = $relativePath; sha256 = $hash.Hash.ToLowerInvariant(); bytes = (Get-Item -LiteralPath $fullPath).Length }
@@ -152,7 +191,9 @@ try {
         credentials_recorded = $false
         checks = @(
             [ordered]@{ name = "minio-response-loss-contract"; exit_code = $artifactExit; status = $(if ($artifactExit -eq 0) { "PASS" } else { "FAIL" }) },
-            [ordered]@{ name = "api-two-worker-container-recovery"; exit_code = $containerExit; status = $(if ($containerExit -eq 0) { "PASS" } else { "FAIL" }) }
+            [ordered]@{ name = "api-two-worker-container-recovery"; exit_code = $containerExit; status = $(if ($containerExit -eq 0) { "PASS" } else { "FAIL" }) },
+            [ordered]@{ name = "api-worker-put-response-loss-recovery"; exit_code = $faultExit; status = $(if ($faultExit -eq 0) { "PASS" } else { "FAIL" }) },
+            [ordered]@{ name = "two-worker-same-artifact-race"; exit_code = $sameCaseExit; status = $(if ($sameCaseExit -eq 0) { "PASS" } else { "FAIL" }) }
         )
         files = $files
     }
@@ -165,11 +206,13 @@ try {
     if (Test-Path -LiteralPath $composeLog) { Copy-Item -LiteralPath $composeLog -Destination (Join-Path $evidenceDirectory "logs\compose.log") -Force }
     if (Test-Path -LiteralPath $testLog) { Copy-Item -LiteralPath $testLog -Destination (Join-Path $evidenceDirectory "logs\test.log") -Force }
     if (Test-Path -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log")) { Copy-Item -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log") -Destination (Join-Path $evidenceDirectory "logs\container-recovery.log") -Force }
+    if (Test-Path -LiteralPath (Join-Path $temporaryDirectory "lost-put-response.log")) { Copy-Item -LiteralPath (Join-Path $temporaryDirectory "lost-put-response.log") -Destination (Join-Path $evidenceDirectory "logs\container-put-response-loss.log") -Force }
+    if (Test-Path -LiteralPath (Join-Path $temporaryDirectory "same-artifact-race.log")) { Copy-Item -LiteralPath (Join-Path $temporaryDirectory "same-artifact-race.log") -Destination (Join-Path $evidenceDirectory "logs\two-worker-same-artifact-race.log") -Force }
     $redacted = "No Compose service was started."
     if ($composeAttempted) {
         $diagnostics = & docker compose --project-name $project --file $composeFile logs --no-color --timestamps 2>&1
         $redacted = ($diagnostics -join "`n")
-        foreach ($name in @("E2E_POSTGRES_PASSWORD", "E2E_S3_ACCESS_KEY", "E2E_S3_SECRET_KEY", "E2E_API_TOKEN", "E2E_ADMIN_TOKEN")) {
+        foreach ($name in @("E2E_POSTGRES_PASSWORD", "E2E_S3_ACCESS_KEY", "E2E_S3_SECRET_KEY", "E2E_API_TOKEN", "E2E_ADMIN_TOKEN", "E2E_S3_PROXY_TOKEN")) {
             $value = [Environment]::GetEnvironmentVariable($name, "Process")
             if ($value) { $redacted = $redacted.Replace($value, "[REDACTED]") }
         }
@@ -185,12 +228,20 @@ try {
     throw
 } finally {
     if ($composeAttempted) {
-        & docker compose --project-name $project --file $composeFile down --rmi local --volumes --remove-orphans *> $null
+        try { Invoke-Compose @("down", "--rmi", "local", "--volumes", "--remove-orphans") }
+        catch { Write-Warning "Could not fully clean this isolated Compose project; see the E: diagnostic log." }
     }
     foreach ($name in $environmentNames) { [Environment]::SetEnvironmentVariable($name, $previous[$name], "Process") }
-    if ($createdImage) { & docker image rm $minioImage *> $null }
+    if ($createdImage) {
+        $savedErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            & docker image rm $minioImage *> $composeLog
+            if ($LASTEXITCODE -ne 0) { Write-Warning "Could not remove this run's MinIO image; inspect the E: diagnostic log." }
+        } finally { $ErrorActionPreference = $savedErrorActionPreference }
+    }
     $resolvedTemporary = (Resolve-Path -LiteralPath $temporaryDirectory -ErrorAction SilentlyContinue).Path
-    $resolvedTempRoot = (Resolve-Path -LiteralPath ([IO.Path]::GetTempPath())).Path
+    $resolvedTempRoot = (Resolve-Path -LiteralPath $temporaryRoot).Path
     if ($resolvedTemporary -and $resolvedTemporary.StartsWith($resolvedTempRoot, [StringComparison]::OrdinalIgnoreCase) -and (Split-Path $resolvedTemporary -Leaf) -eq $project) {
         Remove-Item -LiteralPath $resolvedTemporary -Recurse -Force -ErrorAction SilentlyContinue
     }
