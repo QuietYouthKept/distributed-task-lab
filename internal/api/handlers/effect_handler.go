@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/api/contract"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"github.com/fantasticyi/distributed-task-lab/internal/effects"
 )
 
@@ -20,7 +22,7 @@ func NewEffectHandler(ledger effects.ReconciliationLedger, logger *slog.Logger) 
 
 func (h *EffectHandler) List(w http.ResponseWriter, r *http.Request) {
 	if h.ledger == nil {
-		http.Error(w, "effect reconciliation unavailable", http.StatusServiceUnavailable)
+		writeError(w, r, domain.NewError(domain.ErrorKindUnavailable, "effect_reconciliation_unavailable", "effect reconciliation is unavailable", nil))
 		return
 	}
 	limit := 100
@@ -36,12 +38,12 @@ func (h *EffectHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"effects": records})
+	writeJSON(w, http.StatusOK, contract.EffectsListResponse{Effects: records})
 }
 
 func (h *EffectHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	if h.ledger == nil {
-		http.Error(w, "effect reconciliation unavailable", http.StatusServiceUnavailable)
+		writeError(w, r, domain.NewError(domain.ErrorKindUnavailable, "effect_reconciliation_unavailable", "effect reconciliation is unavailable", nil))
 		return
 	}
 	effectID := r.PathValue("id")
@@ -49,9 +51,7 @@ func (h *EffectHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		writeInvalidRequest(w, r, "missing_effect_id", "effect id is required")
 		return
 	}
-	var request struct {
-		Reason string `json:"reason"`
-	}
+	var request contract.OptionalReasonRequest
 	if err := decodeRequest(r, &request); err != nil || strings.TrimSpace(request.Reason) == "" || len(request.Reason) > 1024 || strings.TrimSpace(request.Reason) != request.Reason {
 		writeInvalidRequest(w, r, "invalid_resolution_reason", "reason must be 1 to 1024 bytes without surrounding whitespace")
 		return
@@ -61,5 +61,5 @@ func (h *EffectHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"effect_id": effectID, "status": "manual_resolution"})
+	writeJSON(w, http.StatusOK, contract.EffectResolutionResponse{EffectID: effectID, Status: "manual_resolution"})
 }
