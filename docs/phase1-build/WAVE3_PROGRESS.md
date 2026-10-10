@@ -61,7 +61,7 @@ Updated: 2026-10-10 (Asia/Shanghai)
 ## Remaining work and next commands
 
 1. Package A's full collector Evidence is committed as `6d3474b`, alongside its clean four-gate cross-container Evidence.
-2. Package A's former response-loss and same-key cross-worker gaps are now covered by `e74e59f`; Package D local API/Worker metrics scraping is implemented in `f597477`. Continue with independent Package E supply-chain controls, then revisit OpenAPI schema coverage and provider-dependent B work only where inputs permit.
+2. Package A's former response-loss and same-key cross-worker gaps are now covered by `e74e59f`; Package D local API/Worker metrics scraping is implemented in `f597477`. Package E local supply-chain controls are implemented in `80db46b` and pinned-tool follow-up `75bce21`; remote workflow execution is pending because these local commits have not been pushed.
 3. Preserve Production Fail-Closed. External IdP, real Provider/Sandbox, cloud S3/DR, production RPO/RTO, and SLO/on-call remain unverified.
 
 Latest resumable command after checking status: `git status -sb; git rev-parse HEAD; go test -race ./internal/api -run '^TestIngress' -count=100`.
@@ -72,3 +72,11 @@ Latest resumable command after checking status: `git status -sb; git rev-parse H
 - Live Compose verification first exposed API `/metrics` returning 401. The final design preserves existing operator authorization: Compose provides the API token to Prometheus as a runtime secret file, while the scrape config only names the secret path. The Worker health/metrics endpoint stays on the Compose network and is not host-published.
 - Exact-commit Docker Compose verification passed: PostgreSQL healthy, API and Worker containers started, and Prometheus reported `tasklab-api` (`api:8080`) and `tasklab-worker` (`worker-metrics:9091`) both `up`. Only the uniquely named verification Compose project was removed afterward, including its disposable volumes.
 - Scope is local development only. The extra named Worker is not replica discovery; production scrape authentication/TLS, cluster discovery, worker-level actionable alerts, Alertmanager/on-call ownership, and image pinning remain open.
+
+## Package E — image SBOM and vulnerability scan — 2026-10-10
+
+- Implementation commits: `80db46bf20f0174a2f59e235fb80a1b5aa0b89dd` and pinned Syft follow-up `75bce219fb329d1960bc66e25fcda37b3898f099`.
+- Built API and Worker images locally from exact commit `75bce21`; both OCI revision labels matched that full commit. The workflow pins Anchore action `v0.24.0` by commit, Syft `v1.54.1`, Trivy action `v0.36.0` by commit, and Trivy scanner `v0.75.0`; `actionlint` passed for the workflow.
+- Exact-commit local artifacts are preserved outside the repository under `E:\distributed-task-lab-temp\wave3-artifacts\package-e-75bce21`: API/Worker image archives, CycloneDX SBOMs and full Trivy JSON reports. Each SBOM contains 251 API / 262 Worker components. API scan reports 0 vulnerabilities; Worker reports one `UNKNOWN` module-level `GO-2026-5932` in `golang.org/x/crypto/openpgp` v0.57.0. `govulncheck ./...` reports 0 vulnerabilities in imported packages and identifies that module finding as not apparently called by this code. It is retained in the raw report, not suppressed. No HIGH/CRITICAL findings were reported after moving from unsupported Alpine 3.19 to digest-pinned Alpine 3.23 and upgrading installed OS packages.
+- Local full unit and Race suites passed; `go run ./cmd/failurelab` passed 12/12 with a disposable PostgreSQL instance; exact-source Docker Compose smoke showed API and Worker healthy and both Prometheus targets up. These are separate local checks, not a rerun of the earlier 14-gate Evidence snapshot.
+- GitHub Actions for `container-supply-chain.yml` has not run against these unpushed commits. Image publication/signing, release/rollback smoke, production deployment and broader vulnerability policy remain open.

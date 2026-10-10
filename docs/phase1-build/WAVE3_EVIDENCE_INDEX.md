@@ -22,3 +22,20 @@
 | Wave 2 latest Evidence | `a292ec7...` implementation / `943b84b` Evidence | 14/14 PASS | `evidence/phase1/runs/wave2-20261009T153618132Z-a292ec7a996b/manifest.json`; historical only. |
 
 The Evidence directory and `evidence/phase1/index.json` are append-only. Do not edit the historical Wave 2 run or index entries.
+
+## Package E local supply-chain artifacts
+
+| Exact source commit | Result | Artifacts and scope |
+|---|---|---|
+| `75bce219fb329d1960bc66e25fcda37b3898f099` | PASS locally; remote GitHub Actions NOT VERIFIED | API/Worker images built with matching OCI revision labels; CycloneDX SBOMs (251/262 components) and full Trivy JSON scans under `E:\distributed-task-lab-temp\wave3-artifacts\package-e-75bce21`. API: 0 vulnerabilities. Worker: one preserved UNKNOWN `GO-2026-5932` module-level advisory, not apparently called according to govulncheck; HIGH/CRITICAL: 0. Build actionlint passed. No signing, publication, staging or release/rollback claim. |
+
+The external E: artifacts are immutable run outputs; earlier failed and intermediate image scan reports remain in their original sibling directories.
+
+Artifact SHA256 (uppercase hex):
+
+- `api-image.tar`: `E7179E346D9A9E0CD909E9913678875CF9A1DAA30CBD4BB077836939EBDDD46C`
+- `worker-image.tar`: `776D782AA749B7E00CA09E1A3DE5E905A77AB0CCC8CECD184B872F31584E20AA`
+- `api-image.cdx.json`: `1E2F044DF6B931804F938F90D9A92E5853BEB26B541EADAF2FC0E8784E697231`
+- `worker-image.cdx.json`: `AFCC633A33C8C7BE37125761B7E528D3541CC94CA8F27AD5C40CFEF186C090F4`
+- `api-image-trivy.json`: `9D909780809A5A3FB6AD183B8F90BF33E214635919CF7D1FE1BFF91AB8A9C2C2`
+- `worker-image-trivy.json`: `F8B2AAECBAEE9C7962EB4E0D4CE4BAF20B22195B4264FCFDF6D8074DE45F7B4E`

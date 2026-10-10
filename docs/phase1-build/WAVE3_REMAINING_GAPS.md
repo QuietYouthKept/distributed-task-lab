@@ -31,6 +31,6 @@
 ## P2 — release and supply chain
 
 - Build API/Worker images with source commit metadata, least privilege, read-only-root feasibility, health checks, signal/drain tests and reproducible dependency inputs.
-- Produce a source/image-linked SBOM and container vulnerability scan artifact. Go vulnerability scanning and CodeQL do not cover image OS/package findings.
+- Local source/image-linked CycloneDX SBOM generation and full-severity Trivy scanning are implemented and verified at `75bce219fb329d1960bc66e25fcda37b3898f099`; exact artifacts/reports are preserved at `E:\distributed-task-lab-temp\wave3-artifacts\package-e-75bce21`. API reported zero findings; Worker retains one `UNKNOWN` module advisory (`GO-2026-5932`, `golang.org/x/crypto/openpgp` v0.57.0) that govulncheck classifies as not apparently called by imported code. No HIGH/CRITICAL findings were present. Remote Actions execution is NOT VERIFIED because the commits are unpushed. Signing/publication, release/rollback smoke, and production approval remain open.
 - Add RC, migration compatibility, rolling/worker drain, rollback and recovery smoke procedures. Staging and production approvals remain separate states.
 - Maintain `Production Worker Fail-Closed`; no production task allowlist, real provider, hosted S3/KMS, external IdP, or release approval is granted here.
