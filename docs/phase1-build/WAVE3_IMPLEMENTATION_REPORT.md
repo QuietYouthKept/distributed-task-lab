@@ -40,7 +40,7 @@ This is only process-local bucket lifecycle management. It does not implement cl
 
 ## Package A — isolated container recovery and S3 response loss (local implementation verified; broader package remains partial)
 
-Implementation commit: `9b81e96b498b05d92469efb41c53c6c1fe6acedf`; the separate diagnostic-evidence commit is `4129483ce5228c00070911bf3c41d747bdd6d62a`.
+Implementation commit: `9b81e96b498b05d92469efb41c53c6c1fe6acedf`; diagnostic/attempt Evidence commit: `4129483ce5228c00070911bf3c41d747bdd6d62a`; clean targeted Evidence commit: `962ec4e33c2c907a73eae628e9f9d39dd2704acb`.
 
 The new Compose topology starts a disposable PostgreSQL, source-built pinned MinIO, API, and two separately built Worker containers with independent filesystems and a unique project network. The runner generates one-run credentials and random host ports, checks the MinIO live endpoint, saves redacted diagnostics, and removes only its own Compose project and temporary MinIO image. It accepts proxy configuration through the caller's environment and does not embed a user-specific proxy port.
 
@@ -50,7 +50,9 @@ The exact clean implementation run `tasklab-e2e-980f3ba036b3` passed both target
 
 Earlier failed fixture runs and one pre-commit diagnostic pass remain preserved under their original paths and statuses; none is edited to PASS. Remaining package-A work: inject the response-loss fault inside the Worker container execution path (current real S3 response-loss contract is a separate test), verify malformed object metadata recovery, and run same-case simultaneous writes from two Worker containers. This remains at-least-once processing and does not imply end-to-end exactly-once execution.
 
-The first full Wave 3 Evidence collector attempt at `962ec4e` failed before all Go commands could load packages because the host set `GOTOOLCHAIN=local` with Go 1.26.6 while the module requires Go 1.26.9. The 13 matching failures are an environment/toolchain gate, not package-test outcomes; the benchmark was not run. The immutable run and logs are retained. The wrapper now temporarily selects `GOTOOLCHAIN=auto`, honoring the module directive, and restores the prior environment; a full rerun is required before claiming those gates.
+The first full Wave 3 Evidence collector attempt at `962ec4e` failed before all Go commands could load packages because the host set `GOTOOLCHAIN=local` with Go 1.26.6 while the module requires Go 1.26.9. The 13 matching failures are an environment/toolchain gate, not package-test outcomes; the benchmark was not run. The immutable run and logs are retained. The wrapper was corrected to temporarily select `GOTOOLCHAIN=auto`, honor the module directive, and restore the prior environment; the subsequent full rerun is recorded below.
+
+That toolchain fix was verified by full clean Evidence run `wave3-20261010T173000Z-80b7baa`: 14/14 PASS, all exit codes 0, clean at start and after excluding run artifacts, exact recorded snapshot `eafc0a83037d24273eb8cfae881c94a8c7ce3d53`. The collector used Go 1.26.9, PostgreSQL 16.15, Docker 28.3.3 and source-built MinIO (HTTP 200). It exercised unit/integration, full Race, PostgreSQL Race ×5, RetryBackoff Race ×20, Failure Lab, Chaos Matrix, 100K pagination, vet, external client, OTLP receiver, MinIO S3 contract, existing API/two-process recovery and PostgreSQL backup/restore. This is local development evidence, not remote CI, staging or production acceptance. The cross-container test is a separate targeted run, not one of the 14 collector gates. The full run's separate Evidence commit is pending.
 
 ## Other packages
 
