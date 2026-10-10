@@ -2,9 +2,11 @@
 
 ## P0 — release safety
 
-- **Old binary rollback:** migration 012 raises schema to 12; Wave 3 API and Worker reject it before serving. No compatible bridge or production restore rehearsal exists. This is an observed compatibility failure, not a theoretical concern. The process matrix covers startup/readiness, not all API/task/effect operations per version/schema cell or a populated-data upgrade/drain workflow.
-- **Hosted final-SHA validation:** no Wave 4 CI, CodeQL, secret scan, SBOM or container scan has completed on the final source. Historic Wave 3 checks are not transferable.
+- **Old binary rollback:** direct rollback to Wave 3 API/Worker remains blocked on schema12 by the embedded migration-history and readiness guards. The populated schema11→12 upgrade, Wave 4 roll-forward restart, and complete isolated pre-migration DB+referenced-artifact restore passed locally on `0d3f48d`; see `WAVE4_MIGRATION_ROLLBACK_COMPATIBILITY.md`. This does not make old binaries compatible with schema12, prove simultaneous mixed-version operations, or constitute a production restore/cutover rehearsal.
+- **Hosted final-SHA validation:** previous source `8ec4fbd` passed CI, Security, and Supply Chain. The new populated-migration harness commit `0d3f48d` and its follow-up docs have not yet been pushed/validated at the time of this edit; do not transfer prior hosted status to those descendants. After push, record exact new run IDs/SHA here.
 - **Operational recovery:** one isolated backup/restore passed, but no scheduled backup, offsite retention, restore operator, RPO/RTO, or production cutover evidence exists.
+
+The new migration-specific restore test uses a second isolated PostgreSQL database and a second MinIO service. It verifies the fixture's referenced input/result objects and their SHA256, but does not model a production-scale bucket snapshot, versioning/retention, cross-region copy, or real cutover.
 
 ## P1 — controlled capabilities
 
