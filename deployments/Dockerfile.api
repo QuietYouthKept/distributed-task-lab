@@ -12,8 +12,13 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /api ./cmd/api
 
-FROM alpine:3.19
-RUN apk add --no-cache ca-certificates \
+FROM alpine:3.23@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0
+ARG SOURCE_COMMIT=unknown
+LABEL org.opencontainers.image.title="distributed-task-lab-api" \
+      org.opencontainers.image.source="https://github.com/QuietYouthKept/distributed-task-lab" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}"
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates \
     && addgroup -S tasklab \
     && adduser -S -G tasklab -h /app tasklab
 COPY --from=builder --chown=tasklab:tasklab /api /api
