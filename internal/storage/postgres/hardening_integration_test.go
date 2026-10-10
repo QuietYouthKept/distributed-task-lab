@@ -65,7 +65,7 @@ func TestExpiredRunningReclaimIgnoresCapacity(t *testing.T) {
 	task := newTask("expired-at-capacity", 3)
 	task.Queue = "reclaim"
 	enqueue(t, q, task)
-	first, err := q.ClaimTasks(ctx, "worker-a", 1, 2*time.Millisecond)
+	first, err := q.ClaimTasks(ctx, "worker-a", 1, time.Minute)
 	if err != nil || len(first) != 1 {
 		t.Fatalf("first claim: n=%d err=%v", len(first), err)
 	}
@@ -73,7 +73,7 @@ func TestExpiredRunningReclaimIgnoresCapacity(t *testing.T) {
 	pending.Queue = "reclaim"
 	pending.Priority = 1000
 	enqueue(t, q, pending)
-	time.Sleep(15 * time.Millisecond)
+	expireLeaseForTest(t, ctx, q, first[0].ID)
 	second, err := q.ClaimTasks(ctx, "worker-b", 1, time.Minute)
 	if err != nil || len(second) != 1 {
 		t.Fatalf("reclaim: n=%d err=%v", len(second), err)
@@ -92,8 +92,11 @@ func TestRenewLeaseRejectsRealStaleSameWorkerGeneration(t *testing.T) {
 	q := setupTestDB(t)
 	ctx := context.Background()
 	enqueue(t, q, newTask("stale-renew", 3))
-	first, _ := q.ClaimTasks(ctx, "same-worker", 1, 2*time.Millisecond)
-	time.Sleep(15 * time.Millisecond)
+	first, err := q.ClaimTasks(ctx, "same-worker", 1, time.Minute)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("first claim: n=%d err=%v", len(first), err)
+	}
+	expireLeaseForTest(t, ctx, q, first[0].ID)
 	second, err := q.ClaimTasks(ctx, "same-worker", 1, time.Minute)
 	if err != nil || len(second) != 1 {
 		t.Fatalf("reclaim: n=%d err=%v", len(second), err)
@@ -103,9 +106,27 @@ func TestRenewLeaseRejectsRealStaleSameWorkerGeneration(t *testing.T) {
 	if !errors.Is(err, domain.ErrTaskNotClaimed) {
 		t.Fatalf("stale renew error=%v", err)
 	}
-	got, _ := q.GetTask(ctx, second[0].ID)
+	got, err := q.GetTask(ctx, second[0].ID)
+	if err != nil {
+		t.Fatalf("read reclaimed task: %v", err)
+	}
 	if !got.LeaseExpiresAt.Equal(before) {
 		t.Fatalf("stale renew changed generation 2 lease: %v -> %v", before, *got.LeaseExpiresAt)
+	}
+}
+
+func expireLeaseForTest(t *testing.T, ctx context.Context, q *PostgresQueue, taskID string) {
+	t.Helper()
+	result, err := q.db.ExecContext(ctx, `UPDATE tasks SET lease_expires_at=clock_timestamp()-interval '1 millisecond' WHERE id=$1`, taskID)
+	if err != nil {
+		t.Fatalf("expire test lease using PostgreSQL clock: %v", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		t.Fatalf("count expired test lease rows: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("expired %d test lease rows, want 1", rows)
 	}
 }
 
