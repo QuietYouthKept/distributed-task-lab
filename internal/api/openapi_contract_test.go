@@ -4,8 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/fantasticyi/distributed-task-lab/internal/application"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 )
 
 func TestOpenAPIContainsEveryStableRoute(t *testing.T) {
@@ -256,4 +260,85 @@ func collectOpenAPIRefs(value any, refs *[]string) {
 			collectOpenAPIRefs(child, refs)
 		}
 	}
+}
+
+func TestOpenAPICreateTaskSchemasMatchGoDTOs(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "api", "openapi.json"))
+	if err != nil {
+		t.Fatalf("read OpenAPI contract: %v", err)
+	}
+	var document struct {
+		Paths map[string]map[string]struct {
+			Responses map[string]struct {
+				Content map[string]struct {
+					Schema struct {
+						Ref string `json:"$ref"`
+					} `json:"schema"`
+				} `json:"content"`
+			} `json:"responses"`
+		} `json:"paths"`
+		Components struct {
+			Schemas map[string]struct {
+				Properties map[string]json.RawMessage `json:"properties"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatalf("parse OpenAPI contract: %v", err)
+	}
+
+	for _, check := range []struct {
+		name string
+		got  map[string]json.RawMessage
+		want reflect.Type
+	}{
+		{name: "CreateTaskRequest", got: document.Components.Schemas["CreateTaskRequest"].Properties, want: reflect.TypeOf(application.CreateTaskRequest{})},
+		{name: "PayloadEnvelope", got: document.Components.Schemas["PayloadEnvelope"].Properties, want: reflect.TypeOf(domain.TaskPayloadEnvelope{})},
+		{name: "CreateTaskResponse", got: document.Components.Schemas["CreateTaskResponse"].Properties, want: reflect.TypeOf(application.CreateTaskResponse{})},
+	} {
+		if check.got == nil {
+			t.Errorf("OpenAPI schema %s is missing properties", check.name)
+			continue
+		}
+		want := jsonFieldNames(check.want)
+		if len(check.got) != len(want) {
+			t.Errorf("OpenAPI schema %s has %d properties, Go DTO has %d JSON fields", check.name, len(check.got), len(want))
+		}
+		for _, field := range want {
+			if _, ok := check.got[field]; !ok {
+				t.Errorf("OpenAPI schema %s is missing Go JSON field %q", check.name, field)
+			}
+		}
+		for field := range check.got {
+			if !containsString(want, field) {
+				t.Errorf("OpenAPI schema %s has undocumented Go JSON field %q", check.name, field)
+			}
+		}
+	}
+
+	response := document.Paths["/v1/tasks"]["post"].Responses["201"].Content["application/json"].Schema.Ref
+	if response != "#/components/schemas/CreateTaskResponse" {
+		t.Errorf("POST /v1/tasks 201 schema ref=%q, want CreateTaskResponse", response)
+	}
+}
+
+func jsonFieldNames(typ reflect.Type) []string {
+	var names []string
+	for i := 0; i < typ.NumField(); i++ {
+		name := strings.Split(typ.Field(i).Tag.Get("json"), ",")[0]
+		if name == "" || name == "-" {
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
