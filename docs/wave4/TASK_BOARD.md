@@ -1,12 +1,12 @@
 # Wave 4 requirement / test / evidence board
 
-Initial board at the verified Wave 3 baseline `a8656a7b72d792986775d94fe007acc7771c072b`. Package statuses are intentionally `AUDIT_PENDING` until corresponding code and tests have been inspected. This is not completion evidence.
+Board initiated at the verified Wave 3 baseline `a8656a7b72d792986775d94fe007acc7771c072b`; entries below are the current states after the first Package A implementation and audit. A status is only accepted when it includes corresponding source and test evidence.
 
 | ID | Priority | Owner | Implementation status | Test status | Evidence | Blocking dependency / next action |
 |---|---|---|---|---|---|---|
-| A-01 | P0 | Codex | IMPLEMENTED | PARTIAL: API unit/race/vet PASS; full + PostgreSQL pending | `WAVE4_PACKAGE_A_API_CONTRACT.md`; E:\distributed-task-lab-temp\wave4-artifacts\package-a-resume-20261010 | Run full regression and PostgreSQL integration before package acceptance. |
-| A-02 | P0 | Codex | IMPLEMENTED | PARTIAL: schema/DTO drift tests PASS; full + PostgreSQL pending | Same as A-01 | Confirm live handler/service status and auth behavior in PostgreSQL-backed tests. |
-| A-03 | P0 | Codex | IMPLEMENTED | PARTIAL: API unit/race PASS; negative integration coverage pending | Same as A-01 | Full unit/race and PostgreSQL owner/auth integration gate. |
+| A-01 | P0 | Codex | IMPLEMENTED | PASS: Full Unit, Full Race, PostgreSQL Integration | `WAVE4_PACKAGE_A_API_CONTRACT.md`; E:\distributed-task-lab-temp\wave4-artifacts\package-a-final-e3d4964-20261010 | Hosted CI remains unverified for Wave 4 SHA. |
+| A-02 | P0 | Codex | IMPLEMENTED | PASS: schema/DTO drift; full regression | Same as A-01 | Hosted CI remains unverified for Wave 4 SHA. |
+| A-03 | P0 | Codex | IMPLEMENTED | PASS: router/auth contract, owner-isolation PG test, full regression | Same as A-01 | Hosted CI remains unverified for Wave 4 SHA. |
 | B-01 | P0 | Codex | AUDIT_IN_PROGRESS | NOT VERIFIED | Wave 3 docs and source audit summarized in STATE | Finish mapping API/Worker/DB/artifact spans and collector harness; then implement async-link semantics and span gaps. |
 | B-02 | P0 | Codex | TODO | NOT VERIFIED | None | Build isolated API/PostgreSQL/MinIO/two-Worker/OTLP Collector trace E2E; prove fresh-run collection and redaction. |
 | C-01 | P0 | Codex | AUDIT_IN_PROGRESS | NOT VERIFIED | Source audit summarized in STATE | Verify integration cases, then prevent fingerprint/receipt mutation under stable idempotency identity. |

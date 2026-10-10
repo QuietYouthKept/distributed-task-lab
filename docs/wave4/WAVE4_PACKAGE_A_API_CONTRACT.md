@@ -1,8 +1,8 @@
 # Wave 4 Package A — API Contract Engineering
 
-Status: `IMPLEMENTED; PACKAGE ACCEPTANCE PENDING`
+Status: `PASS — LOCAL PACKAGE ACCEPTANCE`
 
-Source baseline: `a8656a7b72d792986775d94fe007acc7771c072b` (tree `14675a4cf091e87d6eb629b22d151eb35816fd92`). This report describes Wave 4 changes until an implementation commit is recorded. It does not re-label Wave 3 evidence as validation of these changes.
+Implementation commit: `e3d496495dd4c9da6cdfb67b923facda2910aed3` (tree `921e3098cfb13d712d7eaf7165f303a79713bc59`), based on Wave 3 archive `a8656a7b72d792986775d94fe007acc7771c072b`. These are Wave 4 results and do not re-label Wave 3 evidence as validation of the new commit.
 
 ## Scope and coverage
 
@@ -30,7 +30,7 @@ The JSON DTOs used by API handlers are named in `internal/api/contract/v1.go`. E
 
 ## Drift checks
 
-`internal/api/openapi_v1_drift_test.go` checks the stable route/method set against `router.go`, exact parameter and response-status catalogs for all 15 operations, operation role metadata, response references, DTO JSON property names/types/required fields, pointer nullability, enums, and the shared error envelope. Existing authentication and owner-isolation tests remain in place; PostgreSQL integration is still required for package acceptance.
+`internal/api/openapi_v1_drift_test.go` checks the stable route/method set against `router.go`, exact parameter and response-status catalogs for all 15 operations, operation role metadata, response references, DTO JSON property names/types/required fields, pointer nullability, enums, and the shared error envelope. Existing authentication and owner-isolation tests remain in place; the required PostgreSQL integration gate passed as recorded below.
 
 `internal/api/handlers/effect_handler_test.go` verifies the nil-ledger path returns the common JSON error envelope, request ID, and the existing 503 status. This changes only the unavailable/misconfigured handler body from plain text to the documented error representation; no success response or status is changed.
 
@@ -53,4 +53,13 @@ Resume-run evidence is stored under `E:\distributed-task-lab-temp\wave4-artifact
 - `go vet ./internal/api/...`: PASS.
 - `go version`: Go 1.26.9 on Windows/amd64.
 
-These are package-targeted checks, not the required full unit, full race, or PostgreSQL integration gates. Package A remains pending those gates and a clean-source final evidence run. Raw logs and their SHA-256 manifest are on E: and are not committed as if they validated a later commit.
+Final clean-commit evidence is stored under `E:\distributed-task-lab-temp\wave4-artifacts\package-a-final-e3d4964-20261010` and is bound to the implementation commit and tree above:
+
+- `go test ./... -count=1`: PASS.
+- `go test -race ./... -count=1`: PASS.
+- `go test ./internal/storage/postgres -count=1 -v` with `REQUIRE_TEST_DATABASE=1` against a fresh isolated PostgreSQL 16 container: PASS (99.285s). The opt-in backup/restore drill reported SKIPPED because `RUN_BACKUP_RESTORE_DRILL=1` was not enabled; it is outside Package A's gate.
+- The isolated database bind mount, container logs, command logs, manifest, and SHA-256 list are on E:. The generated database password is redacted and was not written to evidence.
+
+The full unit/race runs use the repository's default non-required DB behavior; the PostgreSQL integration run above explicitly requires a live database. API authentication/role tests are at `internal/api/router_test.go`; PostgreSQL owner isolation is exercised by `TestTaskOwnerScopeAndIdempotencyIsolation` in `internal/storage/postgres/identity_audit_integration_test.go`.
+
+Local Package A acceptance is complete. Hosted CI and CodeQL are not yet run against this Wave 4 commit; no remote result is implied.
