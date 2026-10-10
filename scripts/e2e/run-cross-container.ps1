@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([switch]$Tracing)
 
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
@@ -11,7 +11,7 @@ $createdImage = $false
 $composeStarted = $false
 $composeAttempted = $false
 $testExit = $null
-$temporaryRoot = 'E:\distributed-task-lab-temp'
+$temporaryRoot = if ($Tracing) { 'E:\distributed-task-lab-temp\wave4-artifacts\tracing-e2e-runs' } else { 'E:\distributed-task-lab-temp' }
 New-Item -ItemType Directory -Path $temporaryRoot -Force | Out-Null
 $temporaryDirectory = Join-Path $temporaryRoot $project
 New-Item -ItemType Directory -Path $temporaryDirectory | Out-Null
@@ -26,7 +26,8 @@ $environmentNames = @(
     "E2E_PROXY_ADMIN_PORT", "E2E_S3_PROXY_TOKEN", "E2E_S3_PROXY_ADMIN_URL",
     "REQUIRE_CONTAINER_E2E", "E2E_API_URL", "E2E_DATABASE_URL", "E2E_MINIO_ENDPOINT",
     "E2E_MINIO_BUCKET", "REQUIRE_MINIO", "MINIO_ENDPOINT", "MINIO_BUCKET", "MINIO_ACCESS_KEY",
-    "MINIO_SECRET_KEY", "E2E_COMPOSE_FILE", "GOTOOLCHAIN"
+    "MINIO_SECRET_KEY", "E2E_COMPOSE_FILE", "E2E_TRACING_ENABLED", "E2E_OTEL_HEALTH_PORT",
+    "E2E_DISTRIBUTED_TRACE_E2E", "GOTOOLCHAIN"
 )
 $previous = @{}
 foreach ($name in $environmentNames) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, "Process") }
@@ -94,6 +95,7 @@ try {
     $minioPort = Get-FreeLoopbackPort
     $apiPort = Get-FreeLoopbackPort
     $proxyAdminPort = Get-FreeLoopbackPort
+    $otelHealthPort = Get-FreeLoopbackPort
     $secret = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
     $values = @{
         E2E_POSTGRES_PASSWORD = $secret
@@ -106,6 +108,8 @@ try {
         E2E_API_TOKEN = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
         E2E_ADMIN_TOKEN = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
         E2E_S3_PROXY_TOKEN = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
+        E2E_OTEL_HEALTH_PORT = [string]$otelHealthPort
+        E2E_TRACING_ENABLED = [string]([bool]$Tracing).ToString().ToLowerInvariant()
         E2E_ARTIFACT_PREFIX = "container-e2e/" + $project
         E2E_COMPOSE_PROJECT = $project
         E2E_COMPOSE_FILE = $composeFile
@@ -125,6 +129,17 @@ try {
         Start-Sleep -Seconds 1
     }
     if (-not $minioHealthy) { throw "MinIO HTTP health endpoint did not return 200 within 90 seconds." }
+    if ($Tracing) {
+        Invoke-Compose @("up", "--detach", "--wait", "--wait-timeout", "60", "otel-collector")
+        $collectorHealthy = $false
+        for ($attempt = 0; $attempt -lt 60; $attempt++) {
+            $healthStatus = & curl.exe --noproxy "*" --fail --silent --show-error --max-time 2 --output NUL --write-out "%{http_code}" "http://127.0.0.1:$otelHealthPort/" 2>$null
+            $healthExit = $LASTEXITCODE
+            if ($healthExit -eq 0 -and $healthStatus -eq "200") { $collectorHealthy = $true; break }
+            Start-Sleep -Seconds 1
+        }
+        if (-not $collectorHealthy) { throw "OTLP Collector health endpoint did not return 200 within 60 seconds." }
+    }
     Invoke-Compose @("up", "--detach", "--build", "--wait", "--wait-timeout", "240", "api", "worker-a")
     Invoke-Compose @("up", "--detach", "--build", "--wait", "--wait-timeout", "120", "worker-b")
 
@@ -143,27 +158,75 @@ try {
 
     Push-Location $repoRoot
     try {
-        & go test -race ./internal/artifacts -run '^TestMinIOStoreContractAndConcurrentConditionalWrite$' -count=1 -v *> $testLog
-        $artifactExit = $LASTEXITCODE
-        & go test -race ./internal/e2e -run '^TestAPIWorkerContainersRecoverSharedArtifact$' -count=1 -v *> (Join-Path $temporaryDirectory "container-recovery.log")
-        $containerExit = $LASTEXITCODE
-        & go test -race ./internal/e2e -run '^TestAPIWorkerContainerRecoversLostPutResponse$' -count=1 -v *> (Join-Path $temporaryDirectory "lost-put-response.log")
-        $faultExit = $LASTEXITCODE
-        & go test -race ./internal/e2e -run '^TestTwoWorkerContainersRaceForSameArtifact$' -count=1 -v *> (Join-Path $temporaryDirectory "same-artifact-race.log")
-        $sameCaseExit = $LASTEXITCODE
-        $testExit = if ($artifactExit -eq 0 -and $containerExit -eq 0 -and $faultExit -eq 0 -and $sameCaseExit -eq 0) { 0 } else { 1 }
+        if ($Tracing) {
+            [Environment]::SetEnvironmentVariable("E2E_DISTRIBUTED_TRACE_E2E", "1", "Process")
+            & go test -race ./internal/e2e -run '^TestDistributedTracingContainersExportToCollector$' -count=1 -v *> $testLog
+            $traceExit = $LASTEXITCODE
+            [Environment]::SetEnvironmentVariable("REQUIRE_CONTAINER_E2E", "1", "Process")
+            & go test -race ./internal/e2e -run '^TestAPIWorkerContainersRecoverSharedArtifact$' -count=1 -v *> (Join-Path $temporaryDirectory "container-recovery.log")
+            $containerExit = $LASTEXITCODE
+            $testExit = if ($traceExit -eq 0 -and $containerExit -eq 0) { 0 } else { 1 }
+        } else {
+            & go test -race ./internal/artifacts -run '^TestMinIOStoreContractAndConcurrentConditionalWrite$' -count=1 -v *> $testLog
+            $artifactExit = $LASTEXITCODE
+            & go test -race ./internal/e2e -run '^TestAPIWorkerContainersRecoverSharedArtifact$' -count=1 -v *> (Join-Path $temporaryDirectory "container-recovery.log")
+            $containerExit = $LASTEXITCODE
+            & go test -race ./internal/e2e -run '^TestAPIWorkerContainerRecoversLostPutResponse$' -count=1 -v *> (Join-Path $temporaryDirectory "lost-put-response.log")
+            $faultExit = $LASTEXITCODE
+            & go test -race ./internal/e2e -run '^TestTwoWorkerContainersRaceForSameArtifact$' -count=1 -v *> (Join-Path $temporaryDirectory "same-artifact-race.log")
+            $sameCaseExit = $LASTEXITCODE
+            $testExit = if ($artifactExit -eq 0 -and $containerExit -eq 0 -and $faultExit -eq 0 -and $sameCaseExit -eq 0) { 0 } else { 1 }
+        }
     } finally { Pop-Location }
     Get-Content -LiteralPath $testLog
-    Get-Content -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log")
-    Get-Content -LiteralPath (Join-Path $temporaryDirectory "lost-put-response.log")
-    Get-Content -LiteralPath (Join-Path $temporaryDirectory "same-artifact-race.log")
+    if (-not $Tracing) {
+        Get-Content -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log")
+        Get-Content -LiteralPath (Join-Path $temporaryDirectory "lost-put-response.log")
+        Get-Content -LiteralPath (Join-Path $temporaryDirectory "same-artifact-race.log")
+    } else {
+        Get-Content -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log")
+    }
     if ($testExit -ne 0) { throw "Cross-container E2E failed with exit code $testExit." }
-    $successDirectory = Join-Path $repoRoot ("evidence\phase1\runs\wave3-container-e2e\" + $project)
+    if ($Tracing) {
+        $traceLine = Select-String -LiteralPath $testLog -Pattern 'TRACE_E2E_TASK_ID=(\S+) TRACE_E2E_TRACE_ID=(\S+) TRACE_E2E_API_SPAN_ID=(\S+) TRACE_E2E_SENSITIVE_MARKER=(\S+)' | Select-Object -Last 1
+        if (-not $traceLine) { throw "Trace E2E did not emit correlation identifiers." }
+        $taskID, $traceID, $apiSpanID, $sensitiveMarker = $traceLine.Matches[0].Groups[1..4].Value
+        $recoveryLine = Select-String -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log") -Pattern 'PASS: task_id=(\S+);' | Select-Object -Last 1
+        if (-not $recoveryLine) { throw "Cross-container crash/reclaim test did not emit a task correlation identifier." }
+        $recoveryTaskID = $recoveryLine.Matches[0].Groups[1].Value
+        $requiredTraceEvidence = @($taskID, $traceID, "Name           : POST", "url.path: Str(/v1/tasks)", "task.enqueue", "claim.transaction", "task.execute rag_ingestion", "artifact.head", "artifact.put", "task.mark_success", "task.id: Str($recoveryTaskID)", "task.attempt: Int(2)", "task.claim_reason: Str(expired_lease)")
+        $collectorText = ""
+        $traceDeadline = [DateTime]::UtcNow.AddSeconds(20)
+        do {
+            $collectorLogs = & docker compose --project-name $project --file $composeFile logs --no-color --timestamps otel-collector 2>&1
+            $collectorText = ($collectorLogs -join "`n")
+            $collectorText | Set-Content -LiteralPath (Join-Path $temporaryDirectory "collector.log") -Encoding utf8
+            $missing = @($requiredTraceEvidence | Where-Object { -not $collectorText.Contains($_) })
+            if ($missing.Count -eq 0) { break }
+            Start-Sleep -Seconds 1
+        } while ([DateTime]::UtcNow -lt $traceDeadline)
+        if ($missing.Count -gt 0) {
+            throw "Collector output did not contain required trace evidence before the bounded 20-second deadline: $($missing -join ', ')."
+        }
+        if (-not $collectorText.Contains($apiSpanID)) { throw "Collector did not include the persisted API span as a Worker link." }
+        if ($collectorText.Contains($sensitiveMarker)) { throw "Sensitive payload marker appeared in Collector trace output." }
+        foreach ($name in @("E2E_POSTGRES_PASSWORD", "E2E_S3_ACCESS_KEY", "E2E_S3_SECRET_KEY", "E2E_API_TOKEN", "E2E_ADMIN_TOKEN", "E2E_S3_PROXY_TOKEN")) {
+            $value = [Environment]::GetEnvironmentVariable($name, "Process")
+            if ($value -and $collectorText.Contains($value)) { throw "Collector trace output contains a configured credential value." }
+        }
+    }
+    $successDirectory = if ($Tracing) { Join-Path $temporaryRoot ("evidence\" + $project) } else { Join-Path $repoRoot ("evidence\phase1\runs\wave3-container-e2e\" + $project) }
     New-Item -ItemType Directory -Path (Join-Path $successDirectory "logs") -Force | Out-Null
-    Copy-Item -LiteralPath $testLog -Destination (Join-Path $successDirectory "logs\minio-response-loss-contract.log")
-    Copy-Item -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log") -Destination (Join-Path $successDirectory "logs\container-recovery.log")
-    Copy-Item -LiteralPath (Join-Path $temporaryDirectory "lost-put-response.log") -Destination (Join-Path $successDirectory "logs\container-put-response-loss.log")
-    Copy-Item -LiteralPath (Join-Path $temporaryDirectory "same-artifact-race.log") -Destination (Join-Path $successDirectory "logs\two-worker-same-artifact-race.log")
+    if ($Tracing) {
+        Copy-Item -LiteralPath $testLog -Destination (Join-Path $successDirectory "logs\distributed-tracing.log")
+        Copy-Item -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log") -Destination (Join-Path $successDirectory "logs\container-recovery.log")
+        Copy-Item -LiteralPath (Join-Path $temporaryDirectory "collector.log") -Destination (Join-Path $successDirectory "logs\collector.log")
+    } else {
+        Copy-Item -LiteralPath $testLog -Destination (Join-Path $successDirectory "logs\minio-response-loss-contract.log")
+        Copy-Item -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log") -Destination (Join-Path $successDirectory "logs\container-recovery.log")
+        Copy-Item -LiteralPath (Join-Path $temporaryDirectory "lost-put-response.log") -Destination (Join-Path $successDirectory "logs\container-put-response-loss.log")
+        Copy-Item -LiteralPath (Join-Path $temporaryDirectory "same-artifact-race.log") -Destination (Join-Path $successDirectory "logs\two-worker-same-artifact-race.log")
+    }
     $serviceLogs = & docker compose --project-name $project --file $composeFile logs --no-color --timestamps 2>&1
     $redactedServiceLogs = ($serviceLogs -join "`n")
     foreach ($name in @("E2E_POSTGRES_PASSWORD", "E2E_S3_ACCESS_KEY", "E2E_S3_SECRET_KEY", "E2E_API_TOKEN", "E2E_ADMIN_TOKEN", "E2E_S3_PROXY_TOKEN")) {
@@ -171,10 +234,12 @@ try {
         if ($value) { $redactedServiceLogs = $redactedServiceLogs.Replace($value, "[REDACTED]") }
     }
     $redactedServiceLogs | Set-Content -LiteralPath (Join-Path $successDirectory "logs\services.redacted.log") -Encoding utf8
-    $implementationCommit = (& git log -1 --format=%H -- cmd/e2e-s3-proxy/main.go internal/artifacts/minio_integration_test.go internal/e2e/container_recovery_test.go internal/e2e/worker_recovery_test.go deployments/Dockerfile.e2e-s3-proxy deployments/e2e/compose.yaml scripts/e2e/run-cross-container.ps1).Trim()
-    if (-not $implementationCommit) { throw "Could not resolve the commit that introduced the cross-container E2E implementation." }
+    $implementationCommit = (& git rev-parse HEAD).Trim()
+    $sourceTree = (& git rev-parse 'HEAD^{tree}').Trim()
+    if (-not $implementationCommit -or -not $sourceTree) { throw "Could not resolve the exact tested Git source commit and tree." }
     $files = @()
-    foreach ($relativePath in @("logs/minio-response-loss-contract.log", "logs/container-recovery.log", "logs/container-put-response-loss.log", "logs/two-worker-same-artifact-race.log", "logs/services.redacted.log")) {
+    $evidencePaths = if ($Tracing) { @("logs/distributed-tracing.log", "logs/container-recovery.log", "logs/collector.log", "logs/services.redacted.log") } else { @("logs/minio-response-loss-contract.log", "logs/container-recovery.log", "logs/container-put-response-loss.log", "logs/two-worker-same-artifact-race.log", "logs/services.redacted.log") }
+    foreach ($relativePath in $evidencePaths) {
         $fullPath = Join-Path $successDirectory ($relativePath -replace '/', '\')
         $hash = Get-FileHash -LiteralPath $fullPath -Algorithm SHA256
         $files += [ordered]@{ path = $relativePath; sha256 = $hash.Hash.ToLowerInvariant(); bytes = (Get-Item -LiteralPath $fullPath).Length }
@@ -183,28 +248,36 @@ try {
         run_id = $project
         result = "PASS"
         implementation_commit = $implementationCommit
+        source_tree = $sourceTree
         worktree_dirty_at_test = $dirtyAtTest
         docker_compose_project = $project
         minio_source_commit = "9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a"
         minio_ephemeral_local_image_id = $imageID
         postgres_image = "postgres:16-alpine"
+        otel_collector_image = "otel/opentelemetry-collector-contrib@sha256:89107a3a8f4636a396927edf7025bb9614b8da2d92f4cc3f43109e8d115736e2"
+        trace_e2e = if ($Tracing) { [ordered]@{ task_id = $taskID; trace_id = $traceID; api_span_id = $apiSpanID; collector_redaction_check = "PASS" } } else { $null }
         credentials_recorded = $false
-        checks = @(
+        checks = if ($Tracing) { @(
+            [ordered]@{ name = "distributed-tracing-collector-e2e"; exit_code = $traceExit; status = $(if ($traceExit -eq 0) { "PASS" } else { "FAIL" }) },
+            [ordered]@{ name = "api-two-worker-crash-reclaim-with-tracing"; exit_code = $containerExit; status = $(if ($containerExit -eq 0) { "PASS" } else { "FAIL" }) }
+        ) } else { @(
             [ordered]@{ name = "minio-response-loss-contract"; exit_code = $artifactExit; status = $(if ($artifactExit -eq 0) { "PASS" } else { "FAIL" }) },
             [ordered]@{ name = "api-two-worker-container-recovery"; exit_code = $containerExit; status = $(if ($containerExit -eq 0) { "PASS" } else { "FAIL" }) },
             [ordered]@{ name = "api-worker-put-response-loss-recovery"; exit_code = $faultExit; status = $(if ($faultExit -eq 0) { "PASS" } else { "FAIL" }) },
             [ordered]@{ name = "two-worker-same-artifact-race"; exit_code = $sameCaseExit; status = $(if ($sameCaseExit -eq 0) { "PASS" } else { "FAIL" }) }
-        )
+        ) }
         files = $files
     }
     $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $successDirectory "manifest.json") -Encoding utf8
-    Write-Output "Cross-container E2E passed; Compose project was $project; MinIO source image was $imageID. Credentials were ephemeral and are not recorded."
+    if ($Tracing) { Write-Output "Distributed tracing E2E passed; evidence=$successDirectory; Collector image is digest-pinned. Credentials were ephemeral and are not recorded." }
+    else { Write-Output "Cross-container E2E passed; Compose project was $project; MinIO source image was $imageID. Credentials were ephemeral and are not recorded." }
 } catch {
     Write-Output "Cross-container E2E did not pass: $($_.Exception.Message)"
-    $evidenceDirectory = Join-Path $repoRoot ("evidence\phase1\runs\wave3-container-e2e-attempts\" + $project)
+    $evidenceDirectory = if ($Tracing) { Join-Path $temporaryRoot ("attempts\" + $project) } else { Join-Path $repoRoot ("evidence\phase1\runs\wave3-container-e2e-attempts\" + $project) }
     New-Item -ItemType Directory -Path (Join-Path $evidenceDirectory "logs") -Force | Out-Null
     if (Test-Path -LiteralPath $composeLog) { Copy-Item -LiteralPath $composeLog -Destination (Join-Path $evidenceDirectory "logs\compose.log") -Force }
     if (Test-Path -LiteralPath $testLog) { Copy-Item -LiteralPath $testLog -Destination (Join-Path $evidenceDirectory "logs\test.log") -Force }
+    if (Test-Path -LiteralPath (Join-Path $temporaryDirectory "collector.log")) { Copy-Item -LiteralPath (Join-Path $temporaryDirectory "collector.log") -Destination (Join-Path $evidenceDirectory "logs\collector.log") -Force }
     if (Test-Path -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log")) { Copy-Item -LiteralPath (Join-Path $temporaryDirectory "container-recovery.log") -Destination (Join-Path $evidenceDirectory "logs\container-recovery.log") -Force }
     if (Test-Path -LiteralPath (Join-Path $temporaryDirectory "lost-put-response.log")) { Copy-Item -LiteralPath (Join-Path $temporaryDirectory "lost-put-response.log") -Destination (Join-Path $evidenceDirectory "logs\container-put-response-loss.log") -Force }
     if (Test-Path -LiteralPath (Join-Path $temporaryDirectory "same-artifact-race.log")) { Copy-Item -LiteralPath (Join-Path $temporaryDirectory "same-artifact-race.log") -Destination (Join-Path $evidenceDirectory "logs\two-worker-same-artifact-race.log") -Force }

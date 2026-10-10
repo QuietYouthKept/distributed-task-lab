@@ -198,7 +198,7 @@ func TestAPIWorkerContainersRecoverSharedArtifact(t *testing.T) {
 	if successEvents != 1 {
 		t.Fatalf("task has %d success events, want exactly one", successEvents)
 	}
-	t.Logf("PASS: isolated API, PostgreSQL, MinIO and two Worker containers; owner=%s killed after Put/before ACK; reclaimed_by=%s attempt=%d generation=%d; artifact_sha256=%s; stale generation fenced; one success event", owner, reclaimedBy, completed.Attempt, completed.LeaseVersion, info.SHA256)
+	t.Logf("PASS: task_id=%s; isolated API, PostgreSQL, MinIO and two Worker containers; owner=%s killed after Put/before ACK; reclaimed_by=%s attempt=%d generation=%d; artifact_sha256=%s; stale generation fenced; one success event", created.ID, owner, reclaimedBy, completed.Attempt, completed.LeaseVersion, info.SHA256)
 }
 
 // TestAPIWorkerContainerRecoversLostPutResponse sends the Worker's real S3

@@ -162,7 +162,7 @@ func (h traceCaptureHandler) Handle(ctx context.Context, _ string, payload map[s
 	return &TaskExecResult{Summary: "traced"}, nil
 }
 
-func TestWorkerExecutionContinuesPersistedTraceContext(t *testing.T) {
+func TestWorkerExecutionLinksPersistedTraceContext(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	previousProvider := otel.GetTracerProvider()
@@ -193,8 +193,8 @@ func TestWorkerExecutionContinuesPersistedTraceContext(t *testing.T) {
 
 	select {
 	case got := <-captured:
-		if got["trace_id"] != parent.TraceID().String() {
-			t.Errorf("handler trace ID=%v, want persisted parent trace ID %s", got["trace_id"], parent.TraceID())
+		if got["trace_id"] == parent.TraceID().String() {
+			t.Errorf("worker trace ID=%v, expected an independent asynchronous trace", got["trace_id"])
 		}
 		payload, ok := got["payload"].(map[string]any)
 		if !ok || payload["business"] != "preserved" {
@@ -213,8 +213,11 @@ func TestWorkerExecutionContinuesPersistedTraceContext(t *testing.T) {
 	if len(spans) != 1 {
 		t.Fatalf("exported worker spans=%d, want 1", len(spans))
 	}
-	if spans[0].Parent.SpanID() != parent.SpanID() || spans[0].SpanContext.TraceID() != parent.TraceID() {
-		t.Errorf("worker span parent=%s/%s, want %s/%s", spans[0].Parent.TraceID(), spans[0].Parent.SpanID(), parent.TraceID(), parent.SpanID())
+	if spans[0].Parent.IsValid() {
+		t.Errorf("asynchronous worker span has synchronous parent %s/%s; want root span with a link", spans[0].Parent.TraceID(), spans[0].Parent.SpanID())
+	}
+	if len(spans[0].Links) != 1 || spans[0].Links[0].SpanContext.TraceID() != parent.TraceID() || spans[0].Links[0].SpanContext.SpanID() != parent.SpanID() {
+		t.Errorf("worker span links=%v, want persisted producer context %s/%s", spans[0].Links, parent.TraceID(), parent.SpanID())
 	}
 }
 
