@@ -4,7 +4,7 @@ Date: 2026-10-10 (Asia/Shanghai)
 
 ## Outcome
 
-`WAVE3_ENGINEERING_CLOSEOUT_PARTIAL` — the final local source snapshot passed the complete 14-gate regression and the four live cross-container gates. The required push could not complete because the configured proxy closed the GitHub TLS handshake. Therefore the revised CI workflows, current security scan, and container supply-chain workflow have not yet run remotely. No unresolved local P0 correctness failure was found in these checks.
+`WAVE3_ENGINEERING_CLOSEOUT_COMPLETE` **for the bounded engineering verification and delivery milestone**. The final implementation snapshot `0a5482d` passed the clean 14/14 local regression and four live cross-container gates; its documentation-only descendant `ad52365b` was pushed successfully and CI, Security, and Container Supply Chain all completed SUCCESS on the first attempt. No local P0 correctness failure was reproduced by these checks. Packages B–E retain explicitly documented capability/production gaps; this status does **not** mean full Wave 3 feature or production acceptance.
 
 `PRODUCTION_NOT_APPROVED`. Do not enable production task types, real external effects, production storage, or production identities from this result. Wave 4 is not started.
 
@@ -17,7 +17,7 @@ Date: 2026-10-10 (Asia/Shanghai)
 - Changes in the implementation commits are limited to CI runner/action pins and the bounded MinIO evidence-runner preflight/health-probe handling. No production Go code or database schema was changed.
 - The final full regression and cross-container test both ran from clean E: worktrees at the implementation SHA. Test output and E: evidence-index changes are artifacts, not source edits.
 - The Phase 0 tag `upgrade-p0-complete-20261008` remains at `e66cf722c51b740243ae6d6126eea7fe361ada04`; it was not moved.
-- No merge or release was performed. The implementation push failed with a Schannel TLS handshake error; the local branch remains ahead of its origin tracking ref. The failure is preserved under the E: closeout logs.
+- No merge or release was performed. The earlier Schannel TLS handshake failures are preserved as historical logs. A later normal (non-force) push through proxy `127.0.0.1:7892` advanced the remote branch to `ad52365b`. This documentation-only descendant adds no production-code or schema changes after the locally tested `0a5482d` implementation.
 
 ## Engineering package closeout
 
@@ -27,7 +27,7 @@ Date: 2026-10-10 (Asia/Shanghai)
 | B — Effect / Provider | Provider HTTP contract and side-effect handler Race tests passed ×10; full unit/integration and full Race also passed. Tests cover success, permanent/retryable rejection, timeout/response loss as unknown, duplicate and conflicting idempotency keys, and reconciliation states. | The adapter is a contract prototype, not wired to production admission. No selected provider, sandbox, transaction or real reconciliation authority. Keep `REAL_PROVIDER_NOT_VERIFIED`. | PARTIAL |
 | C — API / Security | Stable v1 route/auth/role contract tests passed; OpenAPI Race ×20 passed. CreateTask request, payload and response schemas are checked against DTO JSON fields. Existing owner isolation, audit, authentication and fail-closed tests passed in the final suites. | Only CreateTask has systematic DTO/schema parity. Thirteen of fifteen documented v1 operations lack a response-body schema; full API drift, external IdP operations, cursor key rotation and cross-instance rate limits remain open. | PARTIAL |
 | D — Observability / Operations | Worker trace continuation and OTLP receiver tests passed in final full Race. The local Prometheus API/Worker scrape previously passed at `f597477`; its observability source files are unchanged in this snapshot. | No API→DB→queue→separate Worker→MinIO/fenced ACK→real Collector end-to-end trace, production alert firing, Alertmanager/on-call, cloud DR or production SLO evidence. | PARTIAL |
-| E — CI / Supply Chain | Workflows now pin Ubuntu 24.04 and signed full commit SHAs for checkout v6.1.0, setup-go v6.5.0 and upload-artifact v6.0.0. Local `actionlint` and PowerShell parser checks passed. | The new workflow versions are not hosted-verified. Prior CI/Security/Supply Chain runs passed at `49c275c`, before these workflow edits. Latest govulncheck and image scan runs are pending push. | PARTIAL |
+| E — CI / Supply Chain | Workflows pin Ubuntu 24.04 and immutable action commit SHAs; local `actionlint` and PowerShell parser checks passed. | Updated CI, Security, and Supply Chain workflows all passed in hosted GitHub Actions at `ad52365b`; publishing/signing, cloud staging, and release/rollback approval remain open. | HOSTED PASS for current workflow; PRODUCTION PARTIAL |
 
 ## Final local verification
 
@@ -49,16 +49,24 @@ Full manifests, logs, copied redacted/original MinIO logs and test binaries are 
 - The stopped local `tasklab-wave2-minio` instance had its test credential rotated. Only that container was replaced; the existing `tasklab-wave2-minio-data` volume was preserved. The replacement is stopped, matching its pre-task stopped state. The new randomly generated credentials are in user/SYSTEM-only files under `E:\distributed-task-lab-temp\local-secrets\tasklab-wave2-minio-20261010`, mounted read-only when the container is started; they are not in container environment values, repo files, or test output. A real MinIO S3 contract run passed with the rotated credential.
 - Docker logs for the prior container and rotation runs remain ACL-restricted. Each has an original and review copy; the pairs have identical SHA256 because the inspected log content contained no credential values. The user's separately saved terminal logs were not located, so their contents and any external credential reuse cannot be certified. Rotate any reused credential in other environments; no past chat or terminal disclosure can be retracted.
 - `GO-2026-5932` applies to `golang.org/x/crypto/openpgp` and its subpackages, all versions, with no known fixed version. The final Worker module graph contains `golang.org/x/crypto v0.57.0` through MinIO encryption/Argon2, but the Linux Worker package graph and binary contain no `openpgp` package/symbol. The finding remains as a module-level `UNKNOWN`; see [WAVE3_VULNERABILITY_TRIAGE.md](WAVE3_VULNERABILITY_TRIAGE.md).
-- A direct local govulncheck retry could not fetch `vuln.go.dev` because the configured proxy terminated the TLS handshake. The previous Security workflow at `49c275c` passed govulncheck, CodeQL and Secret Scan, with Scorecard skipped by its PR condition; that does not verify the new workflow commit.
+- The final local standalone govulncheck attempt remains BLOCKED by an EOF fetching `vuln.go.dev`; its failed log is preserved. Separately, the updated hosted Security workflow at documentation-only descendant `ad52365b` passed govulncheck, CodeQL, and Secret Scan (Scorecard was expected SKIPPED). This closes the *hosted verification* gap, not the residual Trivy module-level `GO-2026-5932` UNKNOWN finding.
 
-## Hosted CI and handoff
+## Final hosted CI verification and handoff
 
-The last verified hosted baseline is SHA `49c275c`:
+The frozen implementation was `0a5482d657ae431751c205abdf01632ebe89cee6` (tree `91940cda4428026b4ab360b3aa00bcaab491dda7`). Commit comparison confirmed that `ad52365b7dae2ddb3e05ec32f310d626e0583611` is its **documentation-only** descendant; no production source or database schema changed between the two revisions.
 
-- [CI Run 38024299670](https://github.com/QuietYouthKept/distributed-task-lab/actions/runs/38024299670) — SUCCESS.
-- [Security Run 38024299679](https://github.com/QuietYouthKept/distributed-task-lab/actions/runs/38024299679) — SUCCESS; Scorecard was an expected PR-event skip.
-- [Container Supply Chain Run 38024299777](https://github.com/QuietYouthKept/distributed-task-lab/actions/runs/38024299777) — SUCCESS.
+The following hosted runs all completed **SUCCESS**, first attempt, against the **same pushed SHA `ad52365b7dae2ddb3e05ec32f310d626e0583611`**:
 
-All three were bound to `49c275c`; none is represented as verification of `0a5482d`. The next action is to retry a normal push of `codex/phase1-production-hardening`, then confirm all three workflows against the pushed source/workflow snapshot and preserve their Run IDs, attempt numbers, job conclusions and head SHA. Do not force-push. PR #1 was last known as open/draft on the earlier snapshot; its live state was not retrievable during this closeout.
+| Workflow | Run | Verified results |
+|---|---|---|
+| CI | [38029233771](https://github.com/QuietYouthKept/distributed-task-lab/actions/runs/38029233771) | Five jobs PASS: format/vet/unit/build; required PostgreSQL integration; PostgreSQL Race; authenticated MinIO S3 contract, two Worker **process** recovery and backup/restore; independent public Go client |
+| Security | [38029233767](https://github.com/QuietYouthKept/distributed-task-lab/actions/runs/38029233767) | govulncheck, CodeQL and Secret Scan PASS; Scorecard expected SKIPPED for PR event |
+| Container Supply Chain | [38029233773](https://github.com/QuietYouthKept/distributed-task-lab/actions/runs/38029233773) | API and Worker image build, SBOM and image vulnerability scan job PASS; the separately triaged module-level advisory remains documented |
 
-No further feature implementation is part of this handoff. After remote CI, remaining external-dependency decisions are listed in [WAVE3_REMAINING_GAPS.md](WAVE3_REMAINING_GAPS.md). Production approval, merge and Wave 4 require a separate explicit scope.
+All three were `completed/success` with `run_attempt=1`. This verifies the updated Ubuntu/action-pinned workflows at `ad52365b`; it does **not** independently run the local two-Worker **container** topology, 14-gate Chaos/performance matrix, real Provider sandbox, full async trace, or staging. Those retain their own local or NOT VERIFIED classifications. The previous baseline successes at `49c275c` remain historical, and the original failed pushes and local govulncheck EOF logs are not overwritten.
+
+PR [#1](https://github.com/QuietYouthKept/distributed-task-lab/pull/1) is open and **Draft**, targeting `codex/p0-verified-evidence-20261008`. No merge, tag, release, image publication, worker allowlist change, or production action was performed.
+
+This remote-verification archival is documentation-only. A later archive commit must not retroactively rebind these runs to itself. The stable, resume-ready baseline is implementation `0a5482d` plus hosted verification at its documentation-only descendant `ad52365b`; any future source/workflow change requires its own gate checks.
+
+**Disposition:** scoped engineering closeout **COMPLETE**; remaining functionality and staging/production gates **PARTIAL / NOT VERIFIED**; `PRODUCTION_NOT_APPROVED`. Wave 4 is not started. See [WAVE3_REMAINING_GAPS.md](WAVE3_REMAINING_GAPS.md) before any new engineering scope.

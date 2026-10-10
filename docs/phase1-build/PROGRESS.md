@@ -1,5 +1,12 @@
 # Phase 1 build progress
 
+## Final Wave 3 hosted verification — 2026-10-10
+
+- Scoped engineering evidence closeout **COMPLETE**. Clean implementation `0a5482d` passed 14/14 local regression and 4/4 live cross-container gates; docs-only descendant `ad52365b` was pushed successfully and received SUCCESS on GitHub CI `38029233771`, Security `38029233767` and Supply Chain `38029233773`, all first attempt.
+- The older proxy/TLS push failure and blocked local govulncheck are preserved as historical attempts, not current remote blockers. The Worker module-level `GO-2026-5932` UNKNOWN finding remains triaged.
+- This closes delivery/hosted verification **only**, not real Provider/IdP/cloud/SLO requirements; `PRODUCTION_NOT_APPROVED`. No merge, tag, release, production allowlist or Wave 4. See `WAVE3_CLOSEOUT.md` for the canonical scoped decision.
+
+
 ## Wave 3 final closeout — 2026-10-10
 
 - Implementation snapshot `0a5482d657ae431751c205abdf01632ebe89cee6`; local full 14-gate regression and four live cross-container gates pass from clean E: worktrees. Detailed source binding, commands and limits are in `WAVE3_VERIFICATION_MATRIX.md`.

@@ -1,5 +1,11 @@
 # Wave 3 progress
 
+## Final remote hosted closeout — 2026-10-10
+
+- **Engineering verification/delivery closeout COMPLETE**: local tested source `0a5482d` (14/14 clean regression, 4/4 live container E2E) has docs-only descendant `ad52365b`, successfully pushed after the earlier proxy/TLS failure.
+- GitHub Actions at exact pushed SHA `ad52365b7dae2ddb3e05ec32f310d626e0583611` all completed SUCCESS on first attempt: CI [38029233771](https://github.com/QuietYouthKept/distributed-task-lab/actions/runs/38029233771), Security [38029233767](https://github.com/QuietYouthKept/distributed-task-lab/actions/runs/38029233767) (govulncheck/CodeQL/secret-scan PASS, Scorecard expected SKIP), Supply Chain [38029233773](https://github.com/QuietYouthKept/distributed-task-lab/actions/runs/38029233773).
+- Historical push failures/local govulncheck EOF remain archived; Worker module-level `GO-2026-5932` UNKNOWN remains triaged. A–E external/capability gaps and `PRODUCTION_NOT_APPROVED` are unchanged. PR #1 remains OPEN/Draft; no merge, tag, release or Wave 4.
+
 ## Final closeout status — 2026-10-10
 
 - Frozen implementation snapshot: `0a5482d657ae431751c205abdf01632ebe89cee6` (tree `91940cda4428026b4ab360b3aa00bcaab491dda7`). Final clean-worktree Evidence: `wave3-final-0a5482d-20261010`, PASS 14/14. Separate live cross-container run: `tasklab-e2e-50ff56931d69`, PASS 4/4 at this exact checked-out snapshot.

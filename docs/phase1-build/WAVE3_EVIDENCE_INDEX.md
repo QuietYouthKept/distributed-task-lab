@@ -72,3 +72,15 @@ Artifact SHA256 (uppercase hex):
 - `worker-image.cdx.json`: `AFCC633A33C8C7BE37125761B7E528D3541CC94CA8F27AD5C40CFEF186C090F4`
 - `api-image-trivy.json`: `9D909780809A5A3FB6AD183B8F90BF33E214635919CF7D1FE1BFF91AB8A9C2C2`
 - `worker-image-trivy.json`: `F8B2AAECBAEE9C7962EB4E0D4CE4BAF20B22195B4264FCFDF6D8074DE45F7B4E`
+
+## Final hosted verification receipt — append-only update (2026-10-10)
+
+This is a newer observation than historical push-failed / hosted-pending entries above. Original failed attempts, prior run results and archived E: manifests are not modified.
+
+| Workflow | Hosted SHA | Run / attempt | Final status and coverage |
+|---|---|---|---|
+| CI | `ad52365b7dae2ddb3e05ec32f310d626e0583611` | [38029233771](https://github.com/QuietYouthKept/distributed-task-lab/actions/runs/38029233771), attempt 1 | SUCCESS, 5/5 jobs: format/vet/unit/build; PostgreSQL integration and Race; source-built authenticated MinIO, independent Worker **process** recovery, backup/restore; external Go client |
+| Security | `ad52365b7dae2ddb3e05ec32f310d626e0583611` | [38029233767](https://github.com/QuietYouthKept/distributed-task-lab/actions/runs/38029233767), attempt 1 | SUCCESS: govulncheck, CodeQL, Secret Scan PASS; Scorecard expected SKIPPED |
+| Container Supply Chain | `ad52365b7dae2ddb3e05ec32f310d626e0583611` | [38029233773](https://github.com/QuietYouthKept/distributed-task-lab/actions/runs/38029233773), attempt 1 | SUCCESS: API+Worker image build, SBOM and vulnerability scanning; residual `GO-2026-5932` module-level UNKNOWN retained |
+
+Implementation `0a5482d657ae431751c205abdf01632ebe89cee6` (tree `91940cda4428026b4ab360b3aa00bcaab491dda7`) was separately tested with clean 14/14 local regression and 4/4 live cross-container gates; the hosted SHA is its **docs-only** descendant. Neither hosted CI nor Supply Chain runs should be described as a hosted two-Worker **container** fault-injection test or real Provider/S3-cloud/production validation. The subsequent archive commit is not the SHA against which these workflows were run.
