@@ -34,7 +34,15 @@ Updated: 2026-10-10 (Asia/Shanghai)
 - CI Run `37965020508` and Security Run `37965020486` both completed successfully for `cedbdc1`; Scorecard was conditionally skipped by its PR-event condition.
 - ADR-0006 proposes, without enabling, shared-quota and cursor-key-rotation decision requirements. No cursor format/config changed.
 
-## Wave 3 package A — cross-container E2E in progress
+## Wave 3 package A — cross-container E2E closed locally
+
+### Package A closeout update — 2026-10-10
+
+- The prior “in progress” bullets below are historical. Package A now has implementation commit `e74e59f66471c449cd68fba525f57ce2028af5b5` and separate immutable Evidence commits `aa11d5f76e587b091306dca407e07b4f49a142b7` and `a1d5873f7fa46b8b421474c22b86c35fd2c2fa07`.
+- The final clean-bound run is `tasklab-e2e-10de3fd9335c`, tied to `e74e59f`, with `worktree_dirty_at_test=false`. Four live MinIO/API/Worker gates passed: real S3 PUT/HEAD response-loss recovery; API plus two Worker container crash recovery; response loss in the actual Worker PUT path; and simultaneous same-key writes from two independent Worker containers. Logs are hash-recorded and credential values are not recorded.
+- E2E coverage proves recovery and immutable object reuse under these tested local conditions; it does not establish exactly-once external effects, cloud S3 compatibility, production network behavior, or production-scale guarantees.
+- Full 14-gate collector run `wave3-d3c5310-full-14-gate` passed 14/14 against exact implementation/tooling snapshot `d3c5310910b942ad7232a287a62ba550625cc855`; it started clean and ended clean when excluding its own run artifacts. Manifest, command logs, Chaos outputs, and 100K PostgreSQL pagination benchmark outputs are preserved under `evidence/phase1/runs/wave3-d3c5310-full-14-gate/`. Raw generated outputs remain under `E:\distributed-task-lab-temp\wave3-artifacts\wave3-d3c5310-full-14-gate`.
+- This latest full suite is a separate broad regression from the Package A implementation commit; it does not claim remote CI, staging, cloud DR, production SLO, or provider verification.
 
 - Added isolated Compose services for PostgreSQL, source-built MinIO, API, and two separately built Worker containers. The Compose project, network, ports, credentials, and artifact prefix are unique per run; the two workers have no shared local filesystem.
 - `TestAPIWorkerContainersRecoverSharedArtifact` has passed against the live containers: a worker wrote a MinIO artifact while ACK was blocked by a real PostgreSQL row lock; the owning container was killed; the other worker reclaimed at attempt/generation 2, reused the object, and completed. The test independently re-reads object bytes from MinIO, checks SHA256 against the task result reference, rejects stale generation ACK, and confirms exactly one succeeded event.
@@ -52,8 +60,8 @@ Updated: 2026-10-10 (Asia/Shanghai)
 
 ## Remaining work and next commands
 
-1. Commit the full 14/14 Evidence for `eafc0a8` separately, preserving the preceding toolchain-blocked run; then continue with Package A's remaining Worker-path fault injection and independent D/E gaps.
-2. Continue independent packages: OpenAPI schema coverage; full trace/alerts/backup operations; image/SBOM/release readiness.
+1. Commit the newly collected full 14/14 Evidence for `d3c5310` with this status update, preserving all preceding failed and diagnostic runs.
+2. Package A's former response-loss and same-key cross-worker gaps are now covered by `e74e59f`; continue independent package D/E gaps, then revisit OpenAPI schema coverage and provider-dependent B work only where inputs permit.
 3. Preserve Production Fail-Closed. External IdP, real Provider/Sandbox, cloud S3/DR, production RPO/RTO, and SLO/on-call remain unverified.
 
 Latest resumable command after checking status: `git status -sb; git rev-parse HEAD; go test -race ./internal/api -run '^TestIngress' -count=100`.
