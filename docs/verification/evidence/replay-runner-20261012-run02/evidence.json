@@ -1,0 +1,13 @@
+{
+  "source_commit": "283c27f6b29ac88489a5fc60e9462ff86d72c637",
+  "source_tree": "b5cacfd574edd44c489fb50ea536e5b15b163301",
+  "python_version": "Python 3.8.3",
+  "working_tree_dirty": true,
+  "compile_command": "python -m py_compile scripts/replay/runner.py scripts/replay/test_runner.py",
+  "compile_exit_code": 0,
+  "test_command": "python -m unittest discover -s scripts/replay -p 'test_*.py' -v",
+  "test_exit_code": 0,
+  "diff_check_exit_code": 0,
+  "test_summary": "21 tests PASS (7 generator + 14 Runner); fake loopback HTTP API only; no real TaskLab API/PostgreSQL E2E",
+  "production_not_approved": true
+}

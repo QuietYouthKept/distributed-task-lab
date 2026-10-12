@@ -1,0 +1,249 @@
+name: tasklab-alicloud-${TASKLAB_RUN_ID:?Set a unique run ID}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: ${TASKLAB_POSTGRES_IMAGE:?Set the verified PostgreSQL image digest}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: tasklab
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+    secrets:
+      - postgres_superuser_password
+      - tasklab_migrator_password
+      - tasklab_api_password
+      - tasklab_worker_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../local-first/postgres/00-create-roles.sh:/docker-entrypoint-initdb.d/00-create-roles.sh:ro
+      - ${TASKLAB_PG_TLS_DIR:?Set run-scoped PostgreSQL TLS directory}:/run/tasklab-pg-tls:ro
+    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/run/tasklab-pg-tls/server.crt", "-c", "ssl_key_file=/run/tasklab-pg-tls/server.key"]
+    ports:
+      - "${TASKLAB_PRIVATE_BIND_IP:?Set this ECS private IP}:5432:5432"
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tasklab"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    mem_limit: 2g
+    cpus: 1.5
+    restart: unless-stopped
+    logging: *logging
+
+  db-migrator:
+    image: ${TASKLAB_IMAGE_MIGRATOR:?Set migrator image by immutable digest}
+    environment:
+      APP_PROFILE: staging-sim
+      MIGRATOR_DATABASE_URL_FILE: /run/secrets/migrator_database_url
+    secrets: [migrator_database_url, pg_root_ca]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [core]
+    mem_limit: 384m
+    cpus: 0.75
+    restart: "no"
+    logging: *logging
+
+  db-runtime-grants:
+    image: ${TASKLAB_POSTGRES_IMAGE:?Set the verified PostgreSQL image digest}
+    entrypoint: ["/bin/sh", "/opt/tasklab/apply-runtime-grants.sh"]
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: tasklab
+      PGUSER: tasklab_migrator
+      PGPASSWORD_FILE: /run/secrets/tasklab_migrator_password
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: /run/secrets/pg_root_ca
+    secrets: [tasklab_migrator_password, pg_root_ca]
+    volumes:
+      - ../local-first/postgres/apply-runtime-grants.sh:/opt/tasklab/apply-runtime-grants.sh:ro
+      - ../local-first/postgres/runtime-grants.sql:/opt/tasklab/runtime-grants.sql:ro
+    depends_on:
+      db-migrator:
+        condition: service_completed_successfully
+    networks: [core]
+    mem_limit: 128m
+    cpus: 0.25
+    restart: "no"
+    logging: *logging
+
+  gateway-simulator:
+    image: ${TASKLAB_IMAGE_GATEWAY:?Set gateway image by immutable digest}
+    environment:
+      GATEWAY_SIMULATOR_LISTEN_ADDR: 0.0.0.0:8081
+      GATEWAY_SIMULATOR_API_KEY_FILE: /run/secrets/gateway_api_key
+      GATEWAY_SIMULATOR_MODE: normal
+    secrets: [gateway_api_key]
+    ports:
+      - "${TASKLAB_PRIVATE_BIND_IP}:18081:8081"
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    mem_limit: 256m
+    cpus: 0.5
+    restart: unless-stopped
+    logging: *logging
+
+  identity:
+    image: ${TASKLAB_IMAGE_IDENTITY:?Set identity fixture image by immutable digest}
+    environment:
+      APP_PROFILE: staging-sim
+      OIDC_FIXTURE_ISSUER: https://identity:8443
+      OIDC_FIXTURE_AUDIENCE: tasklab-local
+      OIDC_FIXTURE_TLS_CERT_FILE: /run/tasklab-tls/identity.crt
+      OIDC_FIXTURE_TLS_KEY_FILE: /run/tasklab-tls/identity.key
+      OIDC_FIXTURE_ENABLE_TEST_ISSUER: "true"
+    volumes:
+      - ${TASKLAB_IDENTITY_TLS_DIR:?Set run-scoped identity TLS directory}:/run/tasklab-tls:ro
+    ports:
+      - "127.0.0.1:${TASKLAB_IDENTITY_HOST_PORT:-18444}:8443"
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate -qO- https://127.0.0.1:8443/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    mem_limit: 256m
+    cpus: 0.5
+    restart: unless-stopped
+    logging: *logging
+
+  api:
+    image: ${TASKLAB_IMAGE_API:?Set API image by immutable digest}
+    environment:
+      APP_PROFILE: staging-sim
+      STAGING_SIM_CLOUD: "true"
+      AUTO_MIGRATE: "false"
+      DATABASE_URL_FILE: /run/secrets/api_database_url
+      API_TLS_CERT_FILE: /run/tasklab-tls/api.crt
+      API_TLS_KEY_FILE: /run/tasklab-tls/api.key
+      OIDC_ISSUER: https://identity:8443
+      OIDC_AUDIENCE: tasklab-local
+      OIDC_JWKS_URL: https://identity:8443/jwks
+      OIDC_CA_CERT_FILE: /run/tasklab-tls/test-ca.crt
+      OIDC_ROLE_CLAIM: roles
+      OIDC_ROLE_MAPPINGS: fixture-reader:reader,fixture-operator:operator,fixture-admin:admin
+      API_CURSOR_SIGNING_KEY_FILE: /run/secrets/api_cursor_signing_key
+      API_PORT: "8080"
+      ARTIFACT_STORE_BACKEND: oss
+      ARTIFACT_OSS_ENDPOINT: ${ARTIFACT_OSS_ENDPOINT:?Set HTTPS OSS regional endpoint}
+      ARTIFACT_OSS_REGION: ${ARTIFACT_OSS_REGION:?Set OSS region}
+      ARTIFACT_OSS_BUCKET: ${ARTIFACT_OSS_BUCKET:?Set pre-created OSS bucket}
+      ARTIFACT_OSS_PREFIX: ${ARTIFACT_OSS_PREFIX:-tasklab/${TASKLAB_RUN_ID}}
+      ARTIFACT_OSS_RAM_ROLE_NAME: ${ARTIFACT_OSS_RAM_ROLE_NAME:?Set run-scoped Worker RAM role name}
+      ARTIFACT_ALLOW_HTTP: "false"
+      ARTIFACT_ALLOW_BUCKET_CREATE: "false"
+    secrets: [api_database_url, api_cursor_signing_key, pg_root_ca]
+    volumes:
+      - ${TASKLAB_API_TLS_DIR:?Set run-scoped API TLS directory}:/run/tasklab-tls:ro
+    depends_on:
+      db-runtime-grants:
+        condition: service_completed_successfully
+      identity:
+        condition: service_healthy
+      gateway-simulator:
+        condition: service_healthy
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate -qO- https://127.0.0.1:8080/ready >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    ports:
+      - "127.0.0.1:${TASKLAB_API_HOST_PORT:-18443}:8080"
+    mem_limit: 768m
+    cpus: 1.0
+    stop_grace_period: 35s
+    restart: unless-stopped
+    logging: *logging
+
+  worker:
+    image: ${TASKLAB_IMAGE_WORKER:?Set Worker image by immutable digest}
+    environment:
+      APP_PROFILE: staging-sim
+      STAGING_SIM_CLOUD: "true"
+      AUTO_MIGRATE: "false"
+      DATABASE_URL_FILE: /run/secrets/worker_database_url
+      WORKER_ID: ${TASKLAB_RUN_ID}-worker-a
+      WORKER_CONCURRENCY: "1"
+      CLAIM_BATCH_SIZE: "1"
+      LEASE_TIMEOUT: 30s
+      SHUTDOWN_TIMEOUT: 20s
+      WORKER_HEALTH_PORT: "9091"
+      ARTIFACT_STORE_BACKEND: oss
+      ARTIFACT_OSS_ENDPOINT: ${ARTIFACT_OSS_ENDPOINT:?Set HTTPS OSS regional endpoint}
+      ARTIFACT_OSS_REGION: ${ARTIFACT_OSS_REGION:?Set OSS region}
+      ARTIFACT_OSS_BUCKET: ${ARTIFACT_OSS_BUCKET:?Set pre-created OSS bucket}
+      ARTIFACT_OSS_PREFIX: ${ARTIFACT_OSS_PREFIX:-tasklab/${TASKLAB_RUN_ID}}
+      ARTIFACT_OSS_RAM_ROLE_NAME: ${ARTIFACT_OSS_RAM_ROLE_NAME:?Set run-scoped Worker RAM role name}
+      ARTIFACT_ALLOW_HTTP: "false"
+      ARTIFACT_ALLOW_BUCKET_CREATE: "false"
+      EVAL_BACKEND: gateway
+      EVAL_GATEWAY_URL: http://gateway-simulator:8081
+      EVAL_GATEWAY_PROFILE: staging-sim
+      EVAL_GATEWAY_API_KEY_FILE: /run/secrets/gateway_api_key
+    secrets: [worker_database_url, gateway_api_key, pg_root_ca]
+    depends_on:
+      db-runtime-grants:
+        condition: service_completed_successfully
+      gateway-simulator:
+        condition: service_healthy
+    networks: [core, oss_egress]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9091/ready >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    mem_limit: 768m
+    cpus: 1.0
+    stop_grace_period: 25s
+    restart: unless-stopped
+    logging: *logging
+
+networks:
+  core:
+    internal: true
+  oss_egress:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: tasklab-alicloud-${TASKLAB_RUN_ID}-postgres
+
+secrets:
+  postgres_superuser_password:
+    file: ${TASKLAB_SECRET_DIR:?Set run-scoped secret directory}/postgres-superuser-password
+  tasklab_migrator_password:
+    file: ${TASKLAB_SECRET_DIR}/tasklab-migrator-password
+  tasklab_api_password:
+    file: ${TASKLAB_SECRET_DIR}/tasklab-api-password
+  tasklab_worker_password:
+    file: ${TASKLAB_SECRET_DIR}/tasklab-worker-password
+  migrator_database_url:
+    file: ${TASKLAB_SECRET_DIR}/migrator-database-url
+  api_database_url:
+    file: ${TASKLAB_SECRET_DIR}/api-database-url
+  worker_database_url:
+    file: ${TASKLAB_SECRET_DIR}/worker-database-url
+  pg_root_ca:
+    file: ${TASKLAB_PG_TLS_DIR}/ca.crt
+  gateway_api_key:
+    file: ${TASKLAB_SECRET_DIR}/gateway-api-key
+  api_cursor_signing_key:
+    file: ${TASKLAB_SECRET_DIR}/api-cursor-signing-key

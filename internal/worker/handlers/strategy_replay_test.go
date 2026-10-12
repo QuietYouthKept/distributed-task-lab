@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 
@@ -192,14 +191,17 @@ func TestStrategyReplayRAGWritesCompleteHashBoundEvidence(t *testing.T) {
 			t.Fatalf("missing RAG evidence field %s", key)
 		}
 	}
-	path := strings.TrimPrefix(m["raw_report_uri"].(string), "file://")
-	raw, err := os.ReadFile(path)
+	key := strings.TrimPrefix(m["raw_report_uri"].(string), "artifact://")
+	raw, info, err := h.Store.Get(context.Background(), key)
 	if err != nil {
-		t.Fatalf("read raw report: %v", err)
+		t.Fatalf("read raw report from store: %v", err)
 	}
 	sum := sha256.Sum256(raw)
 	if got, want := m["raw_report_sha256"], hex.EncodeToString(sum[:]); got != want {
 		t.Fatalf("raw report hash = %v, want %s", got, want)
+	}
+	if info.SHA256 != m["raw_report_sha256"] {
+		t.Fatalf("store hash = %s, want %v", info.SHA256, m["raw_report_sha256"])
 	}
 }
 

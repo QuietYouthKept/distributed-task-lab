@@ -1,0 +1,10 @@
+Initializing provider plugins...
+- Finding aliyun/alicloud versions matching "1.274.0"...
+- Installing aliyun/alicloud v1.274.0...
+- Installed aliyun/alicloud v1.274.0 (signed by a HashiCorp partner, key ID 47422B4AA9FA381B)
+Partner and community providers are signed by their developers.
+If you'd like to know more about it, see https://developer.hashicorp.com/terraform/cli/plugins/signing
+
+Error: Provider dependency changes detected
+
+Changes to the required provider dependencies were detected, but the lock file is read-only. To use and record these requirements, run "terraform init" without the "-lockfile=readonly" flag.

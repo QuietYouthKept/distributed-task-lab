@@ -218,6 +218,7 @@ func main() {
 		time.Sleep(200 * time.Millisecond)
 	}
 	runDur := time.Since(runStart)
+	totalDur := time.Since(submitStart)
 
 	for _, p := range pools {
 		p.Stop()
@@ -278,8 +279,9 @@ func main() {
 	}
 	summary := loadgenArtifactSummary{
 		RunID: runID, Profile: profile, TaskType: taskKind, HandlerMode: handlerMode, CasesPerTask: casesPerTask, ProviderConcurrency: providerConcurrency, Tasks: numTasks, Producers: producers, Workers: numWorkers, Concurrency: concurrency, Queues: queueCount, PayloadBytes: payloadSize,
-		SubmitSeconds: submitDur.Seconds(), ProcessingSeconds: runDur.Seconds(), Throughput: float64(numTasks) / runDur.Seconds(),
-		Success: stats[domain.TaskStatusSuccess], DLQ: stats[domain.TaskStatusDLQ], SubmissionErrors: submitErrors.Load(), Retries: retries, Reclaims: reclaims, DuplicateClaims: int64(duplicates),
+		SubmitSeconds: submitDur.Seconds(), ProcessingSeconds: runDur.Seconds(), EndToEndSeconds: totalDur.Seconds(),
+		TerminalTasks: terminalTaskCount(stats), Throughput: throughput(terminalTaskCount(stats), totalDur),
+		Success: stats[domain.TaskStatusSuccess], Failed: stats[domain.TaskStatusFailed], DLQ: stats[domain.TaskStatusDLQ], SubmissionErrors: submitErrors.Load(), Retries: retries, Reclaims: reclaims, DuplicateClaims: int64(duplicates),
 		ClaimP50MS: float64(percentile(mq.latencies, 0.50)) / float64(time.Millisecond), ClaimP95MS: float64(percentile(mq.latencies, 0.95)) / float64(time.Millisecond), ClaimP99MS: float64(percentile(mq.latencies, 0.99)) / float64(time.Millisecond),
 		QueueWaitP50MS: float64(percentile(queueWaits, 0.50)) / float64(time.Millisecond), QueueWaitP95MS: float64(percentile(queueWaits, 0.95)) / float64(time.Millisecond), QueueWaitP99MS: float64(percentile(queueWaits, 0.99)) / float64(time.Millisecond),
 		EndToEndP50MS: float64(percentile(endToEnds, 0.50)) / float64(time.Millisecond), EndToEndP95MS: float64(percentile(endToEnds, 0.95)) / float64(time.Millisecond), EndToEndP99MS: float64(percentile(endToEnds, 0.99)) / float64(time.Millisecond),
@@ -300,7 +302,7 @@ func main() {
 	fmt.Printf("workers           : %d (concurrency %d each)\n", numWorkers, concurrency)
 	fmt.Printf("submit time       : %s (%d/s)\n", submitDur.Round(time.Millisecond), int(float64(numTasks)/submitDur.Seconds()))
 	fmt.Printf("processing time   : %s\n", runDur.Round(time.Millisecond))
-	fmt.Printf("throughput        : %d tasks/sec\n", int(float64(numTasks)/runDur.Seconds()))
+	fmt.Printf("end-to-end throughput: %d terminal tasks/sec\n", int(throughput(terminalTaskCount(stats), totalDur)))
 	fmt.Printf("success           : %d\n", stats[domain.TaskStatusSuccess])
 	fmt.Printf("dlq               : %d\n", stats[domain.TaskStatusDLQ])
 	fmt.Printf("submission errors : %d (%.3f%%)\n", submitErrors.Load(), 100*float64(submitErrors.Load())/float64(maxInt(1, numTasks)))

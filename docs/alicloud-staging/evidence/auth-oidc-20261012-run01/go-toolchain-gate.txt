@@ -1,0 +1,6 @@
+Initial diagnostic only; this is not a source test failure.
+
+Command: go test -p 1 ./internal/auth -count=1 -timeout=2m
+Observed: go.mod requires go >= 1.26.9 (running go 1.26.6; GOTOOLCHAIN=local)
+Recovery: set GOTOOLCHAIN=auto for the process invocation; Go 1.26.9 was selected and the same package test passed.
+No persistent environment setting was changed.

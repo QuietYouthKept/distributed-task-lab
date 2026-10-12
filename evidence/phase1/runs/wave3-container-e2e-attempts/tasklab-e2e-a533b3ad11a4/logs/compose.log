@@ -1,0 +1,84 @@
+MinIO upstream source tag: RELEASE.2025-10-15T17-29-55Z
+MinIO upstream commit: 9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a
+MinIO Go module version: v0.0.0-20251015172955-9e49d5e7a648
+MinIO Go module checksum: h1:6TdolSCLSs2nwm8i0PpWDqf9iX2Ty9WQK8wmr7dCnUM=
+MinIO go.mod checksum: h1:yCWDkwWO9IWpGsT4mreDDN/B/QVmK2zC666uInRAcqE=
+MinIO upstream LICENSE URL: https://raw.githubusercontent.com/minio/minio/9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a/LICENSE
+MinIO upstream LICENSE SHA256: 0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0
+License: AGPL-3.0 (upstream LICENSE included in image)
+go version go1.26.9 windows/amd64
+<REDACTED_USER_PROFILE>/AppData/Local/Temp/tasklab-minio-build.KCxiIb/bin/minio: go1.26.9
+	path	github.com/minio/minio
+	mod	github.com/minio/minio	(devel)	
+	build	-trimpath=true
+	build	CGO_ENABLED=0
+	build	GOARCH=amd64
+	build	GOOS=linux
+5d0789d5af3cc685a4aad5379176fa2755a821fa3d52050ef93293bd6691828a */tmp/tasklab-minio-build.KCxiIb/bin/minio
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from minio-ci.Dockerfile
+#1 transferring dockerfile: 697B 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load build context
+#3 transferring context: 149.83MB 3.2s done
+#3 DONE 3.2s
+
+#4 [1/2] COPY minio /usr/bin/minio
+#4 DONE 1.0s
+
+#5 [2/2] COPY LICENSE /usr/share/licenses/minio/LICENSE
+#5 DONE 0.2s
+
+#6 exporting to image
+#6 exporting layers
+#6 exporting layers 3.9s done
+#6 exporting manifest sha256:864a7dd2950ae3d252fe0b74af7cd4ded169c3ed069e29f462bd2ed4b1bfeb68 0.0s done
+#6 exporting config sha256:50cb6edb281baf3710f8ee64e8f91b979260f9debe62e7052ac22c9c9192b362 0.0s done
+#6 exporting attestation manifest sha256:5538a7a108ac620ccf366c65735e8e3a4a6aa571ebbd4b57f1e397877c89553c 0.0s done
+#6 exporting manifest list sha256:a9694613a7d236831037da0a2dbf427604853321fbe26abfe3315e6796a8bf8b 0.0s done
+#6 naming to docker.io/library/tasklab-minio-ci:tasklab-e2e-a533b3ad11a4-1 done
+#6 unpacking to docker.io/library/tasklab-minio-ci:tasklab-e2e-a533b3ad11a4-1
+#6 unpacking to docker.io/library/tasklab-minio-ci:tasklab-e2e-a533b3ad11a4-1 1.4s done
+#6 DONE 5.4s
+Built ephemeral MinIO image tag: tasklab-minio-ci:tasklab-e2e-a533b3ad11a4-1
+Local image ID (not a registry digest): sha256:a9694613a7d236831037da0a2dbf427604853321fbe26abfe3315e6796a8bf8b
+#1 [internal] load local bake definitions
+#1 reading from stdin 1.15kB 0.0s done
+#1 DONE 0.0s
+
+#2 [api internal] load build definition from Dockerfile.api
+#2 transferring dockerfile: 650B done
+#2 DONE 0.0s
+
+#3 [worker-a internal] load build definition from Dockerfile.worker
+#3 transferring dockerfile: 1.01kB done
+#3 DONE 0.0s
+
+#4 [worker-a internal] load metadata for docker.io/library/alpine:3.19
+#4 DONE 0.0s
+
+#5 [worker-a internal] load metadata for docker.io/library/golang:1.26.9-alpine3.22
+#5 ERROR: docker.io/library/golang:1.26.9-alpine3.22: not found
+------
+ > [worker-a internal] load metadata for docker.io/library/golang:1.26.9-alpine3.22:
+------
+Dockerfile.api:1
+
+--------------------
+
+   1 | >>> FROM golang:1.26.9-alpine3.22 AS builder
+
+   2 |     
+
+   3 |     # GOPROXY is a build arg so China users can use a mirror:
+
+--------------------
+
+target api: failed to solve: golang:1.26.9-alpine3.22: failed to resolve source metadata for docker.io/library/golang:1.26.9-alpine3.22: docker.io/library/golang:1.26.9-alpine3.22: not found
+

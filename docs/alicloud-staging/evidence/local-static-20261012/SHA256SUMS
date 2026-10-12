@@ -1,0 +1,11 @@
+2cd3405656db061e31dc888908aec0afeda0e6d1a717000a8abd641a804e0d89  README.md
+ea5ea1161d36b0b8bc238e62195e7c5a5158f263c119c7b6ee6ab8713e51d700  go-test-artifacts-config.log
+81b5d7e1c29cd6efe33af1b3a794769d6c62282f66751d0af496d22c0c45543b  go-test-auth-api-payload.log
+bc1c331f00aaa21db1786d75081f12dafe4c2c7a4f5e9ba7f6366c80928ee136  postgres-digest-pull.log
+0dc318f029848c2a81a039662534be011eb8bd7552b6cff87c06320b882bdc45  terraform-init-readonly.log
+1a7ce1a51a1bb952d16e26f68647803c3330c5bbae15809ab06e755aa6dcd1a5  terraform-init-success.log
+86791b56157165b60289f3653d191a3aa70cfe62c3409b058726fbf8db77950e  terraform-validate.log
+f97376de214ddb114d7e1ce6d5810734ba3af1be827bca9a8238c3b3f24db47d  ../../../../infra/alicloud/staging/.terraform.lock.hcl
+cc67cb6c09139ecee0df618764a8fd090d2c409b92883abba6d82ee85ea084d7  ../../../../scripts/alicloud/postgres-only-preflight.sh
+b5ee64790715987553740709a2bc2ebbe7203431b5cd248e8c81a621721a59ca  ../../../../scripts/alicloud/postgres-acceptance.sh
+216561267b5c1ab372fa25cdd03e6f7e6e430005350bb754a0fc6712cb957db9  ../../../../scripts/alicloud/tls-generate.sh

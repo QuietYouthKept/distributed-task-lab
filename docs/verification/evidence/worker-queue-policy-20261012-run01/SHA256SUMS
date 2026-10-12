@@ -1,0 +1,6 @@
+ca2ba7a8e847060d5ccc13d8fa631b758f42de46b7a1501028bcefc4b5c6dcb1  deployments\local-first\postgres\runtime-grants.sql
+b0326778a8a6b9af1e2b4c7e33c5394ae04cfbece71ff55b6bfcc755bc974a0c  internal\storage\postgres\least_privilege_integration_test.go
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  docs\verification\evidence\worker-queue-policy-20261012-run01\gofmt-check.log
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  docs\verification\evidence\worker-queue-policy-20261012-run01\diff-check.log
+dcbba84a8ea8e64b64d45605c7b2275da4b54df56657f2f0bd6c2b0166d712f3  docs\verification\evidence\worker-queue-policy-20261012-run01\worker-sql-audit.log
+6e7d164a85d0711b1e2974178f0539e42382bb00195dc390783c6b47c28c157f  docs\verification\evidence\worker-queue-policy-20261012-run01\evidence.json

@@ -5,10 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/artifacts"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"github.com/fantasticyi/distributed-task-lab/internal/worker"
 )
@@ -18,9 +19,20 @@ import (
 // at-least-once retry returns the original shard result rather than producing a
 // second final result. A real model gateway can replace evaluateCase while
 // preserving this artifact and reconciliation contract.
-type LLMEval struct{ ArtifactDir string }
+type LLMEval struct {
+	ArtifactDir string
+	Store       artifacts.Store
+	storeErr    error
+}
 
-func NewLLMEval(artifactDir string) *LLMEval { return &LLMEval{ArtifactDir: artifactDir} }
+func NewLLMEval(artifactDir string) *LLMEval {
+	store, err := artifacts.NewLocalStore(artifactDir, "", 64<<20)
+	return &LLMEval{ArtifactDir: artifactDir, Store: store, storeErr: err}
+}
+
+func NewLLMEvalWithStore(store artifacts.Store) *LLMEval {
+	return &LLMEval{Store: store}
+}
 
 func (h *LLMEval) Run(ctx context.Context, payload map[string]any) (*worker.TaskExecResult, error) {
 	datasetVersion := getString(payload, "dataset_version", "")
@@ -35,15 +47,26 @@ func (h *LLMEval) Run(ctx context.Context, payload map[string]any) (*worker.Task
 	identity := fmt.Sprintf("%s|%s|%s|%s|%d|%d", datasetVersion, modelProfile, promptVersion, runID, start, end)
 	sum := sha256.Sum256([]byte(identity))
 	fingerprint := hex.EncodeToString(sum[:])
-	path := filepath.Join(h.ArtifactDir, "eval", runID, fingerprint+".json")
+	if h.storeErr != nil {
+		return nil, fmt.Errorf("initialize eval artifact store: %w", h.storeErr)
+	}
+	if h.Store == nil {
+		return nil, fmt.Errorf("eval artifact store is not configured")
+	}
+	key := filepath.ToSlash(filepath.Join("eval", runID, fingerprint+".json"))
 	reused := false
 	result := evalShardResult{}
-	if raw, err := os.ReadFile(path); err == nil {
+	storedKey := key
+	if raw, info, err := h.Store.Get(ctx, key); err == nil {
 		if err := json.Unmarshal(raw, &result); err != nil {
 			return nil, fmt.Errorf("read existing eval shard: %w", err)
 		}
+		if result.DatasetVersion != datasetVersion || result.ModelProfile != modelProfile || result.PromptVersion != promptVersion || result.RunID != runID || result.Fingerprint != fingerprint || result.CaseStart != start || result.CaseEnd != end {
+			return nil, fmt.Errorf("existing eval shard does not match its immutable execution identity: %w", artifacts.ErrCorrupt)
+		}
+		storedKey = info.Key
 		reused = true
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, artifacts.ErrNotFound) {
 		return nil, fmt.Errorf("read eval shard: %w", err)
 	} else {
 		result = buildEvalShard(datasetVersion, modelProfile, promptVersion, runID, start, end, fingerprint)
@@ -51,12 +74,11 @@ func (h *LLMEval) Run(ctx context.Context, payload map[string]any) (*worker.Task
 		if err != nil {
 			return nil, fmt.Errorf("marshal eval shard: %w", err)
 		}
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return nil, fmt.Errorf("create eval artifact directory: %w", err)
-		}
-		if err := os.WriteFile(path, raw, 0o644); err != nil {
+		info, err := h.Store.PutIfAbsent(ctx, key, raw, "application/json")
+		if err != nil {
 			return nil, fmt.Errorf("write eval shard: %w", err)
 		}
+		storedKey = info.Key
 	}
 	select {
 	case <-ctx.Done():
@@ -66,7 +88,7 @@ func (h *LLMEval) Run(ctx context.Context, payload map[string]any) (*worker.Task
 	return &worker.TaskExecResult{
 		Summary: fmt.Sprintf("LLM eval shard %s [%d,%d): %d/%d passed (reused=%t)", runID, start, end, result.Passed, end-start, reused),
 		Artifacts: map[string]string{
-			"case_results_uri": path, "result_fingerprint": result.Fingerprint,
+			"case_results_uri": "artifact://" + storedKey, "result_fingerprint": result.Fingerprint,
 			"run_id": runID, "dataset_version": datasetVersion, "model_profile": modelProfile,
 			"prompt_version": promptVersion, "idempotent_reused": fmt.Sprintf("%t", reused),
 		},

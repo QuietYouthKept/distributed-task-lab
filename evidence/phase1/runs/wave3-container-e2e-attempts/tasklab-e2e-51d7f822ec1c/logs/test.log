@@ -1,0 +1,7 @@
+=== RUN   TestMinIOStoreContractAndConcurrentConditionalWrite
+    minio_integration_test.go:113: existing object with invalid SHA256 metadata returned artifact put "runs/20261010T010145.122535400/result.json-invalid-sha-metadata": At least one of the pre-conditions you specified did not hold
+        artifact head "contract-test/runs/20261010T010145.122535400/result.json-invalid-sha-metadata": missing SHA256 object metadata, want ErrConflict
+--- FAIL: TestMinIOStoreContractAndConcurrentConditionalWrite (0.06s)
+FAIL
+FAIL	github.com/fantasticyi/distributed-task-lab/internal/artifacts	0.796s
+FAIL

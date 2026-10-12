@@ -1,0 +1,9 @@
+resource_gate=3.81 GiB available RAM
+compile_gate=4 GiB minimum
+command=go test -json -p 1 ./cmd/... ./internal/... ./pkg/... -count=1 -timeout=10m
+command_status=NOT_RUN
+test_count=0
+no_container_started=true
+database_target=127.0.0.1:1 only
+source_commit=0a4220cf93cf7bf16034bc37a3f3d5fd29f17176
+source_tree=b3884ba497a3665487adad6b984305a55b068704

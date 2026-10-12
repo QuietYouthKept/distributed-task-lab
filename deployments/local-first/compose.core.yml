@@ -1,0 +1,334 @@
+name: tasklab-local-first
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: tasklab
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+    secrets:
+      - postgres_superuser_password
+      - tasklab_migrator_password
+      - tasklab_api_password
+      - tasklab_worker_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/00-create-roles.sh:/docker-entrypoint-initdb.d/00-create-roles.sh:ro
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tasklab"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    mem_limit: 768m
+    cpus: 1.0
+    restart: unless-stopped
+    logging: *logging
+
+  db-migrator:
+    image: tasklab-migrator:local
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.migrator
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    environment:
+      APP_PROFILE: staging-sim
+      MIGRATOR_DATABASE_URL_FILE: /run/secrets/migrator_database_url
+    secrets:
+      - migrator_database_url
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [core]
+    mem_limit: 384m
+    cpus: 0.75
+    restart: "no"
+    logging: *logging
+
+  db-runtime-grants:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea}
+    entrypoint: ["/bin/sh", "/opt/tasklab/apply-runtime-grants.sh"]
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: tasklab
+      PGUSER: tasklab_migrator
+      PGPASSWORD_FILE: /run/secrets/tasklab_migrator_password
+    secrets:
+      - tasklab_migrator_password
+    volumes:
+      - ./postgres/apply-runtime-grants.sh:/opt/tasklab/apply-runtime-grants.sh:ro
+      - ./postgres/runtime-grants.sql:/opt/tasklab/runtime-grants.sql:ro
+    depends_on:
+      db-migrator:
+        condition: service_completed_successfully
+    networks: [core]
+    mem_limit: 128m
+    cpus: 0.25
+    restart: "no"
+    logging: *logging
+
+  minio:
+    image: ${MINIO_IMAGE:?Set MINIO_IMAGE to a verified, immutable official MinIO image reference}
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_root_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+    secrets:
+      - minio_root_user
+      - minio_root_password
+    volumes:
+      - minio_data:/data
+    networks: [core]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    mem_limit: 768m
+    cpus: 1.0
+    restart: unless-stopped
+    logging: *logging
+
+  minio-init:
+    image: tasklab-minio-init:local
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.minio-init
+      args:
+        MINIO_IMAGE: ${MINIO_IMAGE:?Set MINIO_IMAGE to a verified, immutable official MinIO image reference}
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-unknown}
+    entrypoint: ["/bin/sh", "/opt/tasklab/init-minio.sh"]
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_root_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+      ARTIFACT_S3_ACCESS_KEY_FILE: /run/secrets/artifact_s3_access_key
+      ARTIFACT_S3_SECRET_KEY_FILE: /run/secrets/artifact_s3_secret_key
+    secrets:
+      - minio_root_user
+      - minio_root_password
+      - artifact_s3_access_key
+      - artifact_s3_secret_key
+    volumes:
+      - ./minio/init-minio.sh:/opt/tasklab/init-minio.sh:ro
+      - ./minio/artifact-policy.json:/opt/tasklab/artifact-policy.json:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks: [core]
+    mem_limit: 128m
+    cpus: 0.25
+    restart: "no"
+    logging: *logging
+
+  gateway-simulator:
+    image: tasklab-gateway-simulator:local
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.gateway-simulator
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    environment:
+      GATEWAY_SIMULATOR_LISTEN_ADDR: 0.0.0.0:8081
+      GATEWAY_SIMULATOR_API_KEY_FILE: /run/secrets/gateway_api_key
+      GATEWAY_SIMULATOR_MODE: normal
+    secrets:
+      - gateway_api_key
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    mem_limit: 256m
+    cpus: 0.5
+    restart: unless-stopped
+    logging: *logging
+
+  identity:
+    image: tasklab-oidc-fixture:local
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.oidc-fixture
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    environment:
+      APP_PROFILE: staging-sim
+      OIDC_FIXTURE_ISSUER: https://identity:8443
+      OIDC_FIXTURE_AUDIENCE: tasklab-local
+      OIDC_FIXTURE_TLS_CERT_FILE: /run/tasklab-tls/identity.crt
+      OIDC_FIXTURE_TLS_KEY_FILE: /run/tasklab-tls/identity.key
+      OIDC_FIXTURE_ENABLE_TEST_ISSUER: "true"
+    volumes:
+      - ${TASKLAB_IDENTITY_TLS_DIR:?Run scripts/local-first/provision.ps1 first}:/run/tasklab-tls:ro
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate -qO- https://127.0.0.1:8443/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    ports:
+      - "127.0.0.1:${IDENTITY_HOST_PORT:-18444}:8443"
+    mem_limit: 256m
+    cpus: 0.5
+    restart: unless-stopped
+    logging: *logging
+
+  api:
+    image: tasklab-api:local
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.api
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    environment:
+      APP_PROFILE: staging-sim
+      AUTO_MIGRATE: "false"
+      DATABASE_URL_FILE: /run/secrets/api_database_url
+      API_TLS_CERT_FILE: /run/tasklab-tls/api.crt
+      API_TLS_KEY_FILE: /run/tasklab-tls/api.key
+      OIDC_ISSUER: https://identity:8443
+      OIDC_AUDIENCE: tasklab-local
+      OIDC_JWKS_URL: https://identity:8443/jwks
+      OIDC_CA_CERT_FILE: /run/tasklab-tls/test-ca.crt
+      OIDC_ROLE_CLAIM: roles
+      OIDC_ROLE_MAPPINGS: fixture-reader:reader,fixture-operator:operator,fixture-admin:admin
+      API_CURSOR_SIGNING_KEY_FILE: /run/secrets/api_cursor_signing_key
+      API_PORT: "8080"
+    secrets:
+      - api_database_url
+      - api_cursor_signing_key
+    volumes:
+      - ${TASKLAB_API_TLS_DIR:?Run scripts/local-first/provision.ps1 first}:/run/tasklab-tls:ro
+    depends_on:
+      db-runtime-grants:
+        condition: service_completed_successfully
+      identity:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      gateway-simulator:
+        condition: service_healthy
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate -qO- https://127.0.0.1:8080/ready >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-18443}:8080"
+    mem_limit: 768m
+    cpus: 1.0
+    stop_grace_period: 35s
+    restart: unless-stopped
+    logging: *logging
+
+  worker:
+    image: tasklab-worker:local
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.worker
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    environment:
+      APP_PROFILE: staging-sim
+      AUTO_MIGRATE: "false"
+      DATABASE_URL_FILE: /run/secrets/worker_database_url
+      WORKER_ID: local-first-worker-a
+      WORKER_CONCURRENCY: "1"
+      CLAIM_BATCH_SIZE: "1"
+      LEASE_TIMEOUT: 30s
+      SHUTDOWN_TIMEOUT: 20s
+      WORKER_HEALTH_PORT: "9091"
+      ARTIFACT_STORE_BACKEND: s3
+      ARTIFACT_S3_ENDPOINT: http://minio:9000
+      ARTIFACT_S3_BUCKET: tasklab-artifacts
+      ARTIFACT_S3_REGION: us-east-1
+      ARTIFACT_S3_ACCESS_KEY_FILE: /run/secrets/artifact_s3_access_key
+      ARTIFACT_S3_SECRET_KEY_FILE: /run/secrets/artifact_s3_secret_key
+      ARTIFACT_ALLOW_HTTP: "true"
+      ARTIFACT_ALLOW_BUCKET_CREATE: "false"
+      EVAL_BACKEND: gateway
+      EVAL_GATEWAY_URL: http://gateway-simulator:8081
+      EVAL_GATEWAY_PROFILE: staging-sim
+      EVAL_GATEWAY_API_KEY_FILE: /run/secrets/gateway_api_key
+    secrets:
+      - worker_database_url
+      - artifact_s3_access_key
+      - artifact_s3_secret_key
+      - gateway_api_key
+    depends_on:
+      db-runtime-grants:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      gateway-simulator:
+        condition: service_healthy
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9091/ready >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    mem_limit: 768m
+    cpus: 1.0
+    stop_grace_period: 25s
+    restart: unless-stopped
+    logging: *logging
+
+networks:
+  core:
+    name: ${TASKLAB_NETWORK_NAME:-tasklab-local-first-core}
+    internal: true
+
+volumes:
+  postgres_data:
+    name: ${TASKLAB_POSTGRES_VOLUME:-tasklab-local-first-postgres}
+  minio_data:
+    name: ${TASKLAB_MINIO_VOLUME:-tasklab-local-first-minio}
+
+secrets:
+  postgres_superuser_password:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/postgres-superuser-password
+  tasklab_migrator_password:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/tasklab-migrator-password
+  tasklab_api_password:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/tasklab-api-password
+  tasklab_worker_password:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/tasklab-worker-password
+  migrator_database_url:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/migrator-database-url
+  api_database_url:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/api-database-url
+  worker_database_url:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/worker-database-url
+  minio_root_user:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/minio-root-user
+  minio_root_password:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/minio-root-password
+  artifact_s3_access_key:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/artifact-s3-access-key
+  artifact_s3_secret_key:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/artifact-s3-secret-key
+  gateway_api_key:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/gateway-api-key
+  api_cursor_signing_key:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/api-cursor-signing-key

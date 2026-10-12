@@ -1,0 +1,6 @@
+=== RUN   TestAPIWorkerContainersRecoverSharedArtifact
+    container_recovery_test.go:160: reclaim state owner=<nil> attempt=2 generation=2; want other worker, attempt=2, generation=2
+--- FAIL: TestAPIWorkerContainersRecoverSharedArtifact (3.92s)
+FAIL
+FAIL	github.com/fantasticyi/distributed-task-lab/internal/e2e	4.648s
+FAIL

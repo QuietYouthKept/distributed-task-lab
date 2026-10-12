@@ -1,0 +1,17 @@
+ARG MINIO_IMAGE
+FROM ${MINIO_IMAGE} AS minio-tools
+
+FROM alpine:3.23@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0
+ARG SOURCE_COMMIT=unknown
+LABEL org.opencontainers.image.title="distributed-task-lab-minio-init" \
+      org.opencontainers.image.source="https://github.com/QuietYouthKept/distributed-task-lab" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+      org.opencontainers.image.description="Local-only MinIO bucket and least-privilege worker credential bootstrap"
+RUN apk add --no-cache ca-certificates \
+    && addgroup -S tasklab \
+    && adduser -S -G tasklab -h /home/tasklab tasklab
+COPY --from=minio-tools --chown=tasklab:tasklab /usr/bin/mc /usr/local/bin/mc
+COPY --chown=tasklab:tasklab deployments/local-first/minio/init-minio.sh /opt/tasklab/init-minio.sh
+COPY --chown=tasklab:tasklab deployments/local-first/minio/artifact-policy.json /opt/tasklab/artifact-policy.json
+USER tasklab
+ENTRYPOINT ["/bin/sh", "/opt/tasklab/init-minio.sh"]

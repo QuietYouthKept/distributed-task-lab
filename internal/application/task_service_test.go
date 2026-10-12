@@ -2,10 +2,12 @@ package application
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload"
 	"github.com/fantasticyi/distributed-task-lab/internal/storage/postgres"
 	"github.com/fantasticyi/distributed-task-lab/internal/testutil"
 )
@@ -55,12 +57,14 @@ func TestServiceLifecycle(t *testing.T) {
 		t.Errorf("status = %q, want pending", resp.Status)
 	}
 
-	// Attempt 1: fail (retryable) -> back to pending.
-	claimed, err := q.ClaimTasks(ctx, "worker-1", 5, 30*time.Second)
-	if err != nil || len(claimed) != 1 {
-		t.Fatalf("claim 1: err=%v n=%d", err, len(claimed))
+	// Attempt 1: fail (retryable) -> back to pending. PostgreSQL owns due-time
+	// eligibility; a newly inserted row can briefly be ahead of the claim
+	// statement's clock observation, so poll only within a finite test bound.
+	claimed := claimTaskEventually(t, ctx, q, "worker-1", 3*time.Second)
+	if claimed.ID != resp.ID {
+		t.Fatalf("claim 1 returned task %q, want %q", claimed.ID, resp.ID)
 	}
-	if err := q.MarkFailure(ctx, resp.ID, "worker-1", claimed[0].LeaseVersion,
+	if err := q.MarkFailure(ctx, resp.ID, "worker-1", claimed.LeaseVersion,
 		domain.TaskFailure{Message: "flaky", ErrorType: "execution_error", Retryable: true}); err != nil {
 		t.Fatalf("MarkFailure 1: %v", err)
 	}
@@ -183,5 +187,29 @@ func TestServiceValidation(t *testing.T) {
 		IdempotencyKey: &emptyKey,
 	}); err == nil {
 		t.Error("expected error for empty idempotency key")
+	}
+}
+
+func TestDeploymentAdmissionRejectsValidButDisabledModeBeforeEnqueue(t *testing.T) {
+	_, q := testService(t)
+	svc := NewTaskServiceWithAdmission(q, taskpayload.ProductionExecutionPolicy())
+	before, err := q.Stats(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.CreateTask(context.Background(), CreateTaskRequest{
+		Type:    domain.TaskTypeRAGIngestion,
+		Payload: domain.TaskPayloadEnvelope{Version: "1", Kind: "rag_ingestion", Data: map[string]any{"execution_mode": "mock", "document_id": "must-not-enqueue"}},
+	})
+	var domainErr *domain.Error
+	if !errors.As(err, &domainErr) || domainErr.Code != "task_execution_disabled" {
+		t.Fatalf("error=%v, want task_execution_disabled", err)
+	}
+	after, err := q.Stats(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after[domain.TaskStatusPending] != before[domain.TaskStatusPending] {
+		t.Fatalf("disabled task was enqueued: pending before=%d after=%d", before[domain.TaskStatusPending], after[domain.TaskStatusPending])
 	}
 }

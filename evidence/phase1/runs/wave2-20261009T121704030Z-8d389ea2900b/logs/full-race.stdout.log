@@ -1,0 +1,29 @@
+?   	github.com/fantasticyi/distributed-task-lab/cmd/api	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/assetlab	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/chaosmatrix	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/contractfixture	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/failurelab	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/loadgen	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/worker	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api	5.207s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api/contract	2.277s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api/handlers	4.904s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/application	7.399s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/artifacts	5.990s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/auth	3.895s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/config	1.585s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/domain	1.631s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload	1.801s
+?   	github.com/fantasticyi/distributed-task-lab/internal/effects	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/observability	4.829s
+?   	github.com/fantasticyi/distributed-task-lab/internal/queue	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/storage/postgres	29.569s
+?   	github.com/fantasticyi/distributed-task-lab/internal/storage/redis	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/internal/testutil	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/worker	7.797s
+--- FAIL: TestGatewayLLMEvalWritesReceiptsAndReusesFinalArtifact (0.54s)
+    llm_gateway_eval_test.go:58: persist artifact eval/gateway/a3013a76cbad16d22fca6d63baaba20cc7fe99eebbba4f1ae1004e20f18a28c5/manifest.json: artifact put "eval/gateway/a3013a76cbad16d22fca6d63baaba20cc7fe99eebbba4f1ae1004e20f18a28c5/manifest.json": artifact key already contains different content
+FAIL
+FAIL	github.com/fantasticyi/distributed-task-lab/internal/worker/handlers	6.457s
+ok  	github.com/fantasticyi/distributed-task-lab/pkg/client	3.309s
+FAIL

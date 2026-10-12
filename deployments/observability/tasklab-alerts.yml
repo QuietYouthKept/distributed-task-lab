@@ -1,0 +1,103 @@
+groups:
+  - name: tasklab-availability
+    rules:
+      - alert: TasklabAPIScrapeDown
+        expr: up{job="tasklab-api"} == 0
+        for: 15s
+        labels:
+          severity: warning
+        annotations:
+          summary: Task API metrics endpoint is unavailable
+          description: Prometheus has failed to scrape the Task API for at least 15 seconds.
+
+      - alert: TasklabWorkerScrapeDown
+        expr: up{job="tasklab-worker"} == 0
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: Worker metrics endpoint is unavailable
+          description: Prometheus has failed to scrape the Worker for at least 30 seconds.
+
+  - name: tasklab-correctness
+    rules:
+      - alert: TasklabDeadLetterTasksPresent
+        expr: sum(tasklab_tasks_total{status="dlq"}) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Dead-letter tasks need review
+          description: One or more tasks are currently in the dead-letter queue.
+
+      - alert: TasklabOldestPendingTask
+        expr: tasklab_oldest_pending_age_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Pending work is aging
+          description: The oldest pending task has remained older than five minutes.
+
+      - alert: TasklabUnknownExternalEffect
+        expr: increase(tasklab_effect_unknown_total[5m]) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: External effect outcome is unknown
+          description: Reconciliation is required before retrying or declaring success.
+
+      - alert: TasklabFencingRejections
+        expr: increase(tasklab_fencing_rejection_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Stale task ownership writes were rejected
+          description: Inspect lease expiry, worker pauses, and renewal behavior.
+
+  - name: tasklab-capacity-and-dependencies
+    rules:
+      - alert: TasklabAPIErrorsElevated
+        expr: |
+          sum(rate(tasklab_api_requests_total{status_class="5xx"}[5m]))
+          / clamp_min(sum(rate(tasklab_api_requests_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: API 5xx response ratio is elevated
+          description: More than five percent of API responses have been 5xx for five minutes.
+
+      - alert: TasklabLeaseRenewalsFailing
+        expr: increase(tasklab_lease_renew_failure_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Worker lease renewals are failing
+          description: Check database availability, worker scheduling delays, and lease configuration.
+
+      - alert: TasklabRetriesElevated
+        expr: rate(tasklab_retry_total[10m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Retry rate is elevated
+          description: Tasks are being rescheduled repeatedly; inspect handler and dependency failures.
+
+      - alert: TasklabArtifactBackendErrors
+        expr: increase(tasklab_artifact_error_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Artifact backend operations are failing
+          description: Inspect object-store connectivity, permissions, and integrity errors.
+
+      - alert: TasklabDatabasePoolWaits
+        expr: rate(tasklab_db_pool_wait_seconds_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: API database pool is experiencing sustained waits
+          description: Check pool sizing, query latency, and PostgreSQL capacity.

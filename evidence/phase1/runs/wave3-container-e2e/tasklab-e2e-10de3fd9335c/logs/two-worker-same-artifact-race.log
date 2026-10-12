@@ -1,0 +1,5 @@
+=== RUN   TestTwoWorkerContainersRaceForSameArtifact
+    container_recovery_test.go:627: PASS: two Worker containers reached the same-key PUT barrier before MinIO accepted either; owners=e2e-worker-a/e2e-worker-b; both task results reference identical verified SHA256=bf6038f67527e5efac583e45cc30d86be90dfe4c87f6742106ea2b822e5a9909
+--- PASS: TestTwoWorkerContainersRaceForSameArtifact (5.70s)
+PASS
+ok  	github.com/fantasticyi/distributed-task-lab/internal/e2e	7.471s

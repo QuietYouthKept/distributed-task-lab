@@ -8,6 +8,22 @@ Repository microbenchmarks and system load tests answer different questions.
 - lifecycle: enqueue, claim, fenced terminal write.
 - loadgen: end-to-end worker throughput and latency under a declared profile.
 
+The current loadgen reports `Throughput` as terminal tasks divided by elapsed
+wall time from submission start through the last terminal state. It records
+`SubmitSeconds`, `ProcessingSeconds` (the post-submission drain window), and
+`EndToEndSeconds` separately; failed enqueue attempts are not counted as
+terminal work. Older manifests predate this corrected denominator and their
+throughput uses the configured task count divided by only the post-submission
+drain window (so it can overstate full-run throughput and include failed
+enqueue attempts); the historical scope is documented in
+`docs/verification/03_HISTORICAL_EVIDENCE_AUDIT.md`.
+
+The recorded historical worker matrix uses the in-process Go worker pool and
+PostgreSQL repository/queue directly, with the default mock handler for `noop`;
+it does not traverse HTTP API, OIDC, Gateway, or ArtifactStore. Its figures are
+scheduler-kernel backlog-drain measurements, not end-to-end service capacity
+or provider performance.
+
 Always report PostgreSQL/Go version, CPU/storage, pool settings, task count,
 queue configuration, payload bytes, producer/worker concurrency, seed, warm-up,
 duration, and whether durability settings changed. Never compare numbers from

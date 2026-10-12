@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -57,7 +58,7 @@ func main() {
 	prefix := fmt.Sprintf("fl-%d", time.Now().UnixNano())
 
 	concurrentClaim(ctx, q, prefix)
-	strictCapacity(ctx, q, prefix)
+	strictCapacity(ctx, q, db, prefix)
 	reclaimAndFencing(ctx, q, prefix)
 	leaseRenewal(ctx, q, prefix)
 	retryDLQ(ctx, q, prefix)
@@ -134,12 +135,15 @@ func concurrentClaim(ctx context.Context, q *postgres.PostgresQueue, p string) {
 	pass(s, "claim", "16 unique rows claimed once")
 }
 
-func strictCapacity(ctx context.Context, q *postgres.PostgresQueue, p string) {
+func strictCapacity(ctx context.Context, q *postgres.PostgresQueue, db *sql.DB, p string) {
 	s := "strict-max-concurrency"
 	name := p + "-cap"
 	must(s, q.SetQueueConfig(ctx, domain.QueueConfig{Name: name, MaxConcurrency: 1, Burst: 1}))
 	for i := 0; i < 8; i++ {
 		enqueue(ctx, q, task(fmt.Sprintf("%s-%d", name, i), name))
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE tasks SET next_run_at=clock_timestamp()-interval '1 millisecond' WHERE queue=$1 AND status='pending'`, name); err != nil {
+		fatal(s, "make fixtures due using PostgreSQL time: "+err.Error())
 	}
 	start := make(chan struct{})
 	out := make(chan int, 8)

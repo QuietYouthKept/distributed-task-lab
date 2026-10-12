@@ -83,7 +83,7 @@ func parseAllowlist(raw string) map[string]bool {
 }
 
 func summarizeReceipts(receipts map[int]evalCaseReceipt) (passed, failed, inputTokens, outputTokens int, cost, providerWaitMS, providerMS float64) {
-	for _, r := range receipts {
+	for _, r := range orderedReceipts(receipts) {
 		if r.Status == "passed" {
 			passed++
 		} else {

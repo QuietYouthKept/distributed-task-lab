@@ -1,0 +1,4 @@
+﻿run_id=tasklab-e2e-a071fd1cdd0d
+result=NOT VERIFIED
+reason=Compose startup or health gate did not pass.
+secrets_recorded=false

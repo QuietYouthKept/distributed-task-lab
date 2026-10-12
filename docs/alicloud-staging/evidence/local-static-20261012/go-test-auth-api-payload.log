@@ -1,0 +1,5 @@
+ok  	github.com/fantasticyi/distributed-task-lab/internal/auth	1.043s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api	0.896s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api/contract	0.328s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api/handlers	0.747s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload	0.406s

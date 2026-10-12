@@ -1,0 +1,4 @@
+=== RUN   TestMinIOStoreContractAndConcurrentConditionalWrite
+--- PASS: TestMinIOStoreContractAndConcurrentConditionalWrite (0.16s)
+PASS
+ok  	github.com/fantasticyi/distributed-task-lab/internal/artifacts	1.824s

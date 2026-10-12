@@ -1,0 +1,13 @@
+region                 = "cn-hangzhou"
+zone_id                = "REVIEW_AVAILABLE_ZONE_IN_CONSOLE"
+image_id               = "REVIEW_UBUNTU_24_04_X86_64_IMAGE_ID_IN_CONSOLE"
+ssh_key_name            = "PRECREATED_PUBLIC_KEY_NAME"
+ssh_cidr                = "203.0.113.10/32"
+instance_type           = "ecs.g7.xlarge"
+worker_b_instance_type  = "" # Set a separately reviewed smaller type only with create_worker_b=true.
+system_disk_size_gib    = 40
+create_worker_b         = false
+run_id                  = "tasklab-acceptance-20261011"
+resource_ttl            = "2026-10-12T00:00:00Z"
+enable_resources        = false
+budget_approved         = false

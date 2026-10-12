@@ -1,0 +1,27 @@
+?   	github.com/fantasticyi/distributed-task-lab/cmd/api	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/assetlab	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/chaosmatrix	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/contractfixture	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/failurelab	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/loadgen	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/paginationbench	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/worker	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api	2.461s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api/contract	1.292s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api/handlers	2.227s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/application	3.402s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/artifacts	1.775s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/auth	1.816s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/config	1.218s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/domain	1.218s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload	1.266s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/e2e	1.507s
+?   	github.com/fantasticyi/distributed-task-lab/internal/effects	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/observability	2.529s
+?   	github.com/fantasticyi/distributed-task-lab/internal/queue	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/storage/postgres	25.622s
+?   	github.com/fantasticyi/distributed-task-lab/internal/storage/redis	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/internal/testutil	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/worker	4.494s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/worker/handlers	2.954s
+ok  	github.com/fantasticyi/distributed-task-lab/pkg/client	1.460s

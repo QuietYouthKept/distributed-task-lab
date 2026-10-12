@@ -1,0 +1,10 @@
+
+Warning: "name": [DEPRECATED] Field `name` has been deprecated from provider version 1.239.0. New field `security_group_name` instead.
+
+  with alicloud_security_group.staging,
+  on main.tf line 29, in resource "alicloud_security_group" "staging":
+  29: resource "alicloud_security_group" "staging" {
+
+Success! The configuration is valid, but there were some validation warnings
+as shown above.
+

@@ -1,0 +1,6 @@
+=== RUN   TestAPIWorkerContainersRecoverSharedArtifact
+    container_recovery_test.go:73: check container API readiness: Get "http://127.0.0.1:62651/ready": dial tcp 127.0.0.1:62651: connectex: No connection could be made because the target machine actively refused it.
+--- FAIL: TestAPIWorkerContainersRecoverSharedArtifact (0.02s)
+FAIL
+FAIL	github.com/fantasticyi/distributed-task-lab/internal/e2e	0.842s
+FAIL

@@ -1,0 +1,40 @@
+{
+  "run_id": "tasklab-e2e-e71c60f64c06",
+  "result": "PASS",
+  "implementation_commit": "8cd730018d01bfb16512b1a9480771f6f4583584",
+  "worktree_dirty_at_test": true,
+  "docker_compose_project": "tasklab-e2e-e71c60f64c06",
+  "minio_source_commit": "9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a",
+  "minio_ephemeral_local_image_id": "sha256:dc3d0f40a4c0eb1d4b855bb590a6d8f91bc0d1f2d69eee2fa21874a138e86fd0",
+  "postgres_image": "postgres:16-alpine",
+  "credentials_recorded": false,
+  "checks": [
+    {
+      "name": "minio-response-loss-contract",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "api-two-worker-container-recovery",
+      "exit_code": 0,
+      "status": "PASS"
+    }
+  ],
+  "files": [
+    {
+      "path": "logs/minio-response-loss-contract.log",
+      "sha256": "ff82aa5431d293345fe517a21445bb3e6ec58065e8c0330536026b9eaee90c8d",
+      "bytes": 480
+    },
+    {
+      "path": "logs/container-recovery.log",
+      "sha256": "2d5a40e580abc44a4c3cafb3b518b8923f5e4007ad72cfb3c0f20b4c25cc8e0a",
+      "bytes": 521
+    },
+    {
+      "path": "logs/services.redacted.log",
+      "sha256": "9494e6085339e19260d63faf23bea30409e6d6315b29db0286916d9eea36df4b",
+      "bytes": 34482
+    }
+  ]
+}

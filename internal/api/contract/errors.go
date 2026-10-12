@@ -30,6 +30,13 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	_ = jsonEncoder(w, ErrorResponse{Error: body, RequestID: RequestID(r.Context())})
 }
 
+// WriteRateLimitError emits the stable, request-correlated rate-limit response.
+func WriteRateLimitError(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusTooManyRequests)
+	_ = jsonEncoder(w, ErrorResponse{Error: APIError{Code: "rate_limited", Message: "request rate limit exceeded"}, RequestID: RequestID(r.Context())})
+}
+
 func ClassifyError(err error) (int, APIError) {
 	var typed *domain.Error
 	if errors.As(err, &typed) {

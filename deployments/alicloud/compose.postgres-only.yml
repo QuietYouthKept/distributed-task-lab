@@ -1,0 +1,106 @@
+name: tasklab-postgres-${TASKLAB_RUN_ID:?Set a unique run ID}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: ${TASKLAB_POSTGRES_IMAGE:?Set the reviewed PostgreSQL 16 digest}
+    platform: linux/amd64
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: tasklab
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+    secrets:
+      - postgres_superuser_password
+      - tasklab_migrator_password
+      - tasklab_api_password
+      - tasklab_worker_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../local-first/postgres/00-create-roles.sh:/docker-entrypoint-initdb.d/00-create-roles.sh:ro
+      - ${TASKLAB_PG_TLS_DIR:?Set run-scoped PostgreSQL TLS directory}:/run/tasklab-pg-tls:ro
+    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/run/tasklab-pg-tls/server.crt", "-c", "ssl_key_file=/run/tasklab-pg-tls/server.key"]
+    ports:
+      - "${TASKLAB_PG_PRIVATE_IP:?Set this ECS private IPv4}:5432:5432"
+    networks: [postgres_only]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tasklab"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    mem_limit: 4g
+    cpus: 2.0
+    restart: unless-stopped
+    logging: *logging
+
+  db-migrator:
+    image: tasklab-migrator:${TASKLAB_SOURCE_SHA:?Set the exact 40-character source SHA}
+    build:
+      context: ../..
+      dockerfile: deployments/Dockerfile.migrator
+      args:
+        SOURCE_COMMIT: ${TASKLAB_SOURCE_SHA:?Set the exact 40-character source SHA}
+    environment:
+      APP_PROFILE: staging-sim
+      MIGRATOR_DATABASE_URL_FILE: /run/secrets/migrator_database_url
+    secrets: [migrator_database_url]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [postgres_only]
+    mem_limit: 384m
+    cpus: 0.75
+    restart: "no"
+    logging: *logging
+
+  db-runtime-grants:
+    image: ${TASKLAB_POSTGRES_IMAGE:?Set the reviewed PostgreSQL 16 digest}
+    platform: linux/amd64
+    entrypoint: ["/bin/sh", "/opt/tasklab/apply-runtime-grants.sh"]
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: tasklab
+      PGUSER: tasklab_migrator
+      PGPASSWORD_FILE: /run/secrets/tasklab_migrator_password
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: /run/secrets/pg_root_ca
+    secrets: [tasklab_migrator_password, pg_root_ca]
+    volumes:
+      - ../local-first/postgres/apply-runtime-grants.sh:/opt/tasklab/apply-runtime-grants.sh:ro
+      - ../local-first/postgres/runtime-grants.sql:/opt/tasklab/runtime-grants.sql:ro
+    depends_on:
+      db-migrator:
+        condition: service_completed_successfully
+    networks: [postgres_only]
+    mem_limit: 128m
+    cpus: 0.25
+    restart: "no"
+    logging: *logging
+
+networks:
+  postgres_only:
+    internal: true
+
+volumes:
+  postgres_data:
+    name: tasklab-postgres-${TASKLAB_RUN_ID}-data
+
+secrets:
+  postgres_superuser_password:
+    file: ${TASKLAB_SECRET_DIR:?Set run-scoped secret directory}/postgres-superuser-password
+  tasklab_migrator_password:
+    file: ${TASKLAB_SECRET_DIR}/tasklab-migrator-password
+  tasklab_api_password:
+    file: ${TASKLAB_SECRET_DIR}/tasklab-api-password
+  tasklab_worker_password:
+    file: ${TASKLAB_SECRET_DIR}/tasklab-worker-password
+  migrator_database_url:
+    file: ${TASKLAB_SECRET_DIR}/migrator-database-url
+  pg_root_ca:
+    file: ${TASKLAB_PG_TLS_DIR}/ca.crt

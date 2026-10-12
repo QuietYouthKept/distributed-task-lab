@@ -41,6 +41,7 @@ type Task struct {
 	DLQReason *string `json:"dlq_reason,omitempty"`
 
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
+	CreatedBy      *string `json:"created_by,omitempty"`
 }
 
 // RetryDelayForAttempt computes the delay before the next retry for a task that
@@ -57,11 +58,14 @@ func (t Task) RetryDelayForAttempt(attempt int) time.Duration {
 
 // TaskFilter is used to query tasks with optional filters.
 type TaskFilter struct {
-	Status *TaskStatus
-	Type   *TaskType
-	Queue  *string
-	Limit  int
-	Offset int
+	Status         *TaskStatus
+	Type           *TaskType
+	Queue          *string
+	CreatedBy      *string
+	AfterCreatedAt *time.Time
+	AfterID        *string
+	Limit          int
+	Offset         int
 }
 
 // RetryPolicy defines how a task should be retried.

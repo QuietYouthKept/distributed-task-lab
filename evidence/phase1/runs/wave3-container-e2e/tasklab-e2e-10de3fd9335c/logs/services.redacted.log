@@ -1,0 +1,695 @@
+minio-1     | 2026-10-10T02:28:11.836971130Z INFO: Formatting 1st pool, 1 set(s), 1 drives per set.
+minio-1     | 2026-10-10T02:28:11.837146001Z INFO: WARNING: Host local has more than 0 drives of set. A host failure will result in data becoming unavailable.
+minio-1     | 2026-10-10T02:28:11.858350459Z MinIO Object Storage Server
+minio-1     | 2026-10-10T02:28:11.858518092Z Copyright: 2015-2026 MinIO, Inc.
+minio-1     | 2026-10-10T02:28:11.858525183Z License: GNU AGPLv3 - https://www.gnu.org/licenses/agpl-3.0.html
+api-1       | 2026-10-10T02:28:35.231386374Z {"time":"2026-10-10T02:28:35.23099058Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"f9d6ec362ea6912988611717023dde4d135071bca54503189e11317bf8b46cb8"}
+worker-a-1  | 2026-10-10T02:28:35.806088927Z {"time":"2026-10-10T02:28:35.805642238Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"521061c72e12bbcd576bf8c3c8b4a52b4d1087870a9ed4ce29b97c225eafaf89"}
+api-1       | 2026-10-10T02:28:35.231427603Z {"time":"2026-10-10T02:28:35.231198843Z","level":"INFO","msg":"starting API server","port":8080}
+postgres-1  | 2026-10-10T02:28:11.723909165Z The files belonging to this database system will be owned by user "postgres".
+postgres-1  | 2026-10-10T02:28:11.723950159Z This user must also own the server process.
+worker-b-1  | 2026-10-10T02:28:43.353223826Z {"time":"2026-10-10T02:28:43.35278186Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"521061c72e12bbcd576bf8c3c8b4a52b4d1087870a9ed4ce29b97c225eafaf89"}
+worker-b-1  | 2026-10-10T02:28:43.353255497Z {"time":"2026-10-10T02:28:43.353075481Z","level":"INFO","msg":"starting worker","worker_id":"e2e-worker-b","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000}
+worker-b-1  | 2026-10-10T02:28:43.371866797Z {"time":"2026-10-10T02:28:43.37166007Z","level":"INFO","msg":"database migrations applied","worker_id":"e2e-worker-b"}
+postgres-1  | 2026-10-10T02:28:11.723953002Z 
+postgres-1  | 2026-10-10T02:28:11.723955095Z The database cluster will be initialized with locale "en_US.utf8".
+postgres-1  | 2026-10-10T02:28:11.723957071Z The default database encoding has accordingly been set to "UTF8".
+postgres-1  | 2026-10-10T02:28:11.723959005Z The default text search configuration will be set to "english".
+worker-a-1  | 2026-10-10T02:28:35.806151617Z {"time":"2026-10-10T02:28:35.805953615Z","level":"INFO","msg":"starting worker","worker_id":"e2e-worker-a","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000}
+minio-1     | 2026-10-10T02:28:11.858528438Z Version: DEVELOPMENT.GOGET (go1.26.9 linux/amd64)
+worker-a-1  | 2026-10-10T02:28:35.823409198Z {"time":"2026-10-10T02:28:35.823148076Z","level":"INFO","msg":"database migrations applied","worker_id":"e2e-worker-a"}
+worker-a-1  | 2026-10-10T02:28:35.834665811Z {"time":"2026-10-10T02:28:35.834311245Z","level":"INFO","msg":"worker pool starting","worker_id":"e2e-worker-a","worker_id":"e2e-worker-a","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000,"max_local_claims":2}
+minio-1     | 2026-10-10T02:28:11.858531217Z 
+worker-a-1  | 2026-10-10T02:28:55.362265170Z {"time":"2026-10-10T02:28:55.361900799Z","level":"INFO","msg":"executing task","worker_id":"e2e-worker-a","task_id":"20e66730-1cad-4f9f-8435-426b165eed18","task_type":"rag_ingestion","queue":"default","attempt":1,"lease_version":1,"worker_id":"e2e-worker-a","goroutine":0}
+api-1       | 2026-10-10T02:28:35.280465801Z migration applied: 001_create_tasks.sql
+minio-1     | 2026-10-10T02:28:11.858533828Z API: http://192.168.128.2:9000  http://127.0.0.1:9000 
+postgres-1  | 2026-10-10T02:28:11.723961436Z 
+postgres-1  | 2026-10-10T02:28:11.723963983Z Data page checksums are disabled.
+worker-b-1  | 2026-10-10T02:28:43.376597917Z {"time":"2026-10-10T02:28:43.376325579Z","level":"INFO","msg":"worker pool starting","worker_id":"e2e-worker-b","worker_id":"e2e-worker-b","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000,"max_local_claims":2}
+worker-a-1  | 2026-10-10T02:29:05.026457678Z {"time":"2026-10-10T02:29:05.025961121Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"521061c72e12bbcd576bf8c3c8b4a52b4d1087870a9ed4ce29b97c225eafaf89"}
+worker-b-1  | 2026-10-10T02:28:59.383549839Z {"time":"2026-10-10T02:28:59.383247153Z","level":"INFO","msg":"executing task","worker_id":"e2e-worker-b","task_id":"20e66730-1cad-4f9f-8435-426b165eed18","task_type":"rag_ingestion","queue":"default","attempt":2,"lease_version":2,"worker_id":"e2e-worker-b","goroutine":0}
+worker-b-1  | 2026-10-10T02:28:59.394237510Z {"time":"2026-10-10T02:28:59.393976581Z","level":"INFO","msg":"task completed successfully","worker_id":"e2e-worker-b","task_id":"20e66730-1cad-4f9f-8435-426b165eed18","worker_id":"e2e-worker-b"}
+api-1       | 2026-10-10T02:28:35.300173044Z migration applied: 002_create_task_events.sql
+minio-1     | 2026-10-10T02:28:11.858536861Z WebUI: http://192.168.128.2:9001 http://127.0.0.1:9001  
+api-1       | 2026-10-10T02:28:35.313381682Z migration applied: 003_create_workers.sql
+postgres-1  | 2026-10-10T02:28:11.724014107Z 
+postgres-1  | 2026-10-10T02:28:11.724033088Z fixing permissions on existing directory /var/lib/postgresql/data ... ok
+postgres-1  | 2026-10-10T02:28:11.731581174Z creating subdirectories ... ok
+worker-b-1  | 2026-10-10T02:29:07.584030211Z {"time":"2026-10-10T02:29:07.583792643Z","level":"INFO","msg":"shutting down worker","worker_id":"e2e-worker-b"}
+api-1       | 2026-10-10T02:28:35.323103090Z migration applied: 004_production_hardening.sql
+worker-b-1  | 2026-10-10T02:29:07.584231242Z {"time":"2026-10-10T02:29:07.583989025Z","level":"INFO","msg":"worker pool stopped","worker_id":"e2e-worker-b","worker_id":"e2e-worker-b","forced":false}
+postgres-1  | 2026-10-10T02:28:11.731682185Z selecting dynamic shared memory implementation ... posix
+worker-b-1  | 2026-10-10T02:29:07.584252621Z {"time":"2026-10-10T02:29:07.584151208Z","level":"INFO","msg":"worker stopped","worker_id":"e2e-worker-b"}
+api-1       | 2026-10-10T02:28:35.339180765Z migration applied: 005_queue_governance.sql
+worker-b-1  | 2026-10-10T02:29:13.194973765Z {"time":"2026-10-10T02:29:13.194684652Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"521061c72e12bbcd576bf8c3c8b4a52b4d1087870a9ed4ce29b97c225eafaf89"}
+worker-b-1  | 2026-10-10T02:29:13.195103523Z {"time":"2026-10-10T02:29:13.19493628Z","level":"INFO","msg":"starting worker","worker_id":"e2e-worker-b","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000}
+postgres-1  | 2026-10-10T02:28:11.751252580Z selecting default max_connections ... 100
+api-1       | 2026-10-10T02:28:35.342889889Z migration applied: 006_queue_rate_limit.sql
+api-1       | 2026-10-10T02:28:35.395801749Z migration applied: 007_integrity_and_runtime.sql
+worker-a-1  | 2026-10-10T02:29:05.026509103Z {"time":"2026-10-10T02:29:05.026335052Z","level":"INFO","msg":"starting worker","worker_id":"e2e-worker-a","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000}
+minio-1     | 2026-10-10T02:28:11.858539513Z 
+worker-a-1  | 2026-10-10T02:29:05.042700880Z {"time":"2026-10-10T02:29:05.042461309Z","level":"INFO","msg":"database migrations applied","worker_id":"e2e-worker-a"}
+worker-a-1  | 2026-10-10T02:29:05.045732136Z {"time":"2026-10-10T02:29:05.045482635Z","level":"INFO","msg":"worker pool starting","worker_id":"e2e-worker-a","worker_id":"e2e-worker-a","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000,"max_local_claims":2}
+worker-a-1  | 2026-10-10T02:29:08.054747861Z {"time":"2026-10-10T02:29:08.054476492Z","level":"INFO","msg":"executing task","worker_id":"e2e-worker-a","task_id":"fc02c7b3-cc38-4224-b382-91aa78d7fb43","task_type":"rag_ingestion","queue":"default","attempt":1,"lease_version":1,"worker_id":"e2e-worker-a","goroutine":0}
+worker-a-1  | 2026-10-10T02:29:11.543735996Z {"time":"2026-10-10T02:29:11.543368779Z","level":"INFO","msg":"shutting down worker","worker_id":"e2e-worker-a"}
+worker-a-1  | 2026-10-10T02:29:11.543892700Z {"time":"2026-10-10T02:29:11.543680592Z","level":"INFO","msg":"worker pool stopped","worker_id":"e2e-worker-a","worker_id":"e2e-worker-a","forced":false}
+postgres-1  | 2026-10-10T02:28:11.782479507Z selecting default shared_buffers ... 128MB
+api-1       | 2026-10-10T02:28:35.401972776Z migration applied: 008_queue_aging.sql
+postgres-1  | 2026-10-10T02:28:11.918798102Z selecting default time zone ... UTC
+postgres-1  | 2026-10-10T02:28:11.920470210Z creating configuration files ... ok
+postgres-1  | 2026-10-10T02:28:12.062299401Z running bootstrap script ... ok
+postgres-1  | 2026-10-10T02:28:12.269154880Z sh: locale: not found
+minio-1     | 2026-10-10T02:28:11.858541965Z Docs: https://docs.min.io
+api-1       | 2026-10-10T02:28:35.422412749Z migration applied: 009_create_effects.sql
+api-1       | 2026-10-10T02:28:35.450220518Z migration applied: 010_identity_audit.sql
+worker-b-1  | 2026-10-10T02:29:13.209756417Z {"time":"2026-10-10T02:29:13.209531674Z","level":"INFO","msg":"database migrations applied","worker_id":"e2e-worker-b"}
+postgres-1  | 2026-10-10T02:28:12.269241243Z 2026-10-10 02:28:12.269 UTC [35] WARNING:  no usable system locales were found
+worker-b-1  | 2026-10-10T02:29:13.212256675Z {"time":"2026-10-10T02:29:13.211921738Z","level":"INFO","msg":"worker pool starting","worker_id":"e2e-worker-b","worker_id":"e2e-worker-b","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000,"max_local_claims":2}
+postgres-1  | 2026-10-10T02:28:12.777600375Z performing post-bootstrap initialization ... ok
+postgres-1  | 2026-10-10T02:28:13.237697376Z initdb: warning: enabling "trust" authentication for local connections
+postgres-1  | 2026-10-10T02:28:13.237721799Z initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+postgres-1  | 2026-10-10T02:28:13.237736890Z syncing data to disk ... ok
+worker-b-1  | 2026-10-10T02:29:24.269176354Z {"time":"2026-10-10T02:29:24.268929705Z","level":"INFO","msg":"executing task","worker_id":"e2e-worker-b","task_id":"fc02c7b3-cc38-4224-b382-91aa78d7fb43","task_type":"rag_ingestion","queue":"default","attempt":2,"lease_version":2,"worker_id":"e2e-worker-b","goroutine":0}
+worker-b-1  | 2026-10-10T02:29:24.281092071Z {"time":"2026-10-10T02:29:24.280889425Z","level":"INFO","msg":"task completed successfully","worker_id":"e2e-worker-b","task_id":"fc02c7b3-cc38-4224-b382-91aa78d7fb43","worker_id":"e2e-worker-b"}
+worker-b-1  | 2026-10-10T02:29:32.262291013Z {"time":"2026-10-10T02:29:32.262004075Z","level":"INFO","msg":"shutting down worker","worker_id":"e2e-worker-b"}
+api-1       | 2026-10-10T02:28:35.459781887Z migration applied: 011_task_keyset_pagination.sql
+api-1       | 2026-10-10T02:28:35.460516171Z {"time":"2026-10-10T02:28:35.460286298Z","level":"INFO","msg":"database migrations applied"}
+api-1       | 2026-10-10T02:28:35.460794308Z {"time":"2026-10-10T02:28:35.460554171Z","level":"INFO","msg":"API server listening","addr":":8080"}
+api-1       | 2026-10-10T02:28:55.326590423Z {"time":"2026-10-10T02:28:55.326285391Z","level":"INFO","msg":"request","method":"GET","path":"/ready"}
+postgres-1  | 2026-10-10T02:28:13.237746412Z 
+postgres-1  | 2026-10-10T02:28:13.237749530Z 
+postgres-1  | 2026-10-10T02:28:13.237752087Z Success. You can now start the database server using:
+postgres-1  | 2026-10-10T02:28:13.237754698Z 
+postgres-1  | 2026-10-10T02:28:13.237757044Z     pg_ctl -D /var/lib/postgresql/data -l logfile start
+worker-a-1  | 2026-10-10T02:29:11.544051148Z {"time":"2026-10-10T02:29:11.543851448Z","level":"INFO","msg":"worker stopped","worker_id":"e2e-worker-a"}
+postgres-1  | 2026-10-10T02:28:13.237759337Z 
+worker-a-1  | 2026-10-10T02:29:29.694536452Z {"time":"2026-10-10T02:29:29.69407243Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"521061c72e12bbcd576bf8c3c8b4a52b4d1087870a9ed4ce29b97c225eafaf89"}
+postgres-1  | 2026-10-10T02:28:13.288117244Z waiting for server to start....2026-10-10 02:28:13.287 UTC [41] LOG:  starting PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+worker-a-1  | 2026-10-10T02:29:29.694559283Z {"time":"2026-10-10T02:29:29.694413705Z","level":"INFO","msg":"starting worker","worker_id":"e2e-worker-a","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000}
+worker-a-1  | 2026-10-10T02:29:29.708824752Z {"time":"2026-10-10T02:29:29.708602011Z","level":"INFO","msg":"database migrations applied","worker_id":"e2e-worker-a"}
+worker-a-1  | 2026-10-10T02:29:29.711239637Z {"time":"2026-10-10T02:29:29.711016047Z","level":"INFO","msg":"worker pool starting","worker_id":"e2e-worker-a","worker_id":"e2e-worker-a","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000,"max_local_claims":2}
+worker-a-1  | 2026-10-10T02:29:32.779691510Z {"time":"2026-10-10T02:29:32.779416439Z","level":"INFO","msg":"executing task","worker_id":"e2e-worker-a","task_id":"796bb1a6-fba9-4b8d-b6d7-617529cae301","task_type":"rag_ingestion","queue":"default","attempt":1,"lease_version":1,"worker_id":"e2e-worker-a","goroutine":0}
+postgres-1  | 2026-10-10T02:28:13.290775800Z 2026-10-10 02:28:13.290 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-10-10T02:28:13.298233221Z 2026-10-10 02:28:13.298 UTC [44] LOG:  database system was shut down at 2026-10-10 02:28:12 UTC
+api-1       | 2026-10-10T02:28:55.338017661Z {"time":"2026-10-10T02:28:55.337766494Z","level":"INFO","msg":"request","method":"POST","path":"/v1/tasks"}
+api-1       | 2026-10-10T02:28:55.345934582Z {"time":"2026-10-10T02:28:55.345656699Z","level":"INFO","msg":"task created","task_id":"20e66730-1cad-4f9f-8435-426b165eed18","type":"rag_ingestion"}
+api-1       | 2026-10-10T02:28:55.365359935Z {"time":"2026-10-10T02:28:55.365122743Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:55.400214110Z {"time":"2026-10-10T02:28:55.399928377Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.038531435Z {"time":"2026-10-10T02:28:56.038324551Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+worker-b-1  | 2026-10-10T02:29:32.263106722Z {"time":"2026-10-10T02:29:32.262902113Z","level":"INFO","msg":"worker pool stopped","worker_id":"e2e-worker-b","worker_id":"e2e-worker-b","forced":false}
+worker-b-1  | 2026-10-10T02:29:32.263224508Z {"time":"2026-10-10T02:29:32.263065524Z","level":"INFO","msg":"worker stopped","worker_id":"e2e-worker-b"}
+worker-b-1  | 2026-10-10T02:29:34.058548402Z {"time":"2026-10-10T02:29:34.05830195Z","level":"INFO","msg":"validated effective configuration","profile":"development","database":"postgres://postgres:5432/tasklab?sslmode=disable","config_checksum":"521061c72e12bbcd576bf8c3c8b4a52b4d1087870a9ed4ce29b97c225eafaf89"}
+worker-a-1  | 2026-10-10T02:29:34.352155463Z {"time":"2026-10-10T02:29:34.351854071Z","level":"INFO","msg":"task completed successfully","worker_id":"e2e-worker-a","task_id":"796bb1a6-fba9-4b8d-b6d7-617529cae301","worker_id":"e2e-worker-a"}
+postgres-1  | 2026-10-10T02:28:13.304277759Z 2026-10-10 02:28:13.304 UTC [41] LOG:  database system is ready to accept connections
+postgres-1  | 2026-10-10T02:28:13.363215810Z  done
+postgres-1  | 2026-10-10T02:28:13.363240054Z server started
+worker-a-1  | 2026-10-10T02:29:34.352185706Z {"time":"2026-10-10T02:29:34.351943517Z","level":"INFO","msg":"executing task","worker_id":"e2e-worker-a","task_id":"9bc7f1c1-06af-4c6c-8e67-1c5216665ab1","task_type":"rag_ingestion","queue":"default","attempt":1,"lease_version":1,"worker_id":"e2e-worker-a","goroutine":0}
+api-1       | 2026-10-10T02:28:56.067251175Z {"time":"2026-10-10T02:28:56.066969986Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+postgres-1  | 2026-10-10T02:28:13.445041242Z CREATE DATABASE
+postgres-1  | 2026-10-10T02:28:13.445772614Z 
+postgres-1  | 2026-10-10T02:28:13.445784905Z 
+postgres-1  | 2026-10-10T02:28:13.445787293Z /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+postgres-1  | 2026-10-10T02:28:13.445789481Z 
+api-1       | 2026-10-10T02:28:56.095770571Z {"time":"2026-10-10T02:28:56.095480676Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.124722218Z {"time":"2026-10-10T02:28:56.124463523Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.153449916Z {"time":"2026-10-10T02:28:56.153210581Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.182623522Z {"time":"2026-10-10T02:28:56.182362405Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+worker-b-1  | 2026-10-10T02:29:34.058573184Z {"time":"2026-10-10T02:29:34.058492528Z","level":"INFO","msg":"starting worker","worker_id":"e2e-worker-b","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000}
+api-1       | 2026-10-10T02:28:56.211408104Z {"time":"2026-10-10T02:28:56.211185628Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+worker-b-1  | 2026-10-10T02:29:34.074545028Z {"time":"2026-10-10T02:29:34.074309613Z","level":"INFO","msg":"database migrations applied","worker_id":"e2e-worker-b"}
+worker-a-1  | 2026-10-10T02:29:34.364440003Z {"time":"2026-10-10T02:29:34.364211196Z","level":"INFO","msg":"task completed successfully","worker_id":"e2e-worker-a","task_id":"9bc7f1c1-06af-4c6c-8e67-1c5216665ab1","worker_id":"e2e-worker-a"}
+worker-b-1  | 2026-10-10T02:29:34.076829820Z {"time":"2026-10-10T02:29:34.076572393Z","level":"INFO","msg":"worker pool starting","worker_id":"e2e-worker-b","worker_id":"e2e-worker-b","concurrency":1,"poll_interval":20000000,"lease_timeout":4000000000,"max_local_claims":2}
+worker-b-1  | 2026-10-10T02:29:34.305840040Z {"time":"2026-10-10T02:29:34.305486336Z","level":"INFO","msg":"executing task","worker_id":"e2e-worker-b","task_id":"7bff77b6-f20e-4640-b8f4-7dc534fba10a","task_type":"rag_ingestion","queue":"default","attempt":1,"lease_version":1,"worker_id":"e2e-worker-b","goroutine":0}
+worker-b-1  | 2026-10-10T02:29:34.317440195Z {"time":"2026-10-10T02:29:34.317188016Z","level":"INFO","msg":"task completed successfully","worker_id":"e2e-worker-b","task_id":"7bff77b6-f20e-4640-b8f4-7dc534fba10a","worker_id":"e2e-worker-b"}
+api-1       | 2026-10-10T02:28:56.239936217Z {"time":"2026-10-10T02:28:56.239664647Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+postgres-1  | 2026-10-10T02:28:13.446817373Z waiting for server to shut down...2026-10-10 02:28:13.446 UTC [41] LOG:  received fast shutdown request
+api-1       | 2026-10-10T02:28:56.268634344Z {"time":"2026-10-10T02:28:56.268294641Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.297806153Z {"time":"2026-10-10T02:28:56.297526506Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.326650672Z {"time":"2026-10-10T02:28:56.326393603Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.355409596Z {"time":"2026-10-10T02:28:56.355187924Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.385540586Z {"time":"2026-10-10T02:28:56.384052738Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.415220487Z {"time":"2026-10-10T02:28:56.414985728Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.444183136Z {"time":"2026-10-10T02:28:56.443894648Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.473326667Z {"time":"2026-10-10T02:28:56.473076072Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.501767732Z {"time":"2026-10-10T02:28:56.501541212Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.530480429Z {"time":"2026-10-10T02:28:56.530258767Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.559207657Z {"time":"2026-10-10T02:28:56.558952784Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+postgres-1  | 2026-10-10T02:28:13.450027451Z .2026-10-10 02:28:13.449 UTC [41] LOG:  aborting any active transactions
+postgres-1  | 2026-10-10T02:28:13.452494574Z 2026-10-10 02:28:13.452 UTC [41] LOG:  background worker "logical replication launcher" (PID 47) exited with exit code 1
+postgres-1  | 2026-10-10T02:28:13.452737748Z 2026-10-10 02:28:13.452 UTC [42] LOG:  shutting down
+postgres-1  | 2026-10-10T02:28:13.454695505Z 2026-10-10 02:28:13.454 UTC [42] LOG:  checkpoint starting: shutdown immediate
+postgres-1  | 2026-10-10T02:28:13.601817138Z 2026-10-10 02:28:13.601 UTC [42] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.028 s, sync=0.114 s, total=0.149 s; sync files=301, longest=0.003 s, average=0.001 s; distance=4283 kB, estimate=4283 kB; lsn=0/1925D60, redo lsn=0/1925D60
+postgres-1  | 2026-10-10T02:28:13.614895578Z 2026-10-10 02:28:13.614 UTC [41] LOG:  database system is shut down
+postgres-1  | 2026-10-10T02:28:13.647344727Z  done
+postgres-1  | 2026-10-10T02:28:13.647361436Z server stopped
+postgres-1  | 2026-10-10T02:28:13.648441674Z 
+postgres-1  | 2026-10-10T02:28:13.648452686Z PostgreSQL init process complete; ready for start up.
+postgres-1  | 2026-10-10T02:28:13.648455264Z 
+postgres-1  | 2026-10-10T02:28:13.674311268Z 2026-10-10 02:28:13.674 UTC [1] LOG:  starting PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1  | 2026-10-10T02:28:13.675424522Z 2026-10-10 02:28:13.675 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+postgres-1  | 2026-10-10T02:28:13.685441633Z 2026-10-10 02:28:13.685 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+postgres-1  | 2026-10-10T02:28:13.696095159Z 2026-10-10 02:28:13.695 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-10-10T02:28:13.701998677Z 2026-10-10 02:28:13.701 UTC [63] LOG:  database system was shut down at 2026-10-10 02:28:13 UTC
+postgres-1  | 2026-10-10T02:28:13.709565964Z 2026-10-10 02:28:13.709 UTC [1] LOG:  database system is ready to accept connections
+postgres-1  | 2026-10-10T02:28:56.038352346Z 2026-10-10 02:28:56.038 UTC [148] LOG:  unexpected EOF on client connection with an open transaction
+api-1       | 2026-10-10T02:28:56.587722882Z {"time":"2026-10-10T02:28:56.587481783Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.616285083Z {"time":"2026-10-10T02:28:56.616053672Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.645258917Z {"time":"2026-10-10T02:28:56.644950547Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.674336772Z {"time":"2026-10-10T02:28:56.674117857Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.703166674Z {"time":"2026-10-10T02:28:56.702919004Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.731990680Z {"time":"2026-10-10T02:28:56.731749072Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.760592992Z {"time":"2026-10-10T02:28:56.760329889Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.789551980Z {"time":"2026-10-10T02:28:56.78928851Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.818153980Z {"time":"2026-10-10T02:28:56.817934471Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.846962191Z {"time":"2026-10-10T02:28:56.84671993Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.875776194Z {"time":"2026-10-10T02:28:56.875580243Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.904410332Z {"time":"2026-10-10T02:28:56.904136234Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.933253589Z {"time":"2026-10-10T02:28:56.933012183Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.961935679Z {"time":"2026-10-10T02:28:56.961633372Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:56.990410728Z {"time":"2026-10-10T02:28:56.990165012Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.019305955Z {"time":"2026-10-10T02:28:57.019035633Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.048402730Z {"time":"2026-10-10T02:28:57.048111524Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.077193069Z {"time":"2026-10-10T02:28:57.0769196Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.106426064Z {"time":"2026-10-10T02:28:57.106147888Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.135490317Z {"time":"2026-10-10T02:28:57.135218687Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.164681829Z {"time":"2026-10-10T02:28:57.164449804Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.193818864Z {"time":"2026-10-10T02:28:57.193555155Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.222979952Z {"time":"2026-10-10T02:28:57.22273789Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.252028093Z {"time":"2026-10-10T02:28:57.251793755Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.281126106Z {"time":"2026-10-10T02:28:57.280874347Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.309782938Z {"time":"2026-10-10T02:28:57.309567097Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.338103565Z {"time":"2026-10-10T02:28:57.337825925Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.367066201Z {"time":"2026-10-10T02:28:57.366785656Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.395473916Z {"time":"2026-10-10T02:28:57.395228471Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.424313704Z {"time":"2026-10-10T02:28:57.424085874Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.453285478Z {"time":"2026-10-10T02:28:57.453076271Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.482554942Z {"time":"2026-10-10T02:28:57.482252477Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.511125383Z {"time":"2026-10-10T02:28:57.510890379Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.540066141Z {"time":"2026-10-10T02:28:57.539790329Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.569047007Z {"time":"2026-10-10T02:28:57.568798284Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.597967957Z {"time":"2026-10-10T02:28:57.597715125Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.626986658Z {"time":"2026-10-10T02:28:57.626710878Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.655880999Z {"time":"2026-10-10T02:28:57.655612433Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.685074467Z {"time":"2026-10-10T02:28:57.68477255Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.713976421Z {"time":"2026-10-10T02:28:57.713714861Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.742675924Z {"time":"2026-10-10T02:28:57.742410179Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.771701371Z {"time":"2026-10-10T02:28:57.771415595Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.800637207Z {"time":"2026-10-10T02:28:57.800390351Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.829685559Z {"time":"2026-10-10T02:28:57.829364565Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.858809960Z {"time":"2026-10-10T02:28:57.858562047Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.887578473Z {"time":"2026-10-10T02:28:57.887318007Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.916633627Z {"time":"2026-10-10T02:28:57.916358501Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.945693239Z {"time":"2026-10-10T02:28:57.945481645Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:57.974817027Z {"time":"2026-10-10T02:28:57.974630966Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.004105021Z {"time":"2026-10-10T02:28:58.003901082Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.033277561Z {"time":"2026-10-10T02:28:58.033034063Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.062505709Z {"time":"2026-10-10T02:28:58.062169979Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.091899656Z {"time":"2026-10-10T02:28:58.091640588Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.122193269Z {"time":"2026-10-10T02:28:58.121905941Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.151075409Z {"time":"2026-10-10T02:28:58.15078453Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.179956142Z {"time":"2026-10-10T02:28:58.179692636Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.209559066Z {"time":"2026-10-10T02:28:58.209238864Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.238848547Z {"time":"2026-10-10T02:28:58.238456998Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.267958613Z {"time":"2026-10-10T02:28:58.267706992Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.296905020Z {"time":"2026-10-10T02:28:58.296666512Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.326013503Z {"time":"2026-10-10T02:28:58.3257109Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.355190660Z {"time":"2026-10-10T02:28:58.354848866Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.384725667Z {"time":"2026-10-10T02:28:58.384367923Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.415327173Z {"time":"2026-10-10T02:28:58.415046101Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.443934028Z {"time":"2026-10-10T02:28:58.443700156Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.473088948Z {"time":"2026-10-10T02:28:58.472798633Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.502303701Z {"time":"2026-10-10T02:28:58.5020114Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.530976834Z {"time":"2026-10-10T02:28:58.530778857Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.559987241Z {"time":"2026-10-10T02:28:58.559754825Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.588808659Z {"time":"2026-10-10T02:28:58.588561104Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.617612667Z {"time":"2026-10-10T02:28:58.617398918Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.646668962Z {"time":"2026-10-10T02:28:58.646401568Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.675716330Z {"time":"2026-10-10T02:28:58.675488816Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.704554155Z {"time":"2026-10-10T02:28:58.7042727Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.733153911Z {"time":"2026-10-10T02:28:58.732904759Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.762004347Z {"time":"2026-10-10T02:28:58.761762074Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.790614034Z {"time":"2026-10-10T02:28:58.790329591Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.819548411Z {"time":"2026-10-10T02:28:58.819074769Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.848862750Z {"time":"2026-10-10T02:28:58.848613008Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.877741698Z {"time":"2026-10-10T02:28:58.877441568Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.906672200Z {"time":"2026-10-10T02:28:58.906376612Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.935969023Z {"time":"2026-10-10T02:28:58.935685758Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.964728453Z {"time":"2026-10-10T02:28:58.964474032Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:58.993572467Z {"time":"2026-10-10T02:28:58.993273773Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.022684919Z {"time":"2026-10-10T02:28:59.022407289Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.051668556Z {"time":"2026-10-10T02:28:59.051412455Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.080488251Z {"time":"2026-10-10T02:28:59.080203278Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.109356733Z {"time":"2026-10-10T02:28:59.109098286Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.137906732Z {"time":"2026-10-10T02:28:59.137612697Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.166923213Z {"time":"2026-10-10T02:28:59.166671432Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.195574299Z {"time":"2026-10-10T02:28:59.195317297Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.224770639Z {"time":"2026-10-10T02:28:59.224523486Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.253288778Z {"time":"2026-10-10T02:28:59.253049038Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.282311183Z {"time":"2026-10-10T02:28:59.282082128Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.311295508Z {"time":"2026-10-10T02:28:59.311052391Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.340000047Z {"time":"2026-10-10T02:28:59.339767462Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.369146861Z {"time":"2026-10-10T02:28:59.368877443Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:28:59.398432248Z {"time":"2026-10-10T02:28:59.398194022Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/20e66730-1cad-4f9f-8435-426b165eed18"}
+api-1       | 2026-10-10T02:29:08.041675527Z {"time":"2026-10-10T02:29:08.041318769Z","level":"INFO","msg":"request","method":"POST","path":"/v1/tasks"}
+api-1       | 2026-10-10T02:29:08.046262363Z {"time":"2026-10-10T02:29:08.045978159Z","level":"INFO","msg":"task created","task_id":"fc02c7b3-cc38-4224-b382-91aa78d7fb43","type":"rag_ingestion"}
+api-1       | 2026-10-10T02:29:11.226016051Z {"time":"2026-10-10T02:29:11.225563585Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.419973802Z {"time":"2026-10-10T02:29:13.419644921Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.449215719Z {"time":"2026-10-10T02:29:13.449004493Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.478475949Z {"time":"2026-10-10T02:29:13.478273009Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.507872141Z {"time":"2026-10-10T02:29:13.50760744Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.537509718Z {"time":"2026-10-10T02:29:13.537230222Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.567184951Z {"time":"2026-10-10T02:29:13.566895859Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.596820985Z {"time":"2026-10-10T02:29:13.596543973Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.625706353Z {"time":"2026-10-10T02:29:13.625483767Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.655049941Z {"time":"2026-10-10T02:29:13.65479202Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.684575544Z {"time":"2026-10-10T02:29:13.68429618Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.714030240Z {"time":"2026-10-10T02:29:13.713774179Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.743779756Z {"time":"2026-10-10T02:29:13.743517018Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.773438629Z {"time":"2026-10-10T02:29:13.773119235Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.802404717Z {"time":"2026-10-10T02:29:13.80211459Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.831908893Z {"time":"2026-10-10T02:29:13.83164062Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.861348392Z {"time":"2026-10-10T02:29:13.86110786Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.890439024Z {"time":"2026-10-10T02:29:13.890220548Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.919524395Z {"time":"2026-10-10T02:29:13.919277322Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.949764348Z {"time":"2026-10-10T02:29:13.948374784Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:13.978780941Z {"time":"2026-10-10T02:29:13.978488933Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.008190807Z {"time":"2026-10-10T02:29:14.007966273Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.037295696Z {"time":"2026-10-10T02:29:14.037012534Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.066593699Z {"time":"2026-10-10T02:29:14.066294832Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.095714684Z {"time":"2026-10-10T02:29:14.095437312Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.125073727Z {"time":"2026-10-10T02:29:14.12469859Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.154163332Z {"time":"2026-10-10T02:29:14.153942904Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.183074818Z {"time":"2026-10-10T02:29:14.182765727Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.212517064Z {"time":"2026-10-10T02:29:14.212201467Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.241598640Z {"time":"2026-10-10T02:29:14.241319873Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.271165254Z {"time":"2026-10-10T02:29:14.270801529Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.300102945Z {"time":"2026-10-10T02:29:14.299862973Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.328422609Z {"time":"2026-10-10T02:29:14.328147952Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.357213708Z {"time":"2026-10-10T02:29:14.356870994Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.385435913Z {"time":"2026-10-10T02:29:14.385228514Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.414149655Z {"time":"2026-10-10T02:29:14.413892257Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.442690057Z {"time":"2026-10-10T02:29:14.442480617Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.471682321Z {"time":"2026-10-10T02:29:14.471414112Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.501317056Z {"time":"2026-10-10T02:29:14.501054437Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.530388129Z {"time":"2026-10-10T02:29:14.530127666Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.559572680Z {"time":"2026-10-10T02:29:14.559324484Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.588073622Z {"time":"2026-10-10T02:29:14.58782732Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.616830955Z {"time":"2026-10-10T02:29:14.616600292Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.645485250Z {"time":"2026-10-10T02:29:14.645220857Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.674143941Z {"time":"2026-10-10T02:29:14.673928097Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.702685517Z {"time":"2026-10-10T02:29:14.702466059Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.731040850Z {"time":"2026-10-10T02:29:14.730830723Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.759231678Z {"time":"2026-10-10T02:29:14.759018867Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.787391128Z {"time":"2026-10-10T02:29:14.787164473Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.816180114Z {"time":"2026-10-10T02:29:14.815934818Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.845157109Z {"time":"2026-10-10T02:29:14.844948811Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.874291590Z {"time":"2026-10-10T02:29:14.874017282Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.902798195Z {"time":"2026-10-10T02:29:14.902563772Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.932412026Z {"time":"2026-10-10T02:29:14.932199078Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.960957860Z {"time":"2026-10-10T02:29:14.960707078Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:14.989571278Z {"time":"2026-10-10T02:29:14.989311734Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.018330736Z {"time":"2026-10-10T02:29:15.018065813Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.046925129Z {"time":"2026-10-10T02:29:15.046675331Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.075825020Z {"time":"2026-10-10T02:29:15.075564218Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.104739795Z {"time":"2026-10-10T02:29:15.104402663Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.132925089Z {"time":"2026-10-10T02:29:15.13270152Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.161850636Z {"time":"2026-10-10T02:29:15.161409575Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.190776038Z {"time":"2026-10-10T02:29:15.190504108Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.219440953Z {"time":"2026-10-10T02:29:15.219234303Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.248194832Z {"time":"2026-10-10T02:29:15.24793196Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.276779049Z {"time":"2026-10-10T02:29:15.276547966Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.305619440Z {"time":"2026-10-10T02:29:15.305397963Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.334367813Z {"time":"2026-10-10T02:29:15.334096792Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.363408826Z {"time":"2026-10-10T02:29:15.363185756Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.392340358Z {"time":"2026-10-10T02:29:15.392120653Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.420932131Z {"time":"2026-10-10T02:29:15.420756003Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.450146645Z {"time":"2026-10-10T02:29:15.449896147Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.478680695Z {"time":"2026-10-10T02:29:15.478488956Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.507444530Z {"time":"2026-10-10T02:29:15.507185156Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.535581587Z {"time":"2026-10-10T02:29:15.535381627Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.564281209Z {"time":"2026-10-10T02:29:15.564034992Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.592684954Z {"time":"2026-10-10T02:29:15.592477924Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.621132726Z {"time":"2026-10-10T02:29:15.620868543Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.649788267Z {"time":"2026-10-10T02:29:15.649565659Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.678497052Z {"time":"2026-10-10T02:29:15.678298939Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.707156873Z {"time":"2026-10-10T02:29:15.706927482Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.735773277Z {"time":"2026-10-10T02:29:15.735503582Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.764385908Z {"time":"2026-10-10T02:29:15.764148683Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.793209420Z {"time":"2026-10-10T02:29:15.792919472Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.821707313Z {"time":"2026-10-10T02:29:15.821468422Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.850453397Z {"time":"2026-10-10T02:29:15.850186911Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.879204231Z {"time":"2026-10-10T02:29:15.878915499Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.908241083Z {"time":"2026-10-10T02:29:15.908034093Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.937052178Z {"time":"2026-10-10T02:29:15.936820292Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.965813138Z {"time":"2026-10-10T02:29:15.965578568Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:15.994698252Z {"time":"2026-10-10T02:29:15.994482039Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.023436839Z {"time":"2026-10-10T02:29:16.023203905Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.052274481Z {"time":"2026-10-10T02:29:16.052026859Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.080998113Z {"time":"2026-10-10T02:29:16.080765963Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.109946477Z {"time":"2026-10-10T02:29:16.109706253Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.139026723Z {"time":"2026-10-10T02:29:16.138787746Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.168013620Z {"time":"2026-10-10T02:29:16.167760438Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.196757426Z {"time":"2026-10-10T02:29:16.196513334Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.225455295Z {"time":"2026-10-10T02:29:16.225222848Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.253819060Z {"time":"2026-10-10T02:29:16.253611068Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.282260692Z {"time":"2026-10-10T02:29:16.282023985Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.311005861Z {"time":"2026-10-10T02:29:16.310751265Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.340029663Z {"time":"2026-10-10T02:29:16.339524262Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.368806147Z {"time":"2026-10-10T02:29:16.368522762Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.397398122Z {"time":"2026-10-10T02:29:16.397167999Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.426348167Z {"time":"2026-10-10T02:29:16.426041553Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.455040930Z {"time":"2026-10-10T02:29:16.454832621Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.483996238Z {"time":"2026-10-10T02:29:16.483785879Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.512775720Z {"time":"2026-10-10T02:29:16.512518304Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.541795517Z {"time":"2026-10-10T02:29:16.541585148Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.570822806Z {"time":"2026-10-10T02:29:16.570591998Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.599967665Z {"time":"2026-10-10T02:29:16.599741041Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.629180518Z {"time":"2026-10-10T02:29:16.628920542Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.658549432Z {"time":"2026-10-10T02:29:16.6583474Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.687215738Z {"time":"2026-10-10T02:29:16.686969177Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.716205291Z {"time":"2026-10-10T02:29:16.715981753Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.744809853Z {"time":"2026-10-10T02:29:16.744593968Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.773418832Z {"time":"2026-10-10T02:29:16.773142761Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.802741721Z {"time":"2026-10-10T02:29:16.802437007Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.831930385Z {"time":"2026-10-10T02:29:16.831669976Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.860788656Z {"time":"2026-10-10T02:29:16.86052123Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.889284472Z {"time":"2026-10-10T02:29:16.889064802Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.918133411Z {"time":"2026-10-10T02:29:16.91793231Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.946978440Z {"time":"2026-10-10T02:29:16.946736989Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:16.975337768Z {"time":"2026-10-10T02:29:16.975077241Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.003839078Z {"time":"2026-10-10T02:29:17.00359972Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.032472078Z {"time":"2026-10-10T02:29:17.032262258Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.061107678Z {"time":"2026-10-10T02:29:17.060890503Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.089656066Z {"time":"2026-10-10T02:29:17.089420716Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.117995453Z {"time":"2026-10-10T02:29:17.11767529Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.146256265Z {"time":"2026-10-10T02:29:17.146016799Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.174459162Z {"time":"2026-10-10T02:29:17.174216454Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.203244480Z {"time":"2026-10-10T02:29:17.203033318Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.231430373Z {"time":"2026-10-10T02:29:17.231257331Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.260321078Z {"time":"2026-10-10T02:29:17.260080125Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.289125671Z {"time":"2026-10-10T02:29:17.288924519Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.317579512Z {"time":"2026-10-10T02:29:17.317353352Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.346198540Z {"time":"2026-10-10T02:29:17.345965471Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.374830390Z {"time":"2026-10-10T02:29:17.374636126Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.403203623Z {"time":"2026-10-10T02:29:17.402978838Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.431929540Z {"time":"2026-10-10T02:29:17.431689494Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.460596685Z {"time":"2026-10-10T02:29:17.460365549Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.490049584Z {"time":"2026-10-10T02:29:17.489793845Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.519378446Z {"time":"2026-10-10T02:29:17.518752123Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.548120668Z {"time":"2026-10-10T02:29:17.547865616Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.576520386Z {"time":"2026-10-10T02:29:17.576313164Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.604708689Z {"time":"2026-10-10T02:29:17.604520787Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.633383654Z {"time":"2026-10-10T02:29:17.633132301Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.662024867Z {"time":"2026-10-10T02:29:17.661815468Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.690608704Z {"time":"2026-10-10T02:29:17.690362782Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.719113174Z {"time":"2026-10-10T02:29:17.718888558Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.747875705Z {"time":"2026-10-10T02:29:17.747643514Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.776555685Z {"time":"2026-10-10T02:29:17.776308633Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.805139870Z {"time":"2026-10-10T02:29:17.804929225Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.833741948Z {"time":"2026-10-10T02:29:17.833493722Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.862507566Z {"time":"2026-10-10T02:29:17.862269076Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.890782836Z {"time":"2026-10-10T02:29:17.890544417Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.919329082Z {"time":"2026-10-10T02:29:17.919106874Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.948414981Z {"time":"2026-10-10T02:29:17.948161798Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.977542855Z {"time":"2026-10-10T02:29:17.977289147Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.006234445Z {"time":"2026-10-10T02:29:18.005994009Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.035003320Z {"time":"2026-10-10T02:29:18.03474015Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.063320406Z {"time":"2026-10-10T02:29:18.063087769Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.091889682Z {"time":"2026-10-10T02:29:18.091650027Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.120358726Z {"time":"2026-10-10T02:29:18.120127168Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.149155153Z {"time":"2026-10-10T02:29:18.148825035Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.177657941Z {"time":"2026-10-10T02:29:18.177460413Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.206403727Z {"time":"2026-10-10T02:29:18.206169346Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.235473622Z {"time":"2026-10-10T02:29:18.235107544Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.264195377Z {"time":"2026-10-10T02:29:18.263962116Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.293418291Z {"time":"2026-10-10T02:29:18.293158219Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.322223384Z {"time":"2026-10-10T02:29:18.321985378Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.350676627Z {"time":"2026-10-10T02:29:18.350434745Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.379139431Z {"time":"2026-10-10T02:29:18.378893785Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.407801704Z {"time":"2026-10-10T02:29:18.407534001Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.436215954Z {"time":"2026-10-10T02:29:18.435983001Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.464685136Z {"time":"2026-10-10T02:29:18.464447596Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.493244203Z {"time":"2026-10-10T02:29:18.492999106Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.521801491Z {"time":"2026-10-10T02:29:18.521552221Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.550521256Z {"time":"2026-10-10T02:29:18.550332625Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.578943169Z {"time":"2026-10-10T02:29:18.578703218Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.607510943Z {"time":"2026-10-10T02:29:18.607289083Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.636519925Z {"time":"2026-10-10T02:29:18.636268328Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.664973140Z {"time":"2026-10-10T02:29:18.664733398Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.693385138Z {"time":"2026-10-10T02:29:18.693192408Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.076153192Z {"time":"2026-10-10T02:29:18.075265044Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.104938323Z {"time":"2026-10-10T02:29:18.104695371Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.133371763Z {"time":"2026-10-10T02:29:18.133106618Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.162001699Z {"time":"2026-10-10T02:29:18.16174595Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.190844731Z {"time":"2026-10-10T02:29:18.190591634Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.219722680Z {"time":"2026-10-10T02:29:18.219467269Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.248770618Z {"time":"2026-10-10T02:29:18.24853164Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.277409304Z {"time":"2026-10-10T02:29:18.277157824Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.306911895Z {"time":"2026-10-10T02:29:18.306617783Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.335982924Z {"time":"2026-10-10T02:29:18.335733008Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.364585710Z {"time":"2026-10-10T02:29:18.364319836Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.488021847Z {"time":"2026-10-10T02:29:17.487706568Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.516736559Z {"time":"2026-10-10T02:29:17.516453427Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.546046651Z {"time":"2026-10-10T02:29:17.545759812Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.574904669Z {"time":"2026-10-10T02:29:17.57466847Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.604594011Z {"time":"2026-10-10T02:29:17.604360358Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.634102939Z {"time":"2026-10-10T02:29:17.633841433Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.662490674Z {"time":"2026-10-10T02:29:17.662253073Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.691105403Z {"time":"2026-10-10T02:29:17.690913032Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.719788888Z {"time":"2026-10-10T02:29:17.719570581Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.748387182Z {"time":"2026-10-10T02:29:17.748164152Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.777283900Z {"time":"2026-10-10T02:29:17.777061852Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.806567815Z {"time":"2026-10-10T02:29:17.806272668Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.835562363Z {"time":"2026-10-10T02:29:17.835279052Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.864448229Z {"time":"2026-10-10T02:29:17.864175084Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.893361570Z {"time":"2026-10-10T02:29:17.893085963Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.922807588Z {"time":"2026-10-10T02:29:17.922544675Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.951545901Z {"time":"2026-10-10T02:29:17.951307452Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:17.980501939Z {"time":"2026-10-10T02:29:17.980253417Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.009582606Z {"time":"2026-10-10T02:29:18.009342318Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.038742345Z {"time":"2026-10-10T02:29:18.03849338Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.067519417Z {"time":"2026-10-10T02:29:18.067295322Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.096329449Z {"time":"2026-10-10T02:29:18.096132088Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.124951045Z {"time":"2026-10-10T02:29:18.124698138Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.153747468Z {"time":"2026-10-10T02:29:18.153541382Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.182292192Z {"time":"2026-10-10T02:29:18.182021608Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.210866818Z {"time":"2026-10-10T02:29:18.21060071Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.239522147Z {"time":"2026-10-10T02:29:18.239299042Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.267698762Z {"time":"2026-10-10T02:29:18.267499098Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.296590607Z {"time":"2026-10-10T02:29:18.296329455Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.325715630Z {"time":"2026-10-10T02:29:18.325099506Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.355052470Z {"time":"2026-10-10T02:29:18.354754691Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.384027223Z {"time":"2026-10-10T02:29:18.38380933Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.412851445Z {"time":"2026-10-10T02:29:18.412573862Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.441948429Z {"time":"2026-10-10T02:29:18.441729531Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.470653843Z {"time":"2026-10-10T02:29:18.470432493Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.499678867Z {"time":"2026-10-10T02:29:18.499461819Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.528388815Z {"time":"2026-10-10T02:29:18.528159191Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.557216291Z {"time":"2026-10-10T02:29:18.556941339Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.585613674Z {"time":"2026-10-10T02:29:18.585332023Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.614688771Z {"time":"2026-10-10T02:29:18.614373415Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.643725709Z {"time":"2026-10-10T02:29:18.643466112Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.672150062Z {"time":"2026-10-10T02:29:18.671917992Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.700761947Z {"time":"2026-10-10T02:29:18.700543271Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.729406096Z {"time":"2026-10-10T02:29:18.729159066Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.757732324Z {"time":"2026-10-10T02:29:18.757439142Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.786163979Z {"time":"2026-10-10T02:29:18.785935824Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.814922942Z {"time":"2026-10-10T02:29:18.814692038Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.843698623Z {"time":"2026-10-10T02:29:18.843446475Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.872619964Z {"time":"2026-10-10T02:29:18.87236452Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.901689292Z {"time":"2026-10-10T02:29:18.901457077Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.930562855Z {"time":"2026-10-10T02:29:18.930301885Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.959080177Z {"time":"2026-10-10T02:29:18.958830113Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:18.987562218Z {"time":"2026-10-10T02:29:18.987313424Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.016255957Z {"time":"2026-10-10T02:29:19.016042815Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.044999795Z {"time":"2026-10-10T02:29:19.044790704Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.073877285Z {"time":"2026-10-10T02:29:19.073565549Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.102635703Z {"time":"2026-10-10T02:29:19.102399078Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.131343472Z {"time":"2026-10-10T02:29:19.131107676Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.160221665Z {"time":"2026-10-10T02:29:19.159984945Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.189043179Z {"time":"2026-10-10T02:29:19.18882871Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.218003877Z {"time":"2026-10-10T02:29:19.217811009Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.246884374Z {"time":"2026-10-10T02:29:19.246688007Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.275190141Z {"time":"2026-10-10T02:29:19.274960822Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.303626087Z {"time":"2026-10-10T02:29:19.303309459Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.332196580Z {"time":"2026-10-10T02:29:19.331970217Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.361557914Z {"time":"2026-10-10T02:29:19.360731994Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.390117149Z {"time":"2026-10-10T02:29:19.389835084Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.418945264Z {"time":"2026-10-10T02:29:19.418724282Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.448171556Z {"time":"2026-10-10T02:29:19.447902469Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.476957968Z {"time":"2026-10-10T02:29:19.476712416Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.505770868Z {"time":"2026-10-10T02:29:19.505531824Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.534447549Z {"time":"2026-10-10T02:29:19.534197879Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.563355970Z {"time":"2026-10-10T02:29:19.56311873Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.591672573Z {"time":"2026-10-10T02:29:19.591372586Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.620073203Z {"time":"2026-10-10T02:29:19.619850462Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.648913387Z {"time":"2026-10-10T02:29:19.648679281Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.677185400Z {"time":"2026-10-10T02:29:19.67695197Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.705538721Z {"time":"2026-10-10T02:29:19.705248087Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.734303250Z {"time":"2026-10-10T02:29:19.734078522Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.763208432Z {"time":"2026-10-10T02:29:19.76289711Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.792122234Z {"time":"2026-10-10T02:29:19.791875657Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.820583387Z {"time":"2026-10-10T02:29:19.820325618Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.849725266Z {"time":"2026-10-10T02:29:19.849530812Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.878900627Z {"time":"2026-10-10T02:29:19.878656953Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.907760128Z {"time":"2026-10-10T02:29:19.907500112Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.936743908Z {"time":"2026-10-10T02:29:19.936476877Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.965543517Z {"time":"2026-10-10T02:29:19.965274586Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:19.994474905Z {"time":"2026-10-10T02:29:19.994275342Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.024081739Z {"time":"2026-10-10T02:29:20.023866328Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.053310257Z {"time":"2026-10-10T02:29:20.05307167Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.082818427Z {"time":"2026-10-10T02:29:20.08259963Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.111494578Z {"time":"2026-10-10T02:29:20.111310956Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.140167797Z {"time":"2026-10-10T02:29:20.139958812Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.169480739Z {"time":"2026-10-10T02:29:20.169248343Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.199054211Z {"time":"2026-10-10T02:29:20.198871917Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.228342877Z {"time":"2026-10-10T02:29:20.228140898Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.257152740Z {"time":"2026-10-10T02:29:20.256947859Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.286023772Z {"time":"2026-10-10T02:29:20.285783717Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.315254898Z {"time":"2026-10-10T02:29:20.314580065Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.344761833Z {"time":"2026-10-10T02:29:20.344470229Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.373807213Z {"time":"2026-10-10T02:29:20.373540404Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.402733085Z {"time":"2026-10-10T02:29:20.402421944Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.431545596Z {"time":"2026-10-10T02:29:20.431297121Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.460623144Z {"time":"2026-10-10T02:29:20.460351566Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.489985724Z {"time":"2026-10-10T02:29:20.489730962Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.519524318Z {"time":"2026-10-10T02:29:20.519267647Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.548695150Z {"time":"2026-10-10T02:29:20.548398723Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.577683667Z {"time":"2026-10-10T02:29:20.577391569Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.606303587Z {"time":"2026-10-10T02:29:20.606062129Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.634977629Z {"time":"2026-10-10T02:29:20.634679737Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.663794075Z {"time":"2026-10-10T02:29:20.663579172Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.692575284Z {"time":"2026-10-10T02:29:20.692366003Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.721167183Z {"time":"2026-10-10T02:29:20.720940969Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.750091371Z {"time":"2026-10-10T02:29:20.749873982Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.778793039Z {"time":"2026-10-10T02:29:20.778546421Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.807776840Z {"time":"2026-10-10T02:29:20.80751136Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.836566655Z {"time":"2026-10-10T02:29:20.836281818Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.865477622Z {"time":"2026-10-10T02:29:20.865230389Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.894532846Z {"time":"2026-10-10T02:29:20.894287042Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.923224085Z {"time":"2026-10-10T02:29:20.92296852Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.951986641Z {"time":"2026-10-10T02:29:20.951713765Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:20.980505176Z {"time":"2026-10-10T02:29:20.980228815Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.009249775Z {"time":"2026-10-10T02:29:21.008916413Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.038287244Z {"time":"2026-10-10T02:29:21.038041071Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.067190993Z {"time":"2026-10-10T02:29:21.066918875Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.095693333Z {"time":"2026-10-10T02:29:21.095467204Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.124449074Z {"time":"2026-10-10T02:29:21.124199871Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.153484359Z {"time":"2026-10-10T02:29:21.153120082Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.182127858Z {"time":"2026-10-10T02:29:21.181909134Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.211014694Z {"time":"2026-10-10T02:29:21.210840778Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.240215151Z {"time":"2026-10-10T02:29:21.240008222Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.269532849Z {"time":"2026-10-10T02:29:21.269340091Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.298353010Z {"time":"2026-10-10T02:29:21.298137979Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.326990106Z {"time":"2026-10-10T02:29:21.326760273Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.356286547Z {"time":"2026-10-10T02:29:21.35604514Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.385137247Z {"time":"2026-10-10T02:29:21.384897623Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.414387732Z {"time":"2026-10-10T02:29:21.414190837Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.443220205Z {"time":"2026-10-10T02:29:21.443014816Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.471804127Z {"time":"2026-10-10T02:29:21.471571331Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.500397515Z {"time":"2026-10-10T02:29:21.500175057Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.529435154Z {"time":"2026-10-10T02:29:21.529198232Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.558497624Z {"time":"2026-10-10T02:29:21.558222344Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.588000562Z {"time":"2026-10-10T02:29:21.587782166Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.617156772Z {"time":"2026-10-10T02:29:21.616818547Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.646126141Z {"time":"2026-10-10T02:29:21.645880662Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.675323283Z {"time":"2026-10-10T02:29:21.675094791Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.704844259Z {"time":"2026-10-10T02:29:21.7045853Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.733890465Z {"time":"2026-10-10T02:29:21.733618381Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.762536065Z {"time":"2026-10-10T02:29:21.762259876Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.791615544Z {"time":"2026-10-10T02:29:21.791324912Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.820725829Z {"time":"2026-10-10T02:29:21.820438024Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.849909448Z {"time":"2026-10-10T02:29:21.849670374Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.879110135Z {"time":"2026-10-10T02:29:21.878785776Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.908519575Z {"time":"2026-10-10T02:29:21.908288394Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.937648884Z {"time":"2026-10-10T02:29:21.937407226Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.966860503Z {"time":"2026-10-10T02:29:21.966610046Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:21.995926309Z {"time":"2026-10-10T02:29:21.99563189Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.025090643Z {"time":"2026-10-10T02:29:22.024830847Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.054022813Z {"time":"2026-10-10T02:29:22.053762491Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.082545281Z {"time":"2026-10-10T02:29:22.082296618Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.111474421Z {"time":"2026-10-10T02:29:22.111236383Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.140348484Z {"time":"2026-10-10T02:29:22.140096517Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.169805600Z {"time":"2026-10-10T02:29:22.169380562Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.199078957Z {"time":"2026-10-10T02:29:22.198844294Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.228385780Z {"time":"2026-10-10T02:29:22.22806183Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.257453326Z {"time":"2026-10-10T02:29:22.257155002Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.286181311Z {"time":"2026-10-10T02:29:22.285953969Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.315162591Z {"time":"2026-10-10T02:29:22.314851829Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.344093516Z {"time":"2026-10-10T02:29:22.34392146Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.373871270Z {"time":"2026-10-10T02:29:22.373156273Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.404282163Z {"time":"2026-10-10T02:29:22.404079765Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.433624770Z {"time":"2026-10-10T02:29:22.433348665Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.462998752Z {"time":"2026-10-10T02:29:22.462701485Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.491738470Z {"time":"2026-10-10T02:29:22.491460022Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.520610525Z {"time":"2026-10-10T02:29:22.520285268Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.549221457Z {"time":"2026-10-10T02:29:22.548958739Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.578125837Z {"time":"2026-10-10T02:29:22.57789764Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.607187897Z {"time":"2026-10-10T02:29:22.606916825Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.636552048Z {"time":"2026-10-10T02:29:22.636279812Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.665325578Z {"time":"2026-10-10T02:29:22.665023773Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.694222510Z {"time":"2026-10-10T02:29:22.69394458Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.722939689Z {"time":"2026-10-10T02:29:22.722726663Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.751634948Z {"time":"2026-10-10T02:29:22.751321611Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.780661634Z {"time":"2026-10-10T02:29:22.780357499Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.809752876Z {"time":"2026-10-10T02:29:22.80950724Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.838890172Z {"time":"2026-10-10T02:29:22.838672788Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.867879585Z {"time":"2026-10-10T02:29:22.867643898Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.896510161Z {"time":"2026-10-10T02:29:22.896294888Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.925219223Z {"time":"2026-10-10T02:29:22.925002372Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.954590690Z {"time":"2026-10-10T02:29:22.954289254Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:22.983683251Z {"time":"2026-10-10T02:29:22.983429018Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.012886979Z {"time":"2026-10-10T02:29:23.012584921Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.042253724Z {"time":"2026-10-10T02:29:23.041915734Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.071124524Z {"time":"2026-10-10T02:29:23.070842955Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.099835258Z {"time":"2026-10-10T02:29:23.099534299Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.128769992Z {"time":"2026-10-10T02:29:23.128455959Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.157911178Z {"time":"2026-10-10T02:29:23.157677221Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.186886180Z {"time":"2026-10-10T02:29:23.186654649Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.215500362Z {"time":"2026-10-10T02:29:23.215261425Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.244344492Z {"time":"2026-10-10T02:29:23.244090036Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.273113092Z {"time":"2026-10-10T02:29:23.272885065Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.302549733Z {"time":"2026-10-10T02:29:23.30227308Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.331427317Z {"time":"2026-10-10T02:29:23.331112123Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.360829310Z {"time":"2026-10-10T02:29:23.360586216Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.389855194Z {"time":"2026-10-10T02:29:23.389533671Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.419006382Z {"time":"2026-10-10T02:29:23.418711709Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.448476571Z {"time":"2026-10-10T02:29:23.448232223Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.478216680Z {"time":"2026-10-10T02:29:23.477980868Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.507329225Z {"time":"2026-10-10T02:29:23.507051687Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.536837363Z {"time":"2026-10-10T02:29:23.53661136Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.566248860Z {"time":"2026-10-10T02:29:23.566027935Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.595559240Z {"time":"2026-10-10T02:29:23.595056414Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.624206116Z {"time":"2026-10-10T02:29:23.623980841Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.652823810Z {"time":"2026-10-10T02:29:23.652653311Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.681495879Z {"time":"2026-10-10T02:29:23.681318481Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.710082598Z {"time":"2026-10-10T02:29:23.709881894Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.739112154Z {"time":"2026-10-10T02:29:23.738940759Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.768258279Z {"time":"2026-10-10T02:29:23.76798248Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.797813764Z {"time":"2026-10-10T02:29:23.797550647Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.826961048Z {"time":"2026-10-10T02:29:23.826810331Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.856091285Z {"time":"2026-10-10T02:29:23.855845575Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.885344512Z {"time":"2026-10-10T02:29:23.885155234Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.914376907Z {"time":"2026-10-10T02:29:23.914206977Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.942996286Z {"time":"2026-10-10T02:29:23.942707566Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:23.971942997Z {"time":"2026-10-10T02:29:23.971699565Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:24.000742826Z {"time":"2026-10-10T02:29:24.000487853Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:24.030200945Z {"time":"2026-10-10T02:29:24.030014168Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:24.059435205Z {"time":"2026-10-10T02:29:24.059241728Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:24.088189119Z {"time":"2026-10-10T02:29:24.087971168Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:24.117161790Z {"time":"2026-10-10T02:29:24.116944451Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:24.146429112Z {"time":"2026-10-10T02:29:24.146214759Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:24.175141020Z {"time":"2026-10-10T02:29:24.174995967Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:24.204508895Z {"time":"2026-10-10T02:29:24.204276699Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:24.233748598Z {"time":"2026-10-10T02:29:24.233466595Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:24.262182665Z {"time":"2026-10-10T02:29:24.26196539Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:24.290942503Z {"time":"2026-10-10T02:29:24.290732197Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/fc02c7b3-cc38-4224-b382-91aa78d7fb43"}
+api-1       | 2026-10-10T02:29:32.757715916Z {"time":"2026-10-10T02:29:32.757478074Z","level":"INFO","msg":"request","method":"POST","path":"/v1/tasks"}
+api-1       | 2026-10-10T02:29:32.761229864Z {"time":"2026-10-10T02:29:32.760927018Z","level":"INFO","msg":"task created","task_id":"796bb1a6-fba9-4b8d-b6d7-617529cae301","type":"rag_ingestion"}
+api-1       | 2026-10-10T02:29:32.790392060Z {"time":"2026-10-10T02:29:32.790172709Z","level":"INFO","msg":"request","method":"POST","path":"/v1/tasks"}
+api-1       | 2026-10-10T02:29:32.793627938Z {"time":"2026-10-10T02:29:32.793420059Z","level":"INFO","msg":"task created","task_id":"9bc7f1c1-06af-4c6c-8e67-1c5216665ab1","type":"rag_ingestion"}
+api-1       | 2026-10-10T02:29:34.288185010Z {"time":"2026-10-10T02:29:34.2879521Z","level":"INFO","msg":"request","method":"POST","path":"/v1/tasks"}
+api-1       | 2026-10-10T02:29:34.291518942Z {"time":"2026-10-10T02:29:34.291303624Z","level":"INFO","msg":"task created","task_id":"7bff77b6-f20e-4640-b8f4-7dc534fba10a","type":"rag_ingestion"}
+api-1       | 2026-10-10T02:29:34.320741304Z {"time":"2026-10-10T02:29:34.320514067Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/796bb1a6-fba9-4b8d-b6d7-617529cae301"}
+api-1       | 2026-10-10T02:29:34.376124407Z {"time":"2026-10-10T02:29:34.375869235Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/796bb1a6-fba9-4b8d-b6d7-617529cae301"}
+api-1       | 2026-10-10T02:29:34.378131030Z {"time":"2026-10-10T02:29:34.377951115Z","level":"INFO","msg":"request","method":"GET","path":"/v1/tasks/7bff77b6-f20e-4640-b8f4-7dc534fba10a"}

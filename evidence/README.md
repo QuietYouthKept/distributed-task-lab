@@ -12,7 +12,9 @@ Run the baseline collector from the repository root:
 pwsh -NoProfile -File scripts/evidence/collect-baseline.ps1
 ```
 
-It writes `evidence/baseline/manifest.json` and timestamped command logs. The
+It creates an immutable directory under
+`evidence/baseline/runs/<baseline-id>/` containing `manifest.json` and command
+logs, then regenerates `evidence/index.json`. The
 manifest records the commit, dirty state, non-secret configuration fingerprint,
 tool versions, known migrations/routes, benchmark inventory, and the actual
 exit status of each verification command.
@@ -22,8 +24,14 @@ cannot run or fails. Its manifest is still written in that case, so a missing
 Docker daemon or PostgreSQL test database is evidence of an unverified baseline,
 not a passing test.
 
-`manifest.json` is a point-in-time record. Do not edit test statuses or metric
-values by hand; rerun the collector to create a new baseline record.
+Each manifest is a point-in-time record. The collector refuses to overwrite an
+existing run ID. Do not edit test statuses or metric values by hand; rerun the
+collector to create a new baseline record.
+
+An index record is `measured_valid` only when every required check ran with
+exit code zero and the repository was clean. Skipped checks, failed checks, or
+a dirty working tree remain `unverified`, because the recorded commit alone
+cannot reconstruct uncommitted code.
 
 ## Evidence rules
 

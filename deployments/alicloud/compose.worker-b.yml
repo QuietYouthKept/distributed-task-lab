@@ -1,0 +1,62 @@
+name: tasklab-alicloud-worker-${TASKLAB_RUN_ID:?Set the same run ID as Core ECS}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  worker:
+    image: ${TASKLAB_IMAGE_WORKER:?Set Worker image by immutable digest}
+    environment:
+      APP_PROFILE: staging-sim
+      STAGING_SIM_CLOUD: "true"
+      AUTO_MIGRATE: "false"
+      DATABASE_URL_FILE: /run/secrets/worker_database_url
+      WORKER_ID: ${TASKLAB_RUN_ID}-worker-b
+      WORKER_CONCURRENCY: "1"
+      CLAIM_BATCH_SIZE: "1"
+      LEASE_TIMEOUT: 30s
+      SHUTDOWN_TIMEOUT: 20s
+      WORKER_HEALTH_PORT: "9091"
+      ARTIFACT_STORE_BACKEND: oss
+      ARTIFACT_OSS_ENDPOINT: ${ARTIFACT_OSS_ENDPOINT:?Set HTTPS OSS regional endpoint}
+      ARTIFACT_OSS_REGION: ${ARTIFACT_OSS_REGION:?Set OSS region}
+      ARTIFACT_OSS_BUCKET: ${ARTIFACT_OSS_BUCKET:?Set pre-created OSS bucket}
+      ARTIFACT_OSS_PREFIX: ${ARTIFACT_OSS_PREFIX:-tasklab/${TASKLAB_RUN_ID}}
+      ARTIFACT_OSS_RAM_ROLE_NAME: ${ARTIFACT_OSS_RAM_ROLE_NAME:?Set run-scoped Worker RAM role name}
+      ARTIFACT_ALLOW_HTTP: "false"
+      ARTIFACT_ALLOW_BUCKET_CREATE: "false"
+      EVAL_BACKEND: gateway
+      EVAL_GATEWAY_URL: ${TASKLAB_PRIVATE_GATEWAY_URL:?Set Core ECS private gateway-simulator endpoint}
+      EVAL_GATEWAY_PROFILE: staging-sim
+      EVAL_GATEWAY_API_KEY_FILE: /run/secrets/gateway_api_key
+    secrets:
+      - worker_database_url
+      - pg_root_ca
+      - gateway_api_key
+    networks: [worker_egress]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9091/ready >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    mem_limit: 768m
+    cpus: 1.0
+    stop_grace_period: 25s
+    restart: unless-stopped
+    logging: *logging
+
+networks:
+  worker_egress:
+    driver: bridge
+
+secrets:
+  worker_database_url:
+    file: ${TASKLAB_SECRET_DIR:?Set run-scoped Worker B secret directory}/worker-database-url
+  pg_root_ca:
+    file: ${TASKLAB_PG_TLS_DIR:?Set the run-scoped PostgreSQL CA directory}/ca.crt
+  gateway_api_key:
+    file: ${TASKLAB_SECRET_DIR}/gateway-api-key

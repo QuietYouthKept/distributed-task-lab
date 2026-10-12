@@ -1,0 +1,10 @@
+test_any_skip_fails_even_when_go_package_passes (scripts.alicloud.test_summarize_go_test.GoTestSummaryTests.test_any_skip_fails_even_when_go_package_passes) ... ok
+test_complete_required_suite_passes (scripts.alicloud.test_summarize_go_test.GoTestSummaryTests.test_complete_required_suite_passes) ... ok
+test_failure_event_fails (scripts.alicloud.test_summarize_go_test.GoTestSummaryTests.test_failure_event_fails) ... ok
+test_missing_required_database_test_fails (scripts.alicloud.test_summarize_go_test.GoTestSummaryTests.test_missing_required_database_test_fails) ... ok
+test_zero_executed_tests_fails (scripts.alicloud.test_summarize_go_test.GoTestSummaryTests.test_zero_executed_tests_fails) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.360s
+
+OK

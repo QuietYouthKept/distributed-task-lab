@@ -1,10 +1,17 @@
 .git
 .gitignore
+.env
+.env.*
+secrets/
+*.pem
+*.key
 .reasonix
 *.exe
 *.zip
 bin/
 artifacts/
+evidence/
+**/evidence/
 *.out
 coverage.out
 新建 Text Document.txt

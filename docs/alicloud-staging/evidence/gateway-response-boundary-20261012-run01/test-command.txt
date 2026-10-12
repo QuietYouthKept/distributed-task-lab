@@ -1,0 +1,1 @@
+go test -p 1 ./internal/worker/handlers -run '^TestGatewayLLMEval|^TestStagingSimulationCompositeExecutesOnlyGatewayCandidate$' -count=1 -timeout=2m

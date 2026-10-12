@@ -12,15 +12,17 @@ import (
 	"github.com/fantasticyi/distributed-task-lab/internal/api"
 	"github.com/fantasticyi/distributed-task-lab/internal/api/handlers"
 	"github.com/fantasticyi/distributed-task-lab/internal/application"
+	"github.com/fantasticyi/distributed-task-lab/internal/auth"
 	"github.com/fantasticyi/distributed-task-lab/internal/config"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload"
 	"github.com/fantasticyi/distributed-task-lab/internal/observability"
 	"github.com/fantasticyi/distributed-task-lab/internal/storage/postgres"
 )
 
 func main() {
 	cfg := config.Load()
-	logger := observability.Logger()
-	if err := cfg.Validate(); err != nil {
+	logger := observability.Logger(cfg.SensitiveValues()...)
+	if err := cfg.ValidateAPI(); err != nil {
 		logger.Error("invalid startup configuration", "error", err)
 		os.Exit(1)
 	}
@@ -50,27 +52,91 @@ func main() {
 	}
 	defer db.Close()
 
-	// Run migrations.
-	if err := postgres.RunMigrations(db); err != nil {
-		logger.Error("failed to run migrations", "error", err)
-		os.Exit(1)
+	// Development may migrate in-process; production-like profiles must use
+	// the separately authorized migration job and runtime DB account.
+	if cfg.AutoMigrate {
+		if err := postgres.RunMigrations(db); err != nil {
+			logger.Error("failed to run migrations", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("database migrations applied")
 	}
-	logger.Info("database migrations applied")
 
 	// Initialize queue and service layer.
 	pq := postgres.NewPostgresQueueWithTimeout(db, cfg.DBOperationTimeout)
 	svc := application.NewTaskService(pq)
+	if cfg.Profile == "production" {
+		// No handler mode is production-enabled until its complete provider and
+		// shared-artifact path is wired and independently verified.
+		svc = application.NewTaskServiceWithAdmission(pq, taskpayload.ProductionExecutionPolicy())
+	} else if cfg.Profile == "staging-sim" {
+		svc = application.NewTaskServiceWithAdmission(pq, taskpayload.StagingSimulationExecutionPolicy())
+	}
 
 	// Initialize HTTP handlers and router.
-	taskHandler := handlers.NewTaskHandler(svc, logger)
+	var taskHandler *handlers.TaskHandler
+	if cfg.CursorRotationEnabled {
+		previous := make([]handlers.CursorVerificationKey, 0, len(cfg.CursorPreviousKeys))
+		for _, key := range cfg.CursorPreviousKeys {
+			previous = append(previous, handlers.CursorVerificationKey{ID: key.ID, Key: []byte(key.Key), AcceptUntil: key.AcceptUntil})
+		}
+		taskHandler, err = handlers.NewTaskHandlerWithCursorKeyRing(svc, logger, handlers.CursorKeyRingConfig{
+			ActiveKeyID: cfg.CursorActiveKeyID, ActiveKey: []byte(cfg.CursorActiveKey), PreviousKeys: previous,
+			TTL: cfg.CursorTTL, LegacyV1Key: []byte(cfg.CursorLegacyV1Key), LegacyV1AcceptUntil: cfg.CursorLegacyV1AcceptUntil,
+		})
+	} else {
+		cursorKey := []byte(cfg.CursorSigningKey)
+		if len(cursorKey) == 0 && cfg.Profile == "development" {
+			cursorKey = []byte("development-only-cursor-signing-key-32-bytes")
+		}
+		taskHandler, err = handlers.NewTaskHandlerWithCursorKey(svc, logger, cursorKey)
+	}
+	if err != nil {
+		logger.Error("invalid pagination signing configuration", "error", err)
+		os.Exit(1)
+	}
 
 	// Metrics handler reads aggregated counts, per-queue depth, and oldest-pending age.
 	metricsHandler := handlers.NewMetricsHandler(svc)
 
-	router := api.NewRouterWithConfig(taskHandler, metricsHandler, svc, logger, api.RouterConfig{
-		APIToken: cfg.APIToken, AdminToken: cfg.AdminToken,
+	routerConfig := api.RouterConfig{
 		MaxRequestBodyBytes: cfg.MaxRequestBodyBytes, RequestTimeout: cfg.DBOperationTimeout,
-	})
+		EffectHandler: handlers.NewEffectHandler(postgres.NewEffectLedger(db), logger),
+	}
+	if cfg.SharedRateLimitEnabled {
+		limiter, err := postgres.NewSharedIngressLimiter(db, []byte(cfg.SharedRateLimitHashKey), cfg.SharedRateLimitRate, cfg.SharedRateLimitBurst)
+		if err != nil {
+			logger.Error("invalid shared API admission configuration", "error", err)
+			os.Exit(1)
+		}
+		routerConfig.SharedIngressLimiter = limiter
+		routerConfig.SharedIngressFailOpen = cfg.SharedRateLimitFailureMode == "open"
+	}
+	if cfg.OIDCIssuer != "" || cfg.OIDCAudience != "" || cfg.OIDCJWKSURL != "" {
+		roleMappings := make(map[string]auth.Role, len(cfg.OIDCRoleMappings))
+		for claim, role := range cfg.OIDCRoleMappings {
+			roleMappings[claim] = auth.Role(role)
+		}
+		oidcHTTPClient, err := auth.NewHTTPClientWithCAFile(cfg.OIDCCAFile)
+		if err != nil {
+			logger.Error("invalid OIDC trust configuration", "error", err)
+			os.Exit(1)
+		}
+		verifier, err := auth.NewVerifier(auth.OIDCConfig{
+			Issuer: cfg.OIDCIssuer, Audience: cfg.OIDCAudience, JWKSURL: cfg.OIDCJWKSURL,
+			RoleClaim: cfg.OIDCRoleClaim, RoleMappings: roleMappings, ServiceClientIDs: cfg.OIDCServiceClientIDs,
+			HTTPClient: oidcHTTPClient,
+		})
+		if err != nil {
+			logger.Error("invalid OIDC configuration", "error", err)
+			os.Exit(1)
+		}
+		routerConfig.Authenticator = verifier
+	} else {
+		routerConfig.APIToken, routerConfig.AdminToken = cfg.APIToken, cfg.AdminToken
+	}
+	routerConfig.RequireAuthentication = cfg.Profile == "production" || cfg.Profile == "staging-sim"
+	router := api.NewRouterWithConfig(taskHandler, metricsHandler, svc, logger, routerConfig)
 
 	// Start HTTP server.
 	addr := fmt.Sprintf(":%d", cfg.APIPort)
@@ -96,8 +162,14 @@ func main() {
 	}()
 
 	logger.Info("API server listening", "addr", addr)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Error("API server failed", "error", err)
+	var serveErr error
+	if cfg.Profile == "staging-sim" {
+		serveErr = srv.ListenAndServeTLS(cfg.APITLSCertFile, cfg.APITLSKeyFile)
+	} else {
+		serveErr = srv.ListenAndServe()
+	}
+	if serveErr != nil && serveErr != http.ErrServerClosed {
+		logger.Error("API server failed", "error", serveErr)
 		os.Exit(1)
 	}
 	logger.Info("API server stopped")

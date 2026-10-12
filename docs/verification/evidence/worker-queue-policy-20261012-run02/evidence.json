@@ -1,0 +1,14 @@
+{
+  "source_commit": "925c60d229495f6cdcadc3a2459382d0d7dac20a",
+  "source_tree": "d72cb55882ea79ea255193ce21aee8e36b527a98",
+  "gofmt_exit_code": 0,
+  "diff_check_exit_code": 0,
+  "queue_sql_audit_exit_code": 0,
+  "available_ram_gib_at_compile_gate": 3.4,
+  "go_compile_gate_gib": 4,
+  "integration_command": "go test ./internal/storage/postgres -run '^Test(WorkerCannotRewriteQueueGovernance|RuntimeGrantScriptRestrictsWorkerQueueColumns)$' -count=1",
+  "go_compile": "NOT_RUN_RESOURCE_LIMITED",
+  "postgres_negative_integration": "NOT_RUN_RESOURCE_LIMITED",
+  "scope": "queue governance update closed as deployment candidate; task-table fencing remains unresolved",
+  "production_not_approved": true
+}

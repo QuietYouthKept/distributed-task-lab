@@ -1,0 +1,4 @@
+run_id=tasklab-e2e-122b5c82f69c
+result=FAIL
+reason=Compose topology started but API rejected the test payload with HTTP 422; the payload omitted the required real execution mode. Corrected in the working tree; rerun pending.
+secrets_recorded=false

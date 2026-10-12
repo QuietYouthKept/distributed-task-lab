@@ -1,0 +1,25 @@
+?   	github.com/fantasticyi/distributed-task-lab/cmd/api	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/assetlab	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/chaosmatrix	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/contractfixture	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/failurelab	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/loadgen	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/worker	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api	0.953s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api/contract	0.433s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api/handlers	0.854s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/application	3.201s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/artifacts	0.817s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/auth	0.962s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/config	0.329s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/domain	0.338s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload	0.383s
+?   	github.com/fantasticyi/distributed-task-lab/internal/effects	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/observability	0.777s
+?   	github.com/fantasticyi/distributed-task-lab/internal/queue	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/storage/postgres	19.241s
+?   	github.com/fantasticyi/distributed-task-lab/internal/storage/redis	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/internal/testutil	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/worker	3.403s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/worker/handlers	1.392s
+ok  	github.com/fantasticyi/distributed-task-lab/pkg/client	0.680s

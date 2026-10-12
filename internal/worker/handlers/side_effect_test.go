@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/fantasticyi/distributed-task-lab/internal/effects"
@@ -10,8 +12,9 @@ import (
 
 type ledgerCall struct{ status, effectID string }
 type recordingLedger struct {
-	intents []effects.Intent
-	calls   []ledgerCall
+	intents        []effects.Intent
+	calls          []ledgerCall
+	markUnknownErr error
 }
 
 func (l *recordingLedger) RecordIntent(_ context.Context, intent effects.Intent) error {
@@ -24,7 +27,7 @@ func (l *recordingLedger) RecordReceipt(_ context.Context, id string, _ effects.
 }
 func (l *recordingLedger) MarkUnknown(_ context.Context, id, _ string) error {
 	l.calls = append(l.calls, ledgerCall{"unknown", id})
-	return nil
+	return l.markUnknownErr
 }
 func (l *recordingLedger) MarkManualResolution(_ context.Context, id, _ string) error {
 	l.calls = append(l.calls, ledgerCall{"manual_resolution", id})
@@ -81,5 +84,19 @@ func TestSideEffectLedgerRejectsUntrustedExecutionMetadata(t *testing.T) {
 	_, err := h.Run(context.Background(), map[string]any{"operation": "notification", "operation_id": "n-1", "target": "user-1"})
 	if err == nil || err.Error() != "external effect requires trusted task execution metadata" {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSideEffectDoesNotHideUnknownOutcomeLedgerFailure(t *testing.T) {
+	ledgerErr := errors.New("ledger unavailable")
+	ledger := &recordingLedger{markUnknownErr: ledgerErr}
+	h := NewSideEffectHandler(t.TempDir(), ledger)
+	ctx := worker.WithExecutionMetadata(context.Background(), worker.ExecutionMetadata{TaskID: "11111111-1111-1111-1111-111111111111", Generation: 1, Attempt: 1})
+	_, err := h.Run(ctx, map[string]any{"operation": "payment", "operation_id": "invoice-ledger-failure", "target": "customer-1", "simulate_response_loss": true})
+	if !errors.Is(err, ledgerErr) || !strings.Contains(err.Error(), "provider response lost") {
+		t.Fatalf("unknown effect and ledger failure should both be visible, got %v", err)
+	}
+	if len(ledger.calls) != 1 || ledger.calls[0].status != "unknown" {
+		t.Fatalf("unknown ledger calls = %#v", ledger.calls)
 	}
 }

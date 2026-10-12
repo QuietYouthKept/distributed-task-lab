@@ -1,16 +1,37 @@
 package observability
 
 import (
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
 )
 
 // Logger returns a structured JSON logger.
-func Logger() *slog.Logger {
-	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+func Logger(secrets ...string) *slog.Logger {
+	return slog.New(newJSONHandler(os.Stdout, secrets...))
+}
+
+func newJSONHandler(output io.Writer, secrets ...string) slog.Handler {
+	return slog.NewJSONHandler(output, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
+		ReplaceAttr: func(_ []string, attr slog.Attr) slog.Attr {
+			if sensitiveAttribute(attr.Key) {
+				attr.Value = slog.StringValue("[REDACTED]")
+				return attr
+			}
+			if attr.Value.Kind() == slog.KindString {
+				attr.Value = slog.StringValue(redactText(attr.Value.String(), secrets))
+			} else if attr.Value.Kind() == slog.KindAny {
+				if err, ok := attr.Value.Any().(error); ok {
+					attr.Value = slog.StringValue(redactText(err.Error(), secrets))
+				} else if text, ok := attr.Value.Any().(fmt.Stringer); ok {
+					attr.Value = slog.StringValue(redactText(text.String(), secrets))
+				}
+			}
+			return attr
+		},
 	})
-	return slog.New(handler)
 }
 
 // Metrics holds basic counters for task processing.

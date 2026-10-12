@@ -1,0 +1,22 @@
+FROM golang:1.26.9-alpine@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 AS builder
+
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/e2e-s3-proxy ./cmd/e2e-s3-proxy
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /e2e-s3-proxy ./cmd/e2e-s3-proxy
+
+FROM alpine:3.23@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0
+ARG SOURCE_COMMIT=unknown
+LABEL org.opencontainers.image.title="distributed-task-lab-e2e-s3-proxy" \
+      org.opencontainers.image.source="https://github.com/QuietYouthKept/distributed-task-lab" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+      org.opencontainers.image.description="Local-only S3 contract fixture"
+RUN addgroup -S tasklab && adduser -S -G tasklab tasklab
+COPY --from=builder --chown=tasklab:tasklab /e2e-s3-proxy /e2e-s3-proxy
+USER tasklab
+EXPOSE 9000 9001
+ENTRYPOINT ["/e2e-s3-proxy"]

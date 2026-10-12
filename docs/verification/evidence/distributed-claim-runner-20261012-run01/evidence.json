@@ -1,0 +1,14 @@
+{
+  "source_commit": "840275b3431046460e9a739fb44c814373c7acec",
+  "source_tree": "d44aced47088c9e20129070229b2038b1239d2f4",
+  "bash_syntax_exit_code": 0,
+  "gofmt_check_exit_code": 0,
+  "diff_check_exit_code": 0,
+  "available_ram_gib_at_compile_gate": 3.4,
+  "go_compile_gate_gib": 4,
+  "go_compile": "NOT_RUN_RESOURCE_LIMITED",
+  "postgres_runtime": "NOT_RUN",
+  "test_command": "GOTOOLCHAIN=local go test -json ./internal/storage/postgres -run '^TestConcurrentClaimNoDuplicates$' -count=10 -timeout=3h",
+  "acceptance_profile": "100 logical workers x 10000 tasks x 10 independent test runs",
+  "production_not_approved": true
+}

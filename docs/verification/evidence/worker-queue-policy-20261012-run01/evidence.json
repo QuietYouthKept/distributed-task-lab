@@ -1,0 +1,14 @@
+{
+  "source_commit": "5f3bb3ba1e0a91933ed31aa33748244615b1ed63",
+  "source_tree": "925a7ac370fb8ba477ded352111887f654a3ed96",
+  "gofmt_exit_code": 0,
+  "diff_check_exit_code": 0,
+  "worker_sql_audit_exit_code": 0,
+  "available_ram_gib_at_compile_gate": 3.4,
+  "go_compile_gate_gib": 4,
+  "runtime_grant_change": "Worker UPDATE limited to queues.rate_tokens and queues.rate_updated_at",
+  "focused_unit": "CREATED_NOT_RUN_RESOURCE_LIMITED",
+  "postgres_negative_integration": "NOT_RUN_RESOURCE_LIMITED",
+  "task_table_fencing_gap": "REMAINS_OPEN",
+  "production_not_approved": true
+}

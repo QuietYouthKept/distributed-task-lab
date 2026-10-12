@@ -1,0 +1,64 @@
+MinIO upstream source tag: RELEASE.2025-10-15T17-29-55Z
+MinIO upstream commit: 9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a
+MinIO Go module version: v0.0.0-20251015172955-9e49d5e7a648
+MinIO Go module checksum: h1:6TdolSCLSs2nwm8i0PpWDqf9iX2Ty9WQK8wmr7dCnUM=
+MinIO go.mod checksum: h1:yCWDkwWO9IWpGsT4mreDDN/B/QVmK2zC666uInRAcqE=
+MinIO upstream LICENSE URL: https://raw.githubusercontent.com/minio/minio/9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a/LICENSE
+MinIO upstream LICENSE SHA256: 0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0
+License: AGPL-3.0 (upstream LICENSE included in image)
+go version go1.26.9 windows/amd64
+<REDACTED_LOCAL_ARTIFACT_ROOT>/tasklab-minio-build.WWDHbK/bin/minio: go1.26.9
+	path	github.com/minio/minio
+	mod	github.com/minio/minio	(devel)	
+	build	-trimpath=true
+	build	CGO_ENABLED=0
+	build	GOARCH=amd64
+	build	GOOS=linux
+5d0789d5af3cc685a4aad5379176fa2755a821fa3d52050ef93293bd6691828a */e/distributed-task-lab-temp/tasklab-minio-build.WWDHbK/bin/minio
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from minio-ci.Dockerfile
+#1 transferring dockerfile: 697B 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 2B done
+#2 DONE 0.0s
+
+#3 [internal] load build context
+#3 transferring context: 149.83MB 3.9s done
+#3 DONE 4.3s
+
+#4 [1/2] COPY minio /usr/bin/minio
+#4 DONE 0.3s
+
+#5 [2/2] COPY LICENSE /usr/share/licenses/minio/LICENSE
+#5 DONE 0.2s
+
+#6 exporting to image
+#6 exporting layers
+#6 exporting layers 4.0s done
+#6 exporting manifest sha256:c33be9672f9e812096d54f5deea01409a985a37dd936c31ef1474075de412e4e 0.0s done
+#6 exporting config sha256:27ae995523f6b6e97f013f9dfacfc1d95fa3028642d2bf04a8bd6e35ae30d633 0.0s done
+#6 exporting attestation manifest sha256:39f7fe48ef35d535a52e68b0839b4b3965226ac2ed23e2b1dca70417544a7a86 0.0s done
+#6 exporting manifest list sha256:91bd6c1a7018564d600b6b808ea082a87d43b8728f11a75941d72af0f95ffc38 0.0s done
+#6 naming to docker.io/library/tasklab-minio-ci:tasklab-e2e-6a04ea2f454e-1 done
+#6 unpacking to docker.io/library/tasklab-minio-ci:tasklab-e2e-6a04ea2f454e-1
+#6 unpacking to docker.io/library/tasklab-minio-ci:tasklab-e2e-6a04ea2f454e-1 0.6s done
+#6 DONE 4.7s
+Built ephemeral MinIO image tag: tasklab-minio-ci:tasklab-e2e-6a04ea2f454e-1
+Local image ID (not a registry digest): sha256:91bd6c1a7018564d600b6b808ea082a87d43b8728f11a75941d72af0f95ffc38
+ Network tasklab-e2e-6a04ea2f454e_default  Creating
+ Network tasklab-e2e-6a04ea2f454e_default  Created
+ Container tasklab-e2e-6a04ea2f454e-minio-1  Creating
+ Container tasklab-e2e-6a04ea2f454e-postgres-1  Creating
+ Container tasklab-e2e-6a04ea2f454e-minio-1  Created
+ Container tasklab-e2e-6a04ea2f454e-postgres-1  Created
+ Container tasklab-e2e-6a04ea2f454e-postgres-1  Starting
+ Container tasklab-e2e-6a04ea2f454e-minio-1  Starting
+ Container tasklab-e2e-6a04ea2f454e-postgres-1  Started
+ Container tasklab-e2e-6a04ea2f454e-minio-1  Started
+ Container tasklab-e2e-6a04ea2f454e-minio-1  Waiting
+ Container tasklab-e2e-6a04ea2f454e-postgres-1  Waiting
+ Container tasklab-e2e-6a04ea2f454e-minio-1  Healthy
+ Container tasklab-e2e-6a04ea2f454e-postgres-1  Healthy

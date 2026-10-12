@@ -1,0 +1,109 @@
+name: Container Supply Chain
+
+on:
+  push:
+    branches: [main, codex/production-readiness-p0-p1]
+  pull_request:
+  schedule:
+    - cron: "41 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  image-sbom-and-vulnerability-scan:
+    name: Build, SBOM, and vulnerability scan (API + Worker)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Prepare report directories
+        run: mkdir -p artifacts/sbom artifacts/vulnerability
+
+      - name: Build source-linked API and Worker images
+        id: build-images
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --build-arg SOURCE_COMMIT="${GITHUB_SHA}" \
+            --tag "tasklab-api:${GITHUB_SHA}" \
+            --file deployments/Dockerfile.api .
+          docker build --pull \
+            --build-arg SOURCE_COMMIT="${GITHUB_SHA}" \
+            --tag "tasklab-worker:${GITHUB_SHA}" \
+            --file deployments/Dockerfile.worker .
+          test "$(docker image inspect "tasklab-api:${GITHUB_SHA}" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "${GITHUB_SHA}"
+          test "$(docker image inspect "tasklab-worker:${GITHUB_SHA}" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "${GITHUB_SHA}"
+
+      - name: Generate API CycloneDX SBOM from the built image
+        if: ${{ always() && steps.build-images.outcome == 'success' }}
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: tasklab-api:${{ github.sha }}
+          syft-version: v1.54.1
+          format: cyclonedx-json
+          output-file: artifacts/sbom/api.cdx.json
+          upload-artifact: false
+          dependency-snapshot: false
+
+      - name: Generate Worker CycloneDX SBOM from the built image
+        if: ${{ always() && steps.build-images.outcome == 'success' }}
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: tasklab-worker:${{ github.sha }}
+          syft-version: v1.54.1
+          format: cyclonedx-json
+          output-file: artifacts/sbom/worker.cdx.json
+          upload-artifact: false
+          dependency-snapshot: false
+
+      - name: Scan API image (OS and application dependencies)
+        if: ${{ always() && steps.build-images.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
+        with:
+          image-ref: tasklab-api:${{ github.sha }}
+          version: v0.75.0
+          vuln-type: os,library
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          format: json
+          output: artifacts/vulnerability/api.trivy.json
+          exit-code: "0"
+
+      - name: Scan Worker image (OS and application dependencies)
+        if: ${{ always() && steps.build-images.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
+        with:
+          image-ref: tasklab-worker:${{ github.sha }}
+          version: v0.75.0
+          vuln-type: os,library
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          format: json
+          output: artifacts/vulnerability/worker.trivy.json
+          exit-code: "0"
+
+      - name: Enforce High and Critical vulnerability threshold
+        if: ${{ always() && steps.build-images.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          for report in artifacts/vulnerability/api.trivy.json artifacts/vulnerability/worker.trivy.json; do
+            test -s "$report"
+            if jq -e '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH" or .Severity == "CRITICAL")] | length > 0' "$report" >/dev/null; then
+              echo "High or Critical vulnerabilities found in $report" >&2
+              jq -r '.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH" or .Severity == "CRITICAL") | "\(.Severity) \(.VulnerabilityID) \(.PkgName) \(.InstalledVersion) -> \(.FixedVersion)"' "$report" >&2
+              exit 1
+            fi
+          done
+
+      - name: Preserve SBOM and vulnerability reports, including on scan failure
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: container-supply-chain-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 90

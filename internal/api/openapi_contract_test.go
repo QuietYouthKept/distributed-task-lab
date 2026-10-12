@@ -4,7 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/fantasticyi/distributed-task-lab/internal/application"
+	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 )
 
 func TestOpenAPIContainsEveryStableRoute(t *testing.T) {
@@ -36,6 +41,8 @@ func TestOpenAPIContainsEveryStableRoute(t *testing.T) {
 		"/v1/queues/{name}":        {"put"},
 		"/v1/queues/{name}/pause":  {"post"},
 		"/v1/queues/{name}/resume": {"post"},
+		"/v1/effects":              {"get"},
+		"/v1/effects/{id}/resolve": {"post"},
 	}
 	for path, methods := range want {
 		operations, ok := document.Paths[path]
@@ -79,4 +86,259 @@ func TestOpenAPICreateContractIsStrictAndIdempotent(t *testing.T) {
 	if !found {
 		t.Fatal("POST /v1/tasks must document Idempotency-Key")
 	}
+	list := paths["/v1/tasks"].(map[string]any)["get"].(map[string]any)
+	listParameters := list["parameters"].([]any)
+	for _, expected := range []string{"page_size", "cursor"} {
+		found := false
+		for _, value := range listParameters {
+			if value.(map[string]any)["name"] == expected {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("GET /v1/tasks must document %s", expected)
+		}
+	}
+}
+
+func TestOpenAPIV1RolesAuthErrorsAndRouteSet(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "api", "openapi.json"))
+	if err != nil {
+		t.Fatalf("read OpenAPI contract: %v", err)
+	}
+	var document struct {
+		Security []map[string][]string `json:"security"`
+		Paths    map[string]map[string]struct {
+			OperationID string                     `json:"operationId"`
+			Role        string                     `json:"x-required-role"`
+			Responses   map[string]json.RawMessage `json:"responses"`
+		} `json:"paths"`
+		Components struct {
+			SecuritySchemes map[string]struct {
+				Type   string `json:"type"`
+				Scheme string `json:"scheme"`
+			} `json:"securitySchemes"`
+			Responses map[string]struct {
+				Description string `json:"description"`
+				Content     map[string]struct {
+					Schema struct {
+						Ref string `json:"$ref"`
+					} `json:"schema"`
+				} `json:"content"`
+			} `json:"responses"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatalf("parse OpenAPI contract: %v", err)
+	}
+	if len(document.Security) != 1 || len(document.Security[0]) != 1 {
+		t.Fatalf("global security=%v, want bearerAuth", document.Security)
+	}
+	if _, ok := document.Security[0]["bearerAuth"]; !ok {
+		t.Fatalf("global security=%v, want bearerAuth", document.Security)
+	}
+	bearer := document.Components.SecuritySchemes["bearerAuth"]
+	if bearer.Type != "http" || bearer.Scheme != "bearer" {
+		t.Fatalf("bearerAuth=%+v, want HTTP Bearer", bearer)
+	}
+
+	want := map[string]map[string]string{
+		"/v1/tasks":                {"get": "reader", "post": "operator"},
+		"/v1/tasks/{id}":           {"get": "reader"},
+		"/v1/tasks/{id}/events":    {"get": "reader"},
+		"/v1/tasks/{id}/cancel":    {"post": "operator"},
+		"/v1/tasks/{id}/requeue":   {"post": "operator"},
+		"/v1/dlq":                  {"get": "operator"},
+		"/v1/stats":                {"get": "operator"},
+		"/v1/metrics":              {"get": "operator"},
+		"/v1/queues":               {"get": "operator"},
+		"/v1/queues/{name}":        {"put": "admin"},
+		"/v1/queues/{name}/pause":  {"post": "admin"},
+		"/v1/queues/{name}/resume": {"post": "admin"},
+		"/v1/effects":              {"get": "operator"},
+		"/v1/effects/{id}/resolve": {"post": "admin"},
+	}
+	if len(document.Paths) != len(want) {
+		t.Fatalf("OpenAPI path count=%d, want exactly %d stable v1 paths", len(document.Paths), len(want))
+	}
+	operationIDs := map[string]string{}
+	for path, methods := range document.Paths {
+		wantMethods, knownPath := want[path]
+		if !knownPath {
+			t.Errorf("OpenAPI contains undocumented stable path %s", path)
+			continue
+		}
+		if len(methods) != len(wantMethods) {
+			t.Errorf("OpenAPI methods for %s=%d, want exactly %d", path, len(methods), len(wantMethods))
+		}
+		for method, operation := range methods {
+			role, knownMethod := wantMethods[method]
+			if !knownMethod {
+				t.Errorf("OpenAPI contains undocumented operation %s %s", method, path)
+				continue
+			}
+			if operation.Role != role {
+				t.Errorf("%s %s x-required-role=%q, want %q", method, path, operation.Role, role)
+			}
+			if operation.OperationID == "" {
+				t.Errorf("%s %s has no operationId", method, path)
+			} else if previous, duplicate := operationIDs[operation.OperationID]; duplicate {
+				t.Errorf("operationId %q is duplicated by %s and %s %s", operation.OperationID, previous, method, path)
+			} else {
+				operationIDs[operation.OperationID] = method + " " + path
+			}
+			for _, status := range []string{"401", "403", "429"} {
+				if _, ok := operation.Responses[status]; !ok {
+					t.Errorf("%s %s is missing documented %s response", method, path, status)
+				}
+			}
+		}
+	}
+	for _, name := range []string{"Unauthorized", "Forbidden", "RateLimited"} {
+		response, ok := document.Components.Responses[name]
+		if !ok {
+			t.Errorf("missing common response %s", name)
+			continue
+		}
+		content, ok := response.Content["application/json"]
+		if !ok || content.Schema.Ref != "#/components/schemas/ErrorResponse" {
+			t.Errorf("common response %s does not use ErrorResponse envelope", name)
+		}
+	}
+}
+
+func TestOpenAPILocalComponentReferencesResolve(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "api", "openapi.json"))
+	if err != nil {
+		t.Fatalf("read OpenAPI contract: %v", err)
+	}
+	var document any
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatalf("parse OpenAPI contract: %v", err)
+	}
+	var refs []string
+	collectOpenAPIRefs(document, &refs)
+	if len(refs) == 0 {
+		t.Fatal("OpenAPI document has no component references; expected shared schemas and responses")
+	}
+	for _, ref := range refs {
+		if !strings.HasPrefix(ref, "#/components/") {
+			t.Errorf("unsupported or external OpenAPI reference %q; contract must be self-contained", ref)
+			continue
+		}
+		value := document
+		for _, rawSegment := range strings.Split(strings.TrimPrefix(ref, "#/"), "/") {
+			segment := strings.NewReplacer("~1", "/", "~0", "~").Replace(rawSegment)
+			object, ok := value.(map[string]any)
+			if !ok {
+				value = nil
+				break
+			}
+			value, ok = object[segment]
+			if !ok {
+				value = nil
+				break
+			}
+		}
+		if value == nil {
+			t.Errorf("OpenAPI reference %q does not resolve", ref)
+		}
+	}
+}
+
+func collectOpenAPIRefs(value any, refs *[]string) {
+	switch typed := value.(type) {
+	case map[string]any:
+		if ref, ok := typed["$ref"].(string); ok {
+			*refs = append(*refs, ref)
+		}
+		for _, child := range typed {
+			collectOpenAPIRefs(child, refs)
+		}
+	case []any:
+		for _, child := range typed {
+			collectOpenAPIRefs(child, refs)
+		}
+	}
+}
+
+func TestOpenAPICreateTaskSchemasMatchGoDTOs(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "api", "openapi.json"))
+	if err != nil {
+		t.Fatalf("read OpenAPI contract: %v", err)
+	}
+	var document struct {
+		Paths map[string]map[string]struct {
+			Responses map[string]struct {
+				Content map[string]struct {
+					Schema struct {
+						Ref string `json:"$ref"`
+					} `json:"schema"`
+				} `json:"content"`
+			} `json:"responses"`
+		} `json:"paths"`
+		Components struct {
+			Schemas map[string]struct {
+				Properties map[string]json.RawMessage `json:"properties"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatalf("parse OpenAPI contract: %v", err)
+	}
+
+	for _, check := range []struct {
+		name string
+		got  map[string]json.RawMessage
+		want reflect.Type
+	}{
+		{name: "CreateTaskRequest", got: document.Components.Schemas["CreateTaskRequest"].Properties, want: reflect.TypeOf(application.CreateTaskRequest{})},
+		{name: "PayloadEnvelope", got: document.Components.Schemas["PayloadEnvelope"].Properties, want: reflect.TypeOf(domain.TaskPayloadEnvelope{})},
+		{name: "CreateTaskResponse", got: document.Components.Schemas["CreateTaskResponse"].Properties, want: reflect.TypeOf(application.CreateTaskResponse{})},
+	} {
+		if check.got == nil {
+			t.Errorf("OpenAPI schema %s is missing properties", check.name)
+			continue
+		}
+		want := jsonFieldNames(check.want)
+		if len(check.got) != len(want) {
+			t.Errorf("OpenAPI schema %s has %d properties, Go DTO has %d JSON fields", check.name, len(check.got), len(want))
+		}
+		for _, field := range want {
+			if _, ok := check.got[field]; !ok {
+				t.Errorf("OpenAPI schema %s is missing Go JSON field %q", check.name, field)
+			}
+		}
+		for field := range check.got {
+			if !containsString(want, field) {
+				t.Errorf("OpenAPI schema %s has undocumented Go JSON field %q", check.name, field)
+			}
+		}
+	}
+
+	response := document.Paths["/v1/tasks"]["post"].Responses["201"].Content["application/json"].Schema.Ref
+	if response != "#/components/schemas/CreateTaskResponse" {
+		t.Errorf("POST /v1/tasks 201 schema ref=%q, want CreateTaskResponse", response)
+	}
+}
+
+func jsonFieldNames(typ reflect.Type) []string {
+	var names []string
+	for i := 0; i < typ.NumField(); i++ {
+		name := strings.Split(typ.Field(i).Tag.Get("json"), ",")[0]
+		if name == "" || name == "-" {
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

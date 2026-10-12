@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "run_id": "wave3-minio-proxy-preflight-fail-9b360f5952bb",
+  "implementation_commit": "9b360f5952bb745fcbd25dfcb32c7c9bbe20f1bf",
+  "worktree_clean_at_start": true,
+  "result": "NOT VERIFIED",
+  "exit_code": 1,
+  "failure_stage": "ephemeral MinIO source-build preflight before the evidence collector started",
+  "cause": "Git Bash curl did not inherit the configured local proxy and the pinned raw.githubusercontent.com license fetch returned a connection reset. No test gate ran in this attempt.",
+  "recovery": "Reran with HTTP_PROXY, HTTPS_PROXY, and ALL_PROXY set to http://127.0.0.1:7892. The complete clean Evidence run wave3-20261010T171000Z-9b360f5952bb passed 14/14.",
+  "stdout": "evidence/phase1/runs/wave3-minio-proxy-preflight-fail-9b360f5952bb/logs/stdout.log",
+  "stdout_sha256": "c6a33f322c5a1249005f619a10a6902e043b7bff64da31de7424c28dd18e3c6d",
+  "stdout_bytes": 188,
+  "stderr": "evidence/phase1/runs/wave3-minio-proxy-preflight-fail-9b360f5952bb/logs/stderr.log",
+  "stderr_sha256": "5e218b986887125df81be5d2ef24163333c167d75dda2875bbc9088946f1f6c5",
+  "stderr_bytes": 291,
+  "credential_values_recorded": false,
+  "created_resources_cleanup_verified": true
+}

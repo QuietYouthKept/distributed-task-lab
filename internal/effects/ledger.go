@@ -3,7 +3,10 @@
 // cannot prove whether a provider received a request.
 package effects
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type Policy string
 
@@ -38,6 +41,13 @@ type Receipt struct {
 	ProviderRequestID, ResponseHash string
 }
 
+type Record struct {
+	EffectID, TaskID, OperationKey, Kind, Policy, Status         string
+	ProviderRequestID, RequestHash, ResponseHash, ResolutionNote string
+	Generation, Attempt                                          int
+	CreatedAt, ReconciledAt                                      *time.Time
+}
+
 // Ledger is intentionally small: adapters own provider calls, while the
 // ledger records the durable evidence used for retries and operator review.
 type Ledger interface {
@@ -45,4 +55,11 @@ type Ledger interface {
 	RecordReceipt(ctx context.Context, effectID string, receipt Receipt) error
 	MarkUnknown(ctx context.Context, effectID, reason string) error
 	MarkManualResolution(ctx context.Context, effectID, reason string) error
+}
+
+// ReconciliationLedger exposes only the operator-facing review and
+// non-destructive manual-resolution operations.
+type ReconciliationLedger interface {
+	ListUnresolved(ctx context.Context, limit int) ([]Record, error)
+	ResolveManually(ctx context.Context, effectID, reason string) error
 }

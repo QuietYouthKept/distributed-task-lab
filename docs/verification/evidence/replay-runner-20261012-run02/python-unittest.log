@@ -1,0 +1,26 @@
+test_concurrent_output_creation_is_not_overwritten (test_azure_llm.AzureLLMReplayTests) ... ok
+test_existing_output_is_never_overwritten (test_azure_llm.AzureLLMReplayTests) ... ok
+test_invalid_token_and_oversized_output_are_rejected (test_azure_llm.AzureLLMReplayTests) ... ok
+test_observed_tokens_and_provenance_are_preserved (test_azure_llm.AzureLLMReplayTests) ... ok
+test_out_of_order_timestamp_is_rejected_without_publishing (test_azure_llm.AzureLLMReplayTests) ... ok
+test_repeated_source_pass_gets_later_arrival_offsets (test_azure_llm.AzureLLMReplayTests) ... ok
+test_replay_is_byte_deterministic_for_same_input_and_seed (test_azure_llm.AzureLLMReplayTests) ... ok
+test_cancel_before_submission_does_not_call_api (test_runner.ReplayRunnerTests) ... ok
+test_checkpoint_rejects_different_run (test_runner.ReplayRunnerTests) ... ok
+test_existing_result_is_never_overwritten_without_resume (test_runner.ReplayRunnerTests) ... ok
+test_invalid_json_and_schema_are_rejected (test_runner.ReplayRunnerTests) ... ok
+test_invalid_non_loopback_http_is_rejected (test_runner.ReplayRunnerTests) ... ok
+test_lost_create_response_retries_same_idempotency_key (test_runner.ReplayRunnerTests) ... ok
+test_manifest_hash_mismatch_is_rejected_before_api (test_runner.ReplayRunnerTests) ... ok
+test_max_runtime_rejects_overlong_schedule_before_submission (test_runner.ReplayRunnerTests) ... ok
+test_non_2xx_is_recorded_as_rejected_not_success (test_runner.ReplayRunnerTests) ... ok
+test_real_api_create_poll_and_evidence (test_runner.ReplayRunnerTests) ... ok
+test_redirect_is_not_followed (test_runner.ReplayRunnerTests) ... ok
+test_resume_does_not_resubmit_completed_logical_task (test_runner.ReplayRunnerTests) ... ok
+test_task_that_never_finishes_is_bounded (test_runner.ReplayRunnerTests) ... ok
+test_unsorted_arrivals_are_rejected (test_runner.ReplayRunnerTests) ... ok
+
+----------------------------------------------------------------------
+Ran 21 tests in 7.779s
+
+OK

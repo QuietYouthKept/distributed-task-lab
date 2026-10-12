@@ -1,0 +1,3 @@
+530:			if _, err := tx.ExecContext(ctx, `UPDATE queues SET rate_tokens=$1, rate_updated_at=$2 WHERE name=$3`, s.tokens, s.now, name); err != nil {
+792:	res, err := tx.ExecContext(ctx, `UPDATE queues SET paused = true, updated_at = clock_timestamp() WHERE name = $1`, name)
+812:	res, err := tx.ExecContext(ctx, `UPDATE queues SET paused = false, updated_at = clock_timestamp() WHERE name = $1`, name)

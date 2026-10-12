@@ -1,0 +1,13 @@
+migration applied: 001_create_tasks.sql
+migration applied: 002_create_task_events.sql
+migration applied: 003_create_workers.sql
+migration applied: 004_production_hardening.sql
+migration applied: 005_queue_governance.sql
+migration applied: 006_queue_rate_limit.sql
+migration applied: 007_integrity_and_runtime.sql
+migration applied: 008_queue_aging.sql
+migration applied: 009_create_effects.sql
+migration applied: 010_identity_audit.sql
+migration applied: 011_task_keyset_pagination.sql
+{"time":"2026-10-09T15:15:48.3426496Z","scenario":"concurrent-claim-no-duplicate","operation":"claim","result":"PASS: 16 unique rows claimed once"}
+{"time":"2026-10-09T15:15:48.395958Z","scenario":"strict-max-concurrency","operation":"oracle","result":"FAIL: claims=0"}

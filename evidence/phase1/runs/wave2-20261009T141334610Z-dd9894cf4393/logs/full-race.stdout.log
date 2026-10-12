@@ -1,0 +1,26 @@
+?   	github.com/fantasticyi/distributed-task-lab/cmd/api	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/assetlab	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/chaosmatrix	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/contractfixture	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/failurelab	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/loadgen	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/paginationbench	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/cmd/worker	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api	2.298s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api/contract	1.336s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/api/handlers	2.067s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/application	4.022s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/artifacts	1.654s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/auth	1.638s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/config	1.199s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/domain	1.199s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/domain/taskpayload	1.336s
+?   	github.com/fantasticyi/distributed-task-lab/internal/effects	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/observability	2.349s
+?   	github.com/fantasticyi/distributed-task-lab/internal/queue	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/storage/postgres	20.596s
+?   	github.com/fantasticyi/distributed-task-lab/internal/storage/redis	[no test files]
+?   	github.com/fantasticyi/distributed-task-lab/internal/testutil	[no test files]
+ok  	github.com/fantasticyi/distributed-task-lab/internal/worker	4.491s
+ok  	github.com/fantasticyi/distributed-task-lab/internal/worker/handlers	2.819s
+ok  	github.com/fantasticyi/distributed-task-lab/pkg/client	1.402s

@@ -4,9 +4,13 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/fantasticyi/distributed-task-lab/internal/api/contract"
 	"github.com/fantasticyi/distributed-task-lab/internal/application"
+	"github.com/fantasticyi/distributed-task-lab/internal/auth"
 	"github.com/fantasticyi/distributed-task-lab/internal/domain"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -16,11 +20,33 @@ import (
 type TaskHandler struct {
 	svc    *application.TaskService
 	logger *slog.Logger
+	cursor taskCursorCodec
 }
 
 // NewTaskHandler creates a new task HTTP handler.
 func NewTaskHandler(svc *application.TaskService, logger *slog.Logger) *TaskHandler {
-	return &TaskHandler{svc: svc, logger: logger}
+	codec, _ := newCursorCodec([]byte("development-only-cursor-signing-key-32-bytes"))
+	return &TaskHandler{svc: svc, logger: logger, cursor: codec}
+}
+
+// NewTaskHandlerWithCursorKey constructs the v1 pagination signer from the
+// deployment secret. Production callers must supply at least 32 random bytes.
+func NewTaskHandlerWithCursorKey(svc *application.TaskService, logger *slog.Logger, key []byte) (*TaskHandler, error) {
+	codec, err := newCursorCodec(key)
+	if err != nil {
+		return nil, err
+	}
+	return &TaskHandler{svc: svc, logger: logger, cursor: codec}, nil
+}
+
+// NewTaskHandlerWithCursorKeyRing explicitly opts into expiring v2 cursors.
+// NewTaskHandlerWithCursorKey remains the compatibility-preserving default.
+func NewTaskHandlerWithCursorKeyRing(svc *application.TaskService, logger *slog.Logger, config CursorKeyRingConfig) (*TaskHandler, error) {
+	codec, err := newRotatingCursorCodec(config)
+	if err != nil {
+		return nil, err
+	}
+	return &TaskHandler{svc: svc, logger: logger, cursor: codec}, nil
 }
 
 // CreateTask handles POST /tasks.
@@ -87,9 +113,12 @@ func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
 
 // ListTasks handles GET /tasks.
 func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
-	filter := domain.TaskFilter{
-		Limit: 100,
+	v1 := r.URL.Path == "/v1/tasks"
+	pageSize := 100
+	if v1 {
+		pageSize = 50
 	}
+	filter := domain.TaskFilter{Limit: pageSize}
 
 	// Parse query parameters.
 	q := r.URL.Query()
@@ -116,6 +145,33 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 		}
 		filter.Queue = &queueName
 	}
+	if v1 {
+		if raw := q.Get("page_size"); raw != "" {
+			parsed, err := strconv.Atoi(raw)
+			if err != nil || parsed < 1 || parsed > 100 {
+				writeInvalidRequest(w, r, "invalid_page_size", "page_size must be between 1 and 100")
+				return
+			}
+			pageSize = parsed
+		}
+		principal, _ := auth.PrincipalFromContext(r.Context())
+		subject := principal.Subject
+		status, taskType, queueName := q.Get("status"), q.Get("type"), q.Get("queue")
+		fingerprint := taskFilterFingerprint(status, taskType, queueName, subject)
+		if token := q.Get("cursor"); token != "" {
+			if h.cursor == nil {
+				writeError(w, r, domain.NewError(domain.ErrorKindInternal, "pagination_unavailable", "pagination is unavailable", nil))
+				return
+			}
+			createdAt, id, err := h.cursor.decode(token, fingerprint, pageSize, subject)
+			if err != nil {
+				writeInvalidRequest(w, r, "invalid_cursor", "cursor is invalid or does not match the query")
+				return
+			}
+			filter.AfterCreatedAt, filter.AfterID = &createdAt, &id
+		}
+		filter.Limit = pageSize + 1
+	}
 
 	tasks, err := h.svc.ListTasks(r.Context(), filter)
 	if err != nil {
@@ -124,7 +180,23 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, tasks)
+	if !v1 {
+		writeJSON(w, http.StatusOK, tasks)
+		return
+	}
+	hasMore := len(tasks) > pageSize
+	if hasMore {
+		tasks = tasks[:pageSize]
+	}
+	next := ""
+	if hasMore && len(tasks) > 0 {
+		last := tasks[len(tasks)-1]
+		principal, _ := auth.PrincipalFromContext(r.Context())
+		status, taskType, queueName := q.Get("status"), q.Get("type"), q.Get("queue")
+		next = h.cursor.encode(taskCursor{Version: 1, CreatedAt: last.CreatedAt.UTC().Format(time.RFC3339Nano), ID: last.ID,
+			Filter: taskFilterFingerprint(status, taskType, queueName, principal.Subject), PageSize: pageSize, Subject: principal.Subject})
+	}
+	writeJSON(w, http.StatusOK, contract.TaskListResponse{Tasks: tasks, NextCursor: next, HasMore: hasMore})
 }
 
 // ListDLQ handles GET /tasks?status=dlq (also supports /dlq for convenience).
@@ -153,9 +225,9 @@ func (h *TaskHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Emit every known status so the JSON shape stays stable for callers.
-	out := make(map[string]int64, len(domain.ValidTaskStatuses))
+	out := make(contract.TaskStatsResponse, len(domain.ValidTaskStatuses))
 	for st := range domain.ValidTaskStatuses {
-		out[string(st)] = counts[st]
+		out[st] = counts[st]
 	}
 
 	writeJSON(w, http.StatusOK, out)
@@ -169,9 +241,7 @@ func (h *TaskHandler) Requeue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var body struct {
-		Reason string `json:"reason"`
-	}
+	var body contract.OptionalReasonRequest
 	if err := decodeOptionalRequest(r, &body); err != nil {
 		writeMalformedRequest(w, r, "invalid_json", "request body must be valid JSON")
 		return
@@ -187,7 +257,7 @@ func (h *TaskHandler) Requeue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.Info("task requeued", "task_id", id)
-	writeJSON(w, http.StatusOK, map[string]string{"status": "requeued", "task_id": id})
+	writeJSON(w, http.StatusOK, contract.TaskActionResponse{Status: "requeued", TaskID: id})
 }
 
 // Cancel handles POST /tasks/{id}/cancel — cancels a pending or running task.
@@ -198,9 +268,7 @@ func (h *TaskHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var body struct {
-		Reason string `json:"reason"`
-	}
+	var body contract.OptionalReasonRequest
 	if err := decodeOptionalRequest(r, &body); err != nil {
 		writeMalformedRequest(w, r, "invalid_json", "request body must be valid JSON")
 		return
@@ -216,7 +284,7 @@ func (h *TaskHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.Info("task cancelled", "task_id", id)
-	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled", "task_id": id})
+	writeJSON(w, http.StatusOK, contract.TaskActionResponse{Status: "cancelled", TaskID: id})
 }
 
 // GetTaskEvents handles GET /tasks/{id}/events — returns the task audit log.
@@ -249,7 +317,7 @@ func (h *TaskHandler) PauseQueue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "paused", "queue": name})
+	writeJSON(w, http.StatusOK, contract.QueueActionResponse{Status: "paused", Queue: name})
 }
 
 // ResumeQueue handles POST /queues/{name}/resume.
@@ -264,7 +332,7 @@ func (h *TaskHandler) ResumeQueue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "resumed", "queue": name})
+	writeJSON(w, http.StatusOK, contract.QueueActionResponse{Status: "resumed", Queue: name})
 }
 
 // ListQueues handles GET /queues.
@@ -285,13 +353,7 @@ func (h *TaskHandler) SetQueueConfig(w http.ResponseWriter, r *http.Request) {
 		writeInvalidRequest(w, r, "missing_queue", "queue name is required")
 		return
 	}
-	var body struct {
-		MaxConcurrency     int     `json:"max_concurrency"`
-		RateLimitPerSecond float64 `json:"rate_limit_per_second"`
-		Burst              int     `json:"burst"`
-		AgingAfterSeconds  int     `json:"aging_after_seconds"`
-		AgingPriorityBoost int     `json:"aging_priority_boost"`
-	}
+	var body contract.QueueConfigRequest
 	if err := decodeOptionalRequest(r, &body); err != nil {
 		writeMalformedRequest(w, r, "invalid_json", "request body must be valid JSON")
 		return
@@ -310,7 +372,7 @@ func (h *TaskHandler) SetQueueConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "configured", "queue": name})
+	writeJSON(w, http.StatusOK, contract.QueueActionResponse{Status: "configured", Queue: name})
 }
 
 func applyIdempotencyKey(r *http.Request, req *application.CreateTaskRequest) error {
