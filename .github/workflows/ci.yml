@@ -131,7 +131,6 @@ jobs:
           output="${RUNNER_TEMP}/tasklab-loadgen-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "$output"
           bundle="$output/$run_id"
-          mkdir -p "$bundle"
           printf '%s\n' \
             'go run ./cmd/loadgen' \
             'LOADGEN_TASKS=500' \
@@ -142,7 +141,7 @@ jobs:
             'LOADGEN_PAYLOAD_SIZE=128' \
             'LOADGEN_PROFILE=backlog-drain' \
             'LOADGEN_TASK_TYPE=noop' \
-            'LOADGEN_SEED=20261012' > "$bundle/command.txt"
+            'LOADGEN_SEED=20261012' > "$output/command.txt"
           echo "LOADGEN_OUTPUT_DIR=$output" >> "$GITHUB_ENV"
           echo "LOADGEN_RUN_ID=$run_id" >> "$GITHUB_ENV"
           set +e
@@ -162,6 +161,7 @@ jobs:
           benchmark_rc=${PIPESTATUS[0]}
           set -e
           printf '%s\n' "$benchmark_rc" > "$bundle/exit-code.txt"
+          mv "$output/command.txt" "$bundle/command.txt"
           if [[ -f "$output/benchmark.log" ]]; then
             cp "$output/benchmark.log" "$bundle/benchmark.log"
             rm "$output/benchmark.log"
