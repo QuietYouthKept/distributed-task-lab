@@ -66,61 +66,6 @@ jobs:
           cache: true
       - name: Verify PostgreSQL test evidence gate
         run: python3 -B scripts/alicloud/test_summarize_go_test.py -v
-      - name: Prepare PostgreSQL acceptance evidence
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/postgres-integration
-          git rev-parse HEAD > artifacts/postgres-integration/source-commit.txt
-          git rev-parse 'HEAD^{tree}' > artifacts/postgres-integration/source-tree.txt
-          printf '%s\n' "$GITHUB_RUN_ID" > artifacts/postgres-integration/workflow-run-id.txt
-          printf '%s\n' "$GITHUB_RUN_ATTEMPT" > artifacts/postgres-integration/workflow-run-attempt.txt
-          printf '%s\n' "$(uname -a)" > artifacts/postgres-integration/runner-os.txt
-          go version > artifacts/postgres-integration/go-version.txt
-          printf '%s\n' 'postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea' > artifacts/postgres-integration/postgres-image.txt
-          printf '%s\n' "go test -json -p 2 -parallel 2 -count=1 -timeout=18m ./internal/storage/postgres -skip '^TestDatabaseBackupRestoreDrill$'" > artifacts/postgres-integration/test-command.txt
-          printf '%s\n' 'Migration version 12 is asserted by TestMigrationsFreshAndRerun.' > artifacts/postgres-integration/migration-assertion.txt
-          if PGPASSWORD=postgres psql "$TEST_DATABASE_URL" --no-psqlrc --tuples-only --no-align --command='SHOW server_version' > artifacts/postgres-integration/postgres-version.txt 2> artifacts/postgres-integration/postgres-version.stderr; then
-            :
-          else
-            printf '%s\n' 'NOT_AVAILABLE (see job failure; credentials and DSN suppressed)' > artifacts/postgres-integration/postgres-version.txt
-          fi
-      - name: Integration and migration suite (unexpected skips fail)
-        shell: bash
-        run: |
-          set -uo pipefail
-          evidence=artifacts/postgres-integration
-          mkdir -p "$evidence"
-          set +e
-          go test -json -p 2 -parallel 2 -count=1 -timeout=18m ./internal/storage/postgres \
-            -skip '^TestDatabaseBackupRestoreDrill$' > "$evidence/go-test-events.jsonl" 2>&1
-          test_rc=$?
-          set -e
-          printf '%s\n' "$test_rc" > "$evidence/go-test-exit-code.txt"
-          set +e
-          python3 scripts/alicloud/summarize-go-test.py \
-            "$evidence/go-test-events.jsonl" "$evidence/go-test-summary.json" \
-            --require-test TestEnqueueAndGetTask \
-            --require-test TestConcurrentClaimNoDuplicates \
-            --require-test TestRenewLeaseRejectsRealStaleSameWorkerGeneration \
-            --require-test TestExpiredRunningReclaimIgnoresCapacity \
-            --require-test TestMarkSuccessStaleLeaseVersion \
-            --require-test TestRetryBackoff \
-            --require-test TestRetryTaskReclaimable \
-            --require-test TestDLQNotClaimable \
-            --require-test TestEffectLedgerKeepsOldGenerationReceiptAsEvidence \
-            --require-test TestEffectReconciliationRequiresIdentityAndWritesAtomicAudit \
-            --require-test TestAdministrativeMutationAndAuditAreAtomic \
-            --require-test TestRuntimeRoleLeastPrivilege \
-            --require-test TestRuntimeRoleLeastPrivilege/alter_schema \
-            --require-test TestRuntimeGrantScriptRestrictsWorkerQueueColumns \
-            --require-test TestWorkerCannotRewriteQueueGovernance \
-            --require-test TestMigrationsFreshAndRerun \
-            --require-test TestSharedIngressLimiterCoordinatesIndependentInstancesAndBoundsState
-          summary_rc=$?
-          set -e
-          (cd "$evidence" && sha256sum source-commit.txt source-tree.txt workflow-run-id.txt workflow-run-attempt.txt runner-os.txt go-version.txt postgres-image.txt test-command.txt migration-assertion.txt postgres-version.txt postgres-version.stderr go-test-events.jsonl go-test-summary.json go-test-exit-code.txt > SHA256SUMS)
-          test "$test_rc" -eq 0 && test "$summary_rc" -eq 0
       - name: Run bounded PostgreSQL scheduler benchmark
         shell: bash
         env:
@@ -185,6 +130,61 @@ jobs:
           path: ${{ runner.temp }}/tasklab-loadgen-${{ github.run_id }}-${{ github.run_attempt }}/
           if-no-files-found: warn
           retention-days: 90
+      - name: Prepare PostgreSQL acceptance evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/postgres-integration
+          git rev-parse HEAD > artifacts/postgres-integration/source-commit.txt
+          git rev-parse 'HEAD^{tree}' > artifacts/postgres-integration/source-tree.txt
+          printf '%s\n' "$GITHUB_RUN_ID" > artifacts/postgres-integration/workflow-run-id.txt
+          printf '%s\n' "$GITHUB_RUN_ATTEMPT" > artifacts/postgres-integration/workflow-run-attempt.txt
+          printf '%s\n' "$(uname -a)" > artifacts/postgres-integration/runner-os.txt
+          go version > artifacts/postgres-integration/go-version.txt
+          printf '%s\n' 'postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea' > artifacts/postgres-integration/postgres-image.txt
+          printf '%s\n' "go test -json -p 2 -parallel 2 -count=1 -timeout=18m ./internal/storage/postgres -skip '^TestDatabaseBackupRestoreDrill$'" > artifacts/postgres-integration/test-command.txt
+          printf '%s\n' 'Migration version 12 is asserted by TestMigrationsFreshAndRerun.' > artifacts/postgres-integration/migration-assertion.txt
+          if PGPASSWORD=postgres psql "$TEST_DATABASE_URL" --no-psqlrc --tuples-only --no-align --command='SHOW server_version' > artifacts/postgres-integration/postgres-version.txt 2> artifacts/postgres-integration/postgres-version.stderr; then
+            :
+          else
+            printf '%s\n' 'NOT_AVAILABLE (see job failure; credentials and DSN suppressed)' > artifacts/postgres-integration/postgres-version.txt
+          fi
+      - name: Integration and migration suite (unexpected skips fail)
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence=artifacts/postgres-integration
+          mkdir -p "$evidence"
+          set +e
+          go test -json -p 2 -parallel 2 -count=1 -timeout=18m ./internal/storage/postgres \
+            -skip '^TestDatabaseBackupRestoreDrill$' > "$evidence/go-test-events.jsonl" 2>&1
+          test_rc=$?
+          set -e
+          printf '%s\n' "$test_rc" > "$evidence/go-test-exit-code.txt"
+          set +e
+          python3 scripts/alicloud/summarize-go-test.py \
+            "$evidence/go-test-events.jsonl" "$evidence/go-test-summary.json" \
+            --require-test TestEnqueueAndGetTask \
+            --require-test TestConcurrentClaimNoDuplicates \
+            --require-test TestRenewLeaseRejectsRealStaleSameWorkerGeneration \
+            --require-test TestExpiredRunningReclaimIgnoresCapacity \
+            --require-test TestMarkSuccessStaleLeaseVersion \
+            --require-test TestRetryBackoff \
+            --require-test TestRetryTaskReclaimable \
+            --require-test TestDLQNotClaimable \
+            --require-test TestEffectLedgerKeepsOldGenerationReceiptAsEvidence \
+            --require-test TestEffectReconciliationRequiresIdentityAndWritesAtomicAudit \
+            --require-test TestAdministrativeMutationAndAuditAreAtomic \
+            --require-test TestRuntimeRoleLeastPrivilege \
+            --require-test TestRuntimeRoleLeastPrivilege/alter_schema \
+            --require-test TestRuntimeGrantScriptRestrictsWorkerQueueColumns \
+            --require-test TestWorkerCannotRewriteQueueGovernance \
+            --require-test TestMigrationsFreshAndRerun \
+            --require-test TestSharedIngressLimiterCoordinatesIndependentInstancesAndBoundsState
+          summary_rc=$?
+          set -e
+          (cd "$evidence" && sha256sum source-commit.txt source-tree.txt workflow-run-id.txt workflow-run-attempt.txt runner-os.txt go-version.txt postgres-image.txt test-command.txt migration-assertion.txt postgres-version.txt postgres-version.stderr go-test-events.jsonl go-test-summary.json go-test-exit-code.txt > SHA256SUMS)
+          test "$test_rc" -eq 0 && test "$summary_rc" -eq 0
       - name: Preserve PostgreSQL acceptance evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
