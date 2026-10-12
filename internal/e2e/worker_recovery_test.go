@@ -100,6 +100,7 @@ func TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash(t *testing.T) {
 
 	commonWorkerEnv := map[string]string{
 		"APP_PROFILE":            "development",
+		"AUTO_MIGRATE":           "false",
 		"ARTIFACT_STORE_BACKEND": "s3", "ARTIFACT_S3_ENDPOINT": endpoint,
 		"ARTIFACT_S3_BUCKET": bucket, "ARTIFACT_S3_PREFIX": prefix,
 		"ARTIFACT_S3_ACCESS_KEY": accessKey, "ARTIFACT_S3_SECRET_KEY": secretKey,
