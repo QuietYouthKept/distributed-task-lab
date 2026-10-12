@@ -45,7 +45,10 @@ jobs:
           extra_args: --only-verified
 
   scorecard:
-    if: github.event_name != 'pull_request'
+    # Scorecard's publishing API rejects every non-default push. Keep this
+    # analysis on the repository default branch only; branch security remains
+    # covered by CodeQL, govulncheck, and the verified-secret scan below.
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -59,7 +62,7 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
-          publish_results: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+          publish_results: true
       - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: results.sarif
