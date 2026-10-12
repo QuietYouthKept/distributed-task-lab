@@ -56,9 +56,23 @@ func TestJWKSFixtureIssuesRoleTokenOverTrustedHTTPSAndRotatesKeys(t *testing.T) 
 		t.Fatalf("rotate status=%d want=%d", response.StatusCode, http.StatusNoContent)
 	}
 	newToken := requestFixtureToken(t, server.Client(), server.URL, "reader")
-	principal, err = verifier.Verify(context.Background(), newToken)
-	if err != nil {
-		t.Fatalf("verifier did not refresh JWKS for rotated key: %v", err)
+	// Unknown-kid refreshes are throttled to one per five seconds. Poll with a
+	// bounded deadline so this integration-style unit test honors that security
+	// guard without relying on an unbounded retry or weakening the verifier.
+	refreshDeadline := time.NewTimer(7 * time.Second)
+	defer refreshDeadline.Stop()
+	refreshPoll := time.NewTicker(50 * time.Millisecond)
+	defer refreshPoll.Stop()
+	for {
+		principal, err = verifier.Verify(context.Background(), newToken)
+		if err == nil {
+			break
+		}
+		select {
+		case <-refreshDeadline.C:
+			t.Fatalf("verifier did not refresh JWKS for rotated key before deadline: %v", err)
+		case <-refreshPoll.C:
+		}
 	}
 	if principal.Subject != "fixture-reader" || !principal.HasRole(auth.RoleReader) || principal.HasRole(auth.RoleAdmin) {
 		t.Fatalf("unexpected reader principal: %+v", principal)
