@@ -39,9 +39,9 @@ function Get-ScopedComposeCleanupPlan {
     if (-not $composeFullPath.StartsWith($(Join-Path $TaskLabArtifactRoot 'production-readiness\worktree\'),[System.StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path -LiteralPath $composeFullPath -PathType Leaf)) { throw 'Compose file must be the existing file in the dedicated E: worktree.' }
 
     $allowedFiles = @(
-        'postgres-superuser-password','tasklab-migrator-password','tasklab-api-password','tasklab-worker-password',
+        'postgres-superuser-password','tasklab-migrator-password','tasklab-api-password','tasklab-worker-a-password',
         'minio-root-user','minio-root-password','artifact-s3-access-key','artifact-s3-secret-key','gateway-api-key','api-cursor-signing-key',
-        'migrator-database-url','api-database-url','worker-database-url','compose.env',
+        'migrator-database-url','api-database-url','worker-a-database-url','compose.env',
         'tls\test-ca.key','tls\test-ca.crt','tls\test-ca.srl','tls\ca-extensions.cnf','tls\identity.key','tls\identity.crt','tls\identity-extensions.cnf',
         'tls\api.key','tls\api.crt','tls\api-extensions.cnf','tls\identity\identity.crt','tls\identity\identity.key',
         'tls\api\api.crt','tls\api\api.key','tls\api\test-ca.crt'

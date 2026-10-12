@@ -47,7 +47,7 @@ if($namesScoped -and (Get-Command docker -ErrorAction SilentlyContinue)){
 }
 Add-Check 'no_preexisting_owned_resource_collision' $resourcesAbsent 'refuses names already present; does not remove resources'
 
-$requiredSecrets = @('postgres-superuser-password','tasklab-migrator-password','tasklab-api-password','tasklab-worker-password','migrator-database-url','api-database-url','worker-database-url','minio-root-user','minio-root-password','artifact-s3-access-key','artifact-s3-secret-key','gateway-api-key','api-cursor-signing-key')
+$requiredSecrets = @('postgres-superuser-password','tasklab-migrator-password','tasklab-api-password','tasklab-worker-a-password','migrator-database-url','api-database-url','worker-a-database-url','minio-root-user','minio-root-password','artifact-s3-access-key','artifact-s3-secret-key','gateway-api-key','api-cursor-signing-key')
 $secretRoot = $envMap.TASKLAB_SECRET_DIR -replace '/', '\'
 $missingSecrets = @($requiredSecrets | Where-Object { -not (Test-Path -LiteralPath (Join-Path $secretRoot $_) -PathType Leaf) })
 Add-Check 'required_secret_files' ($secretRoot.StartsWith('E:\', [System.StringComparison]::OrdinalIgnoreCase) -and $missingSecrets.Count -eq 0) "missing_count=$($missingSecrets.Count); secret values omitted"

@@ -17,10 +17,11 @@ services:
       - postgres_superuser_password
       - tasklab_migrator_password
       - tasklab_api_password
-      - tasklab_worker_password
+      - tasklab_worker_a_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/00-create-roles.sh:/docker-entrypoint-initdb.d/00-create-roles.sh:ro
+      - ./postgres/upgrade-worker-login.sh:/opt/tasklab/upgrade-worker-login.sh:ro
     networks: [core]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d tasklab"]
@@ -63,6 +64,7 @@ services:
       PGDATABASE: tasklab
       PGUSER: tasklab_migrator
       PGPASSWORD_FILE: /run/secrets/tasklab_migrator_password
+      TASKLAB_WORKER_ID: local-first-worker-a
     secrets:
       - tasklab_migrator_password
     volumes:
@@ -312,14 +314,14 @@ secrets:
     file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/tasklab-migrator-password
   tasklab_api_password:
     file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/tasklab-api-password
-  tasklab_worker_password:
-    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/tasklab-worker-password
+  tasklab_worker_a_password:
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/tasklab-worker-a-password
   migrator_database_url:
     file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/migrator-database-url
   api_database_url:
     file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/api-database-url
   worker_database_url:
-    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/worker-database-url
+    file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/worker-a-database-url
   minio_root_user:
     file: ${TASKLAB_SECRET_DIR:?Run scripts/local-first/provision.ps1 first}/minio-root-user
   minio_root_password:

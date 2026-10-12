@@ -17,10 +17,11 @@ services:
       - postgres_superuser_password
       - tasklab_migrator_password
       - tasklab_api_password
-      - tasklab_worker_password
+      - tasklab_worker_a_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../local-first/postgres/00-create-roles.sh:/docker-entrypoint-initdb.d/00-create-roles.sh:ro
+      - ../local-first/postgres/upgrade-worker-login.sh:/opt/tasklab/upgrade-worker-login.sh:ro
       - ${TASKLAB_PG_TLS_DIR:?Set run-scoped PostgreSQL TLS directory}:/run/tasklab-pg-tls:ro
     command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/run/tasklab-pg-tls/server.crt", "-c", "ssl_key_file=/run/tasklab-pg-tls/server.key"]
     ports:
@@ -61,6 +62,7 @@ services:
       PGDATABASE: tasklab
       PGUSER: tasklab_migrator
       PGPASSWORD_FILE: /run/secrets/tasklab_migrator_password
+      TASKLAB_WORKER_ID: ${TASKLAB_RUN_ID}-worker-a
       PGSSLMODE: verify-full
       PGSSLROOTCERT: /run/secrets/pg_root_ca
     secrets: [tasklab_migrator_password, pg_root_ca]
@@ -233,14 +235,14 @@ secrets:
     file: ${TASKLAB_SECRET_DIR}/tasklab-migrator-password
   tasklab_api_password:
     file: ${TASKLAB_SECRET_DIR}/tasklab-api-password
-  tasklab_worker_password:
-    file: ${TASKLAB_SECRET_DIR}/tasklab-worker-password
+  tasklab_worker_a_password:
+    file: ${TASKLAB_SECRET_DIR}/tasklab-worker-a-password
   migrator_database_url:
     file: ${TASKLAB_SECRET_DIR}/migrator-database-url
   api_database_url:
     file: ${TASKLAB_SECRET_DIR}/api-database-url
   worker_database_url:
-    file: ${TASKLAB_SECRET_DIR}/worker-database-url
+    file: ${TASKLAB_SECRET_DIR}/worker-a-database-url
   pg_root_ca:
     file: ${TASKLAB_PG_TLS_DIR}/ca.crt
   gateway_api_key:

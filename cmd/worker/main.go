@@ -66,7 +66,13 @@ func main() {
 	}
 
 	// Initialize queue.
-	pq := postgres.NewPostgresQueueWithTimeout(db, cfg.DBOperationTimeout)
+	queueCtx, queueCancel := context.WithTimeout(context.Background(), cfg.DBOperationTimeout)
+	pq, err := postgres.NewFencedWorkerQueue(queueCtx, db, cfg.DBOperationTimeout, workerID)
+	queueCancel()
+	if err != nil {
+		logger.Error("failed to authenticate Worker database identity", "error", err)
+		os.Exit(1)
+	}
 
 	// Composite handler: explicit real-RAG object-key tasks or explicit mock workloads.
 	var handler worker.Handler

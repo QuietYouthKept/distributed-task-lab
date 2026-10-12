@@ -55,7 +55,7 @@ networks:
 
 secrets:
   worker_database_url:
-    file: ${TASKLAB_SECRET_DIR:?Set run-scoped Worker B secret directory}/worker-database-url
+    file: ${TASKLAB_SECRET_DIR:?Set run-scoped Worker B secret directory}/worker-b-database-url
   pg_root_ca:
     file: ${TASKLAB_PG_TLS_DIR:?Set the run-scoped PostgreSQL CA directory}/ca.crt
   gateway_api_key:

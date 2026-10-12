@@ -168,6 +168,242 @@ func TestRuntimeGrantScriptRestrictsWorkerQueueColumns(t *testing.T) {
 	if strings.Contains(grants, "GRANT SELECT, UPDATE ON TABLE queues TO tasklab_worker;") {
 		t.Fatal("runtime grant script still contains a table-wide Worker UPDATE grant on queues")
 	}
+	if !strings.Contains(grants, "REVOKE UPDATE ON TABLE tasks FROM tasklab_worker;") {
+		t.Fatal("runtime grant script must revoke direct Worker task updates")
+	}
+	if !strings.Contains(grants, "GRANT EXECUTE ON FUNCTION tasklab_worker_ack(TEXT, INTEGER, JSONB) TO tasklab_worker;") {
+		t.Fatal("runtime grant script must grant the fenced ACK routine")
+	}
+	if strings.Contains(grants, "GRANT SELECT, INSERT ON TABLE task_events TO tasklab_worker;") || !strings.Contains(grants, "GRANT EXECUTE ON FUNCTION tasklab_worker_insert_event(TEXT, TEXT, TEXT, JSONB) TO tasklab_worker;") {
+		t.Fatal("runtime grant script must route Worker event writes through identity-bound routine")
+	}
+}
+
+// TestFencedWorkerDatabaseTransitions proves the production Worker path cannot
+// directly mutate task state and that every legal transition is bound to the
+// authenticated PostgreSQL login rather than a caller-provided worker ID.
+func TestFencedWorkerDatabaseTransitions(t *testing.T) {
+	var random [24]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		t.Fatalf("generate disposable Worker identity: %v", err)
+	}
+	suffix := hex.EncodeToString(random[:])
+	roleName := "tasklab_fenced_" + suffix
+	workerID := "fenced-worker-" + suffix[:12]
+	password := suffix + hex.EncodeToString(random[:])
+	database, err := testutil.EnsureDatabase(testutil.DefaultBaseURL(), "tasklab_fenced_worker")
+	if err != nil {
+		if os.Getenv("REQUIRE_TEST_DATABASE") == "1" {
+			t.Fatalf("required fenced Worker PostgreSQL integration unavailable: %v", err)
+		}
+		t.Skipf("skipping fenced Worker integration: cannot create isolated PostgreSQL database: %v", err)
+	}
+	adminDB, err := NewDB(database.URL)
+	if err != nil {
+		database.Drop()
+		t.Fatalf("connect isolated database owner: %v", err)
+	}
+	if err := RunMigrations(adminDB); err != nil {
+		adminDB.Close()
+		database.Drop()
+		t.Fatalf("apply migrations: %v", err)
+	}
+	baseAdmin, err := NewDB(testutil.DefaultBaseURL())
+	if err != nil {
+		adminDB.Close()
+		database.Drop()
+		t.Fatalf("connect maintenance database: %v", err)
+	}
+	var workerDB *sql.DB
+	roleCreated := false
+	t.Cleanup(func() {
+		if workerDB != nil {
+			_ = workerDB.Close()
+		}
+		_ = adminDB.Close()
+		database.Drop()
+		if roleCreated {
+			_, _ = baseAdmin.Exec(`DROP ROLE IF EXISTS ` + quoteIdentifier(roleName))
+		}
+		_ = baseAdmin.Close()
+	})
+	if _, err := baseAdmin.Exec(`CREATE ROLE ` + quoteIdentifier(roleName) + ` LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '` + password + `'`); err != nil {
+		t.Fatalf("create disposable Worker login: %v", err)
+	}
+	roleCreated = true
+	for _, statement := range []string{
+		`GRANT CONNECT ON DATABASE ` + quoteIdentifier(database.Name) + ` TO ` + quoteIdentifier(roleName),
+		`GRANT USAGE ON SCHEMA public TO ` + quoteIdentifier(roleName),
+		`GRANT SELECT ON TABLE tasks, queues, schema_migrations TO ` + quoteIdentifier(roleName),
+		`GRANT INSERT ON TABLE workers TO ` + quoteIdentifier(roleName),
+		`GRANT SELECT ON TABLE task_events TO ` + quoteIdentifier(roleName),
+		`GRANT UPDATE ON TABLE workers TO ` + quoteIdentifier(roleName),
+		`GRANT SELECT, INSERT, UPDATE ON TABLE effects TO ` + quoteIdentifier(roleName),
+		`GRANT UPDATE (rate_tokens, rate_updated_at) ON TABLE queues TO ` + quoteIdentifier(roleName),
+		`GRANT EXECUTE ON FUNCTION tasklab_worker_identity() TO ` + quoteIdentifier(roleName),
+		`GRANT EXECUTE ON FUNCTION tasklab_worker_terminalize_exhausted_leases() TO ` + quoteIdentifier(roleName),
+		`GRANT EXECUTE ON FUNCTION tasklab_worker_claim_task(TEXT, BIGINT) TO ` + quoteIdentifier(roleName),
+		`GRANT EXECUTE ON FUNCTION tasklab_worker_ack(TEXT, INTEGER, JSONB) TO ` + quoteIdentifier(roleName),
+		`GRANT EXECUTE ON FUNCTION tasklab_worker_fail(TEXT, INTEGER, TEXT, TEXT, BOOLEAN) TO ` + quoteIdentifier(roleName),
+		`GRANT EXECUTE ON FUNCTION tasklab_worker_renew(TEXT, INTEGER, BIGINT) TO ` + quoteIdentifier(roleName),
+		`GRANT EXECUTE ON FUNCTION tasklab_worker_insert_event(TEXT, TEXT, TEXT, JSONB) TO ` + quoteIdentifier(roleName),
+	} {
+		if _, err := adminDB.Exec(statement); err != nil {
+			t.Fatalf("apply scoped Worker grant: %v", err)
+		}
+	}
+	if _, err := adminDB.Exec(`INSERT INTO worker_db_identities(login_role, worker_id) VALUES ($1, $2)`, roleName, workerID); err != nil {
+		t.Fatalf("bind database login to Worker identity: %v", err)
+	}
+	workerURL, err := url.Parse(database.URL)
+	if err != nil {
+		t.Fatalf("parse database URL: %v", err)
+	}
+	workerURL.User = url.UserPassword(roleName, password)
+	workerDB, err = NewDB(workerURL.String())
+	if err != nil {
+		t.Fatalf("connect as registered Worker: %v", err)
+	}
+	ctx := context.Background()
+	workerQueue, err := NewFencedWorkerQueue(ctx, workerDB, 5*time.Second, workerID)
+	if err != nil {
+		t.Fatalf("initialize fenced Worker queue: %v", err)
+	}
+	adminQueue := NewPostgresQueue(adminDB)
+
+	task := newTask("fenced-worker-ack", 3)
+	if _, err := adminQueue.Enqueue(ctx, task); err != nil {
+		t.Fatalf("enqueue ACK task: %v", err)
+	}
+	if _, err := workerDB.ExecContext(ctx, `UPDATE tasks SET status='success' WHERE id=$1`, task.ID); err == nil {
+		t.Fatal("Worker login unexpectedly performed direct task state UPDATE")
+	}
+	if _, err := workerDB.ExecContext(ctx, `INSERT INTO task_events(task_id,event_type,worker_id,message) VALUES ($1,'succeeded','spoofed-worker','forged')`, task.ID); err == nil {
+		t.Fatal("Worker login unexpectedly inserted an event with a caller-forged identity")
+	}
+	if _, err := workerDB.ExecContext(ctx, `SELECT tasklab_worker_insert_event($1,'claimed','forged','{}'::jsonb)`, task.ID); err == nil {
+		t.Fatal("Worker event routine unexpectedly accepted an event inconsistent with task state")
+	}
+	claimed := claimOne(t, workerQueue, workerID)
+	if claimed.Attempt != 1 || claimed.LeaseVersion != 1 || claimed.LeasedBy == nil || *claimed.LeasedBy != workerID {
+		t.Fatalf("unexpected first claim identity/generation: attempt=%d lease_version=%d leased_by=%v", claimed.Attempt, claimed.LeaseVersion, claimed.LeasedBy)
+	}
+	if err := workerQueue.MarkSuccess(ctx, task.ID, "spoofed-worker", claimed.LeaseVersion, domain.TaskResult{Summary: "must reject spoof"}); err == nil {
+		t.Fatal("queue accepted caller-supplied Worker identity that differs from the DB identity")
+	}
+	if err := workerQueue.RenewLease(ctx, task.ID, workerID, claimed.LeaseVersion, time.Second); err != nil {
+		t.Fatalf("registered Worker lease renewal: %v", err)
+	}
+	if err := workerQueue.MarkSuccess(ctx, task.ID, workerID, claimed.LeaseVersion, domain.TaskResult{Summary: "fenced ACK"}); err != nil {
+		t.Fatalf("registered Worker fenced ACK: %v", err)
+	}
+	ackEvents, err := adminQueue.GetTaskEvents(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("read ACK task events: %v", err)
+	}
+	var claimedEvents, successEvents int
+	for _, event := range ackEvents {
+		if event.EventType == domain.EventClaimed && event.WorkerID != nil && *event.WorkerID == workerID {
+			claimedEvents++
+		}
+		if event.EventType == domain.EventSucceeded && event.WorkerID != nil && *event.WorkerID == workerID {
+			successEvents++
+		}
+	}
+	if claimedEvents != 1 || successEvents != 1 {
+		t.Fatalf("transition trigger must atomically persist identity-bound events: claimed=%d succeeded=%d", claimedEvents, successEvents)
+	}
+
+	retryTask := newTask("fenced-worker-retry", 3)
+	retryTask.RetryDelaySeconds = 30
+	retryTask.RetryJitter = false
+	if _, err := adminQueue.Enqueue(ctx, retryTask); err != nil {
+		t.Fatalf("enqueue retry task: %v", err)
+	}
+	retryClaim := claimOne(t, workerQueue, workerID)
+	if retryClaim.ID != retryTask.ID {
+		t.Fatalf("claimed %q, want retry task %q", retryClaim.ID, retryTask.ID)
+	}
+	if err := workerQueue.MarkFailure(ctx, retryTask.ID, workerID, retryClaim.LeaseVersion, domain.TaskFailure{Message: "transient", ErrorType: "test", Retryable: true}); err != nil {
+		t.Fatalf("registered Worker retry transition: %v", err)
+	}
+	retried, err := adminQueue.GetTask(ctx, retryTask.ID)
+	if err != nil || retried == nil {
+		t.Fatalf("read retried task: task=%v err=%v", retried, err)
+	}
+	var databaseNow time.Time
+	if err := adminDB.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&databaseNow); err != nil {
+		t.Fatalf("read database clock: %v", err)
+	}
+	if retried.Status != domain.TaskStatusPending || retried.Attempt != 1 || retried.LeaseVersion != retryClaim.LeaseVersion || retried.LeasedBy != nil || retried.LeaseExpiresAt != nil || !retried.NextRunAt.After(databaseNow) {
+		t.Fatalf("unexpected retry invariants: status=%s attempt=%d lease_version=%d next_run_at=%s db_now=%s lease=%v expiry=%v", retried.Status, retried.Attempt, retried.LeaseVersion, retried.NextRunAt, databaseNow, retried.LeasedBy, retried.LeaseExpiresAt)
+	}
+	retryEvents, err := adminQueue.GetTaskEvents(ctx, retryTask.ID)
+	if err != nil {
+		t.Fatalf("read retry task events: %v", err)
+	}
+	var retryEventCount int
+	for _, event := range retryEvents {
+		if event.EventType == domain.EventRetried && event.WorkerID != nil && *event.WorkerID == workerID {
+			retryEventCount++
+		}
+	}
+	if retryEventCount != 1 {
+		t.Fatalf("retry transition event count=%d, want 1 identity-bound event", retryEventCount)
+	}
+
+	staleTask := newTask("fenced-worker-stale-ack", 3)
+	if _, err := adminQueue.Enqueue(ctx, staleTask); err != nil {
+		t.Fatalf("enqueue stale ACK task: %v", err)
+	}
+	firstBatch, err := workerQueue.ClaimTasks(ctx, workerID, 1, 50*time.Millisecond)
+	if err != nil || len(firstBatch) != 1 {
+		t.Fatalf("claim stale-ACK task: tasks=%d err=%v", len(firstBatch), err)
+	}
+	first := firstBatch[0]
+	if first.ID != staleTask.ID {
+		t.Fatalf("claimed %q, want %q", first.ID, staleTask.ID)
+	}
+	time.Sleep(80 * time.Millisecond)
+	secondBatch, err := workerQueue.ClaimTasks(ctx, workerID, 1, time.Second)
+	if err != nil || len(secondBatch) != 1 {
+		t.Fatalf("reclaim expired lease: tasks=%d err=%v", len(secondBatch), err)
+	}
+	second := secondBatch[0]
+	if second.ID != staleTask.ID || second.LeaseVersion != first.LeaseVersion+1 {
+		t.Fatalf("reclaim did not advance fencing generation: first=%+v second=%+v", first, second)
+	}
+	if err := workerQueue.MarkSuccess(ctx, staleTask.ID, workerID, first.LeaseVersion, domain.TaskResult{Summary: "stale"}); err == nil {
+		t.Fatal("database routine accepted stale lease generation")
+	}
+	if err := workerQueue.MarkFailure(ctx, staleTask.ID, workerID, second.LeaseVersion, domain.TaskFailure{Message: "non-retryable", ErrorType: "test", Retryable: false}); err != nil {
+		t.Fatalf("registered Worker DLQ transition: %v", err)
+	}
+	got, err := adminQueue.GetTask(ctx, staleTask.ID)
+	if err != nil || got == nil {
+		t.Fatalf("read terminal task: task=%v err=%v", got, err)
+	}
+	if got.Status != domain.TaskStatusDLQ || got.LeaseVersion != second.LeaseVersion || got.Attempt != second.Attempt || got.LeasedBy != nil || got.LeaseExpiresAt != nil {
+		t.Fatalf("unexpected terminal task invariants: status=%s lease_version=%d attempt=%d leased_by=%v expiry=%v", got.Status, got.LeaseVersion, got.Attempt, got.LeasedBy, got.LeaseExpiresAt)
+	}
+	staleEvents, err := adminQueue.GetTaskEvents(ctx, staleTask.ID)
+	if err != nil {
+		t.Fatalf("read stale-generation task events: %v", err)
+	}
+	var reclaimEvents, dlqEvents int
+	for _, event := range staleEvents {
+		if event.WorkerID != nil && *event.WorkerID == workerID {
+			if event.EventType == domain.EventClaimed {
+				reclaimEvents++
+			}
+			if event.EventType == domain.EventMovedToDLQ {
+				dlqEvents++
+			}
+		}
+	}
+	if reclaimEvents != 2 || dlqEvents != 1 {
+		t.Fatalf("reclaim/DLQ event counts=%d/%d, want 2/1 identity-bound events", reclaimEvents, dlqEvents)
+	}
 }
 
 // TestWorkerCannotRewriteQueueGovernance verifies that the Worker role may

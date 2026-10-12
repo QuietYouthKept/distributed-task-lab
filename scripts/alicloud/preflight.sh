@@ -21,8 +21,8 @@ free_kib=$(df -Pk /var/lib 2>/dev/null | awk 'NR==2 {print $4}')
 [[ -n "$free_kib" ]] || fail 'evidence filesystem is unavailable'
 (( free_kib >= 5242880 )) || fail 'at least 5 GiB free space is required for images, database and evidence'
 
-for name in postgres-superuser-password tasklab-migrator-password tasklab-api-password tasklab-worker-password \
-  migrator-database-url api-database-url worker-database-url gateway-api-key api-cursor-signing-key; do
+for name in postgres-superuser-password tasklab-migrator-password tasklab-api-password tasklab-worker-a-password \
+  migrator-database-url api-database-url worker-a-database-url gateway-api-key api-cursor-signing-key; do
   [[ -s "$TASKLAB_SECRET_DIR/$name" ]] || fail "required run-scoped secret file missing: $name"
 done
 [[ -s "${TASKLAB_PG_TLS_DIR:-}/ca.crt" && -s "${TASKLAB_PG_TLS_DIR:-}/server.crt" && -s "${TASKLAB_PG_TLS_DIR:-}/server.key" ]] || fail 'PostgreSQL TLS CA/server certificate/key files are required'

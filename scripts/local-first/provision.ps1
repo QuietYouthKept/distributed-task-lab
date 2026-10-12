@@ -43,7 +43,7 @@ function New-LocalSecret {
 $null = New-LocalSecret 'postgres-superuser-password'
 $migratorPassword = New-LocalSecret 'tasklab-migrator-password'
 $apiPassword = New-LocalSecret 'tasklab-api-password'
-$workerPassword = New-LocalSecret 'tasklab-worker-password'
+$workerAPassword = New-LocalSecret 'tasklab-worker-a-password'
 $null = New-LocalSecret 'minio-root-user' 18
 $null = New-LocalSecret 'minio-root-password'
 $null = New-LocalSecret 'artifact-s3-access-key' 20
@@ -54,11 +54,11 @@ $null = New-LocalSecret 'api-cursor-signing-key'
 $database = 'tasklab'
 $migratorUrl = "postgres://tasklab_migrator:$migratorPassword@postgres:5432/$database?sslmode=disable"
 $apiUrl = "postgres://tasklab_api:$apiPassword@postgres:5432/$database?sslmode=disable"
-$workerUrl = "postgres://tasklab_worker:$workerPassword@postgres:5432/$database?sslmode=disable"
+$workerAUrl = "postgres://tasklab_worker_a:$workerAPassword@postgres:5432/$database?sslmode=disable"
 foreach ($entry in @(
     @{ Name = 'migrator-database-url'; Value = $migratorUrl },
     @{ Name = 'api-database-url'; Value = $apiUrl },
-    @{ Name = 'worker-database-url'; Value = $workerUrl }
+    @{ Name = 'worker-a-database-url'; Value = $workerAUrl }
 )) {
     $path = Join-Path $runDirectory $entry.Name
     [System.IO.File]::WriteAllText($path, $entry.Value + "`n", [System.Text.UTF8Encoding]::new($false))

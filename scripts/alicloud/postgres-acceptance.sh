@@ -61,21 +61,21 @@ postgres_system_id=$(docker exec -e PGPASSWORD_FILE=/run/secrets/postgres_superu
 [[ "$postgres_version" =~ ^[0-9]+\.[0-9]+ ]] || fail 'PostgreSQL server version result is invalid'
 [[ "$postgres_system_id" =~ ^[0-9]+$ ]] || fail 'PostgreSQL system identifier is invalid'
 schema_version=$(docker exec -e PGPASSWORD_FILE=/run/secrets/postgres_superuser_password "$container" sh -ec 'export PGPASSWORD="$(cat "$PGPASSWORD_FILE")"; exec psql --no-password -XAt -U postgres -d tasklab -c "SELECT COALESCE(MAX(version),0) FROM schema_migrations"') || fail 'could not read migration schema version'
-[[ "$schema_version" == 12 ]] || fail "expected schema version 12 before acceptance tests, got $schema_version"
+[[ "$schema_version" == 13 ]] || fail "expected schema version 13 before acceptance tests, got $schema_version"
 
-role_sql="SELECT rolname,rolsuper,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname IN ('tasklab_migrator','tasklab_api','tasklab_worker') ORDER BY rolname"
+role_sql="SELECT rolname,rolsuper,rolcreatedb,rolcreaterole,rolcanlogin FROM pg_roles WHERE rolname IN ('tasklab_migrator','tasklab_api','tasklab_worker','tasklab_worker_a') ORDER BY rolname"
 runtime_role_rows=$(docker exec -e PGPASSWORD_FILE=/run/secrets/postgres_superuser_password -e PGTEST_SQL="$role_sql" "$container" sh -ec 'export PGPASSWORD="$(cat "$PGPASSWORD_FILE")"; unset PGPASSWORD_FILE; exec psql --no-password -XAt -F "|" -U postgres -d postgres -c "$PGTEST_SQL"') || fail 'could not inspect runtime database roles'
-expected_roles=$'tasklab_api|f|f|f\ntasklab_migrator|f|f|f\ntasklab_worker|f|f|f'
-[[ "$runtime_role_rows" == "$expected_roles" ]] || fail 'API, Worker, and Migrator must exist as distinct non-superuser/non-admin roles'
+expected_roles=$'tasklab_api|f|f|f|t\ntasklab_migrator|f|f|f|t\ntasklab_worker|f|f|f|f\ntasklab_worker_a|f|f|f|t'
+[[ "$runtime_role_rows" == "$expected_roles" ]] || fail 'API, Worker group, per-Worker login, and Migrator must have least-privilege attributes'
 
-grant_sql="SELECT has_table_privilege('tasklab_api','tasks','INSERT') AND has_table_privilege('tasklab_api','security_audit_events','INSERT') AND has_table_privilege('tasklab_worker','tasks','UPDATE') AND has_table_privilege('tasklab_worker','task_events','INSERT')"
+grant_sql="SELECT has_table_privilege('tasklab_api','tasks','INSERT') AND has_table_privilege('tasklab_api','security_audit_events','INSERT') AND NOT has_table_privilege('tasklab_worker_a','tasks','UPDATE') AND NOT has_table_privilege('tasklab_worker_a','task_events','INSERT') AND has_function_privilege('tasklab_worker_a','tasklab_worker_ack(text,integer,jsonb)','EXECUTE') AND has_function_privilege('tasklab_worker_a','tasklab_worker_insert_event(text,text,text,jsonb)','EXECUTE')"
 runtime_grants=$(docker exec -e PGPASSWORD_FILE=/run/secrets/postgres_superuser_password -e PGTEST_SQL="$grant_sql" "$container" sh -ec 'export PGPASSWORD="$(cat "$PGPASSWORD_FILE")"; unset PGPASSWORD_FILE; exec psql --no-password -XAt -U postgres -d tasklab -c "$PGTEST_SQL"') || fail 'could not inspect API/Worker DML grants'
 [[ "$runtime_grants" == t ]] || fail 'API/Worker expected DML privileges are missing'
 
 probe_log=$(mktemp "$TASKLAB_SECRET_DIR/ddl-probe.XXXXXX")
 chmod 0600 "$probe_log"
 trap 'rm -f -- "$probe_log"' EXIT
-for role in tasklab_api tasklab_worker; do
+for role in tasklab_api tasklab_worker_a; do
   password_secret="/run/secrets/${role}_password"
   ddl_sql="BEGIN; CREATE TABLE public.tasklab_ddl_probe_${TASKLAB_RUN_ID//-/_} (id integer); ROLLBACK;"
   if docker exec -e PGPASSWORD_FILE="$password_secret" -e PGUSER="$role" -e PGDATABASE=tasklab -e PGTEST_SQL="$ddl_sql" \
@@ -115,6 +115,7 @@ python3 "$root/scripts/alicloud/summarize-go-test.py" "$evidence/postgres-test.j
   --require-test TestRuntimeRoleLeastPrivilege \
   --require-test TestRuntimeRoleLeastPrivilege/alter_schema \
   --require-test TestRuntimeGrantScriptRestrictsWorkerQueueColumns \
+  --require-test TestFencedWorkerDatabaseTransitions \
   --require-test TestWorkerCannotRewriteQueueGovernance \
   --require-test TestMigrationsFreshAndRerun \
   --require-test TestSharedIngressLimiterCoordinatesIndependentInstancesAndBoundsState

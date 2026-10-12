@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -95,9 +96,10 @@ func TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash(t *testing.T) {
 	apiProc := startProcess(t, apiBinary, root, filepath.Join(binDir, "api.log"), apiEnv)
 	defer apiProc.stop()
 	waitHTTP(t, apiProc, apiURL+"/ready", 20*time.Second)
+	workerDatabaseURLs := provisionFencedWorkerLogins(t, db, database.URL, []string{"e2e-worker-a", "e2e-worker-b"})
 
 	commonWorkerEnv := map[string]string{
-		"APP_PROFILE": "development", "DATABASE_URL": database.URL,
+		"APP_PROFILE":            "development",
 		"ARTIFACT_STORE_BACKEND": "s3", "ARTIFACT_S3_ENDPOINT": endpoint,
 		"ARTIFACT_S3_BUCKET": bucket, "ARTIFACT_S3_PREFIX": prefix,
 		"ARTIFACT_S3_ACCESS_KEY": accessKey, "ARTIFACT_S3_SECRET_KEY": secretKey,
@@ -108,11 +110,13 @@ func TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash(t *testing.T) {
 	}
 	workerEnvA := cloneEnv(commonWorkerEnv)
 	workerEnvA["WORKER_ID"], workerEnvA["WORKER_HEALTH_PORT"] = "e2e-worker-a", fmt.Sprint(workerPortA)
+	workerEnvA["DATABASE_URL"] = workerDatabaseURLs["e2e-worker-a"]
 	workerA := startProcess(t, workerBinary, root, filepath.Join(binDir, "worker-a.log"), workerEnvA)
 	defer workerA.stop()
 	waitHTTP(t, workerA, fmt.Sprintf("http://127.0.0.1:%d/ready", workerPortA), 20*time.Second)
 	workerEnvB := cloneEnv(commonWorkerEnv)
 	workerEnvB["WORKER_ID"], workerEnvB["WORKER_HEALTH_PORT"] = "e2e-worker-b", fmt.Sprint(workerPortB)
+	workerEnvB["DATABASE_URL"] = workerDatabaseURLs["e2e-worker-b"]
 	workerB := startProcess(t, workerBinary, root, filepath.Join(binDir, "worker-b.log"), workerEnvB)
 	defer workerB.stop()
 	waitHTTP(t, workerB, fmt.Sprintf("http://127.0.0.1:%d/ready", workerPortB), 20*time.Second)
@@ -205,6 +209,75 @@ func TestAPITwoWorkersRecoverSharedArtifactAfterAckProcessCrash(t *testing.T) {
 		t.Fatalf("stale owner generation write returned %v, want ErrTaskNotClaimed", staleErr)
 	}
 	t.Logf("PASS: API-created task recovered by the surviving worker after owner %s was killed after shared Put and before ACK; attempt=%d lease_version=%d; stale generation %d rejected", owner, completed.Attempt, completed.LeaseVersion, originalLeaseVersion)
+}
+
+func provisionFencedWorkerLogins(t *testing.T, adminDB *sql.DB, databaseURL string, workerIDs []string) map[string]string {
+	t.Helper()
+	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:16]
+	var roleNames []string
+	urls := make(map[string]string, len(workerIDs))
+	for index, workerID := range workerIDs {
+		roleName := fmt.Sprintf("tasklab_e2e_%s_%d", suffix, index)
+		password := uuid.NewString() + uuid.NewString()
+		if _, err := adminDB.Exec(`CREATE ROLE ` + postgresQuoteIdentifier(roleName) + ` LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '` + password + `'`); err != nil {
+			t.Fatalf("create isolated process-test Worker login: %v", err)
+		}
+		roleNames = append(roleNames, roleName)
+		for _, statement := range []string{
+			`GRANT CONNECT ON DATABASE ` + postgresQuoteIdentifier(databaseNameFromURL(t, databaseURL)) + ` TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT USAGE ON SCHEMA public TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT SELECT ON TABLE tasks, queues, schema_migrations TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT INSERT ON TABLE workers TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT SELECT ON TABLE task_events TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT UPDATE ON TABLE workers TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT SELECT, INSERT, UPDATE ON TABLE effects TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT UPDATE (rate_tokens, rate_updated_at) ON TABLE queues TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT EXECUTE ON FUNCTION tasklab_worker_identity() TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT EXECUTE ON FUNCTION tasklab_worker_terminalize_exhausted_leases() TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT EXECUTE ON FUNCTION tasklab_worker_claim_task(TEXT, BIGINT) TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT EXECUTE ON FUNCTION tasklab_worker_ack(TEXT, INTEGER, JSONB) TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT EXECUTE ON FUNCTION tasklab_worker_fail(TEXT, INTEGER, TEXT, TEXT, BOOLEAN) TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT EXECUTE ON FUNCTION tasklab_worker_renew(TEXT, INTEGER, BIGINT) TO ` + postgresQuoteIdentifier(roleName),
+			`GRANT EXECUTE ON FUNCTION tasklab_worker_insert_event(TEXT, TEXT, TEXT, JSONB) TO ` + postgresQuoteIdentifier(roleName),
+		} {
+			if _, err := adminDB.Exec(statement); err != nil {
+				t.Fatalf("grant isolated process-test Worker access: %v", err)
+			}
+		}
+		if _, err := adminDB.Exec(`INSERT INTO worker_db_identities(login_role, worker_id) VALUES ($1, $2)`, roleName, workerID); err != nil {
+			t.Fatalf("register process-test Worker database identity: %v", err)
+		}
+		parsed, err := url.Parse(databaseURL)
+		if err != nil {
+			t.Fatalf("parse process-test database URL: %v", err)
+		}
+		parsed.User = url.UserPassword(roleName, password)
+		urls[workerID] = parsed.String()
+	}
+	t.Cleanup(func() {
+		for _, roleName := range roleNames {
+			_, _ = adminDB.Exec(`DROP OWNED BY ` + postgresQuoteIdentifier(roleName))
+			_, _ = adminDB.Exec(`DROP ROLE IF EXISTS ` + postgresQuoteIdentifier(roleName))
+		}
+	})
+	return urls
+}
+
+func postgresQuoteIdentifier(value string) string {
+	return `"` + strings.ReplaceAll(value, `"`, `""`) + `"`
+}
+
+func databaseNameFromURL(t *testing.T, raw string) string {
+	t.Helper()
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("parse test database URL: %v", err)
+	}
+	name := strings.TrimPrefix(parsed.Path, "/")
+	if name == "" || strings.Contains(name, "/") {
+		t.Fatalf("test database URL has invalid database path")
+	}
+	return name
 }
 
 func buildBinary(t *testing.T, root, directory, name, packagePath string) string {

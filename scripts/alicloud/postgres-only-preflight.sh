@@ -60,7 +60,7 @@ check_private_file() {
 }
 check_private_dir "$TASKLAB_SECRET_DIR"
 check_private_file "$TASKLAB_COMPOSE_ENV"
-for name in postgres-superuser-password tasklab-migrator-password tasklab-api-password tasklab-worker-password \
+for name in postgres-superuser-password tasklab-migrator-password tasklab-api-password tasklab-worker-a-password \
   migrator-database-url postgres-acceptance-dsn; do
   check_private_file "$TASKLAB_SECRET_DIR/$name"
 done

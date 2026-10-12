@@ -29,6 +29,7 @@ var _ queue.Queue = (*PostgresQueue)(nil)
 type PostgresQueue struct {
 	db               *sql.DB
 	operationTimeout time.Duration
+	workerIdentity   string
 }
 
 // NewPostgresQueue creates a new PostgreSQL-backed queue.
@@ -42,6 +43,36 @@ func NewPostgresQueueWithTimeout(db *sql.DB, operationTimeout time.Duration) *Po
 		q.operationTimeout = operationTimeout
 	}
 	return q
+}
+
+// NewFencedWorkerQueue creates the production Worker repository. Its database
+// login must be mapped to the configured logical Worker identity by migration
+// 013. Transition routines derive identity from session_user; workerID is only
+// checked here to prevent misleading event attribution in the application.
+func NewFencedWorkerQueue(ctx context.Context, db *sql.DB, operationTimeout time.Duration, workerID string) (*PostgresQueue, error) {
+	if strings.TrimSpace(workerID) == "" {
+		return nil, fmt.Errorf("fenced Worker queue requires a Worker ID")
+	}
+	var mappedWorkerID string
+	if err := db.QueryRowContext(ctx, `SELECT tasklab_worker_identity()`).Scan(&mappedWorkerID); err != nil {
+		return nil, fmt.Errorf("verify Worker database identity: %w", err)
+	}
+	if mappedWorkerID != workerID {
+		return nil, fmt.Errorf("Worker database identity mismatch")
+	}
+	q := NewPostgresQueueWithTimeout(db, operationTimeout)
+	q.workerIdentity = mappedWorkerID
+	return q, nil
+}
+
+func (q *PostgresQueue) verifyWorkerIdentity(workerID string) error {
+	if q.workerIdentity == "" {
+		return nil // development/admin repository compatibility path
+	}
+	if workerID != q.workerIdentity {
+		return fmt.Errorf("supplied Worker ID does not match authenticated database identity")
+	}
+	return nil
 }
 
 func (q *PostgresQueue) operationContext(parent context.Context) (context.Context, context.CancelFunc) {
@@ -258,6 +289,9 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 	defer func() { observability.RecordSpanFailure(span, resultErr, "task claim failed"); span.End() }()
 	ctx, cancel := q.operationContext(ctx)
 	defer cancel()
+	if err := q.verifyWorkerIdentity(workerID); err != nil {
+		return nil, err
+	}
 	if limit <= 0 || leaseTimeout <= 0 {
 		return nil, nil
 	}
@@ -269,7 +303,11 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 
 	// A hard-crashed worker cannot call MarkFailure. Terminalize an expired
 	// final attempt before reclaim selection so a crash cannot exceed max_attempts.
-	exhaustedRows, err := tx.QueryContext(ctx, `
+	var exhaustedRows *sql.Rows
+	if q.workerIdentity != "" {
+		exhaustedRows, err = tx.QueryContext(ctx, `SELECT task_id FROM tasklab_worker_terminalize_exhausted_leases()`)
+	} else {
+		exhaustedRows, err = tx.QueryContext(ctx, `
 		UPDATE tasks
 		SET status = 'dlq',
 		    dlq_reason = 'max attempts exceeded after worker lease expiry',
@@ -283,6 +321,7 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		  AND attempt >= max_attempts
 		RETURNING id
 	`)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("claim: terminalize exhausted leases: %w", err)
 	}
@@ -464,15 +503,42 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 			continue
 		}
 		// Cluster-global queue rate is admitted under the same queue row lock.
-		if s.rate > 0 && s.tokens < 1 {
+		if q.workerIdentity == "" && s.rate > 0 && s.tokens < 1 {
 			continue
 		}
-		if s.rate > 0 {
+		if q.workerIdentity == "" && s.rate > 0 {
 			s.tokens--
 		}
 
 		var leaseExpires, updatedAt time.Time
-		err := tx.QueryRowContext(ctx, `
+		if q.workerIdentity != "" {
+			var attempt, leaseVersion int
+			var startedAt time.Time
+			var wasReclaim bool
+			var actualWorkerID string
+			err := tx.QueryRowContext(ctx, `
+				SELECT lease_expires_at, updated_at, attempt, lease_version, started_at, was_reclaim, worker_id
+				FROM tasklab_worker_claim_task($1, $2)
+			`, claimed[i].ID, leaseTimeout.Microseconds()).Scan(&leaseExpires, &updatedAt, &attempt, &leaseVersion, &startedAt, &wasReclaim, &actualWorkerID)
+			if err == sql.ErrNoRows {
+				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("claim: transition task %s: %w", claimed[i].ID, err)
+			}
+			if actualWorkerID != workerID {
+				return nil, fmt.Errorf("claim: database Worker identity mismatch")
+			}
+			claimed[i].Status = domain.TaskStatusRunning
+			claimed[i].LeasedBy = &actualWorkerID
+			claimed[i].LeaseExpiresAt = &leaseExpires
+			claimed[i].LeaseVersion = leaseVersion
+			claimed[i].UpdatedAt = updatedAt
+			claimed[i].StartedAt = &startedAt
+			claimed[i].Attempt = attempt
+			isReclaim = wasReclaim
+		} else {
+			err := tx.QueryRowContext(ctx, `
 			UPDATE tasks
 			SET status = 'running',
 			    leased_by = $1,
@@ -483,20 +549,20 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 			    attempt = attempt + 1
 			WHERE id = $3
 			RETURNING lease_expires_at, updated_at
-		`, workerID, leaseTimeout.Microseconds(), claimed[i].ID).Scan(&leaseExpires, &updatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("claim: update task %s: %w", claimed[i].ID, err)
+			`, workerID, leaseTimeout.Microseconds(), claimed[i].ID).Scan(&leaseExpires, &updatedAt)
+			if err != nil {
+				return nil, fmt.Errorf("claim: update task %s: %w", claimed[i].ID, err)
+			}
+			claimed[i].Status = domain.TaskStatusRunning
+			claimed[i].LeasedBy = &workerID
+			claimed[i].LeaseExpiresAt = &leaseExpires
+			claimed[i].LeaseVersion++
+			claimed[i].UpdatedAt = updatedAt
+			if claimed[i].StartedAt == nil {
+				claimed[i].StartedAt = &updatedAt
+			}
+			claimed[i].Attempt++
 		}
-
-		claimed[i].Status = domain.TaskStatusRunning
-		claimed[i].LeasedBy = &workerID
-		claimed[i].LeaseExpiresAt = &leaseExpires
-		claimed[i].LeaseVersion++
-		claimed[i].UpdatedAt = updatedAt
-		if claimed[i].StartedAt == nil {
-			claimed[i].StartedAt = &updatedAt
-		}
-		claimed[i].Attempt++
 
 		reason := "pending"
 		if isReclaim {
@@ -513,7 +579,7 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 			attribute.String("claim_reason", reason),
 		))
 		if promoted {
-			if err := q.insertEvent(ctx, tx, claimed[i].ID, domain.EventPriorityPromoted, workerID, "task priority promoted by aging", map[string]any{"original_priority": claimed[i].Priority, "effective_priority": claimed[i].Priority + s.agingBoost, "wait_threshold_seconds": s.agingAfter}); err != nil {
+			if err := q.insertEvent(ctx, tx, claimed[i].ID, domain.EventPriorityPromoted, workerID, "task priority promoted by aging", map[string]any{"original_priority": claimed[i].Priority, "effective_priority": claimed[i].Priority + s.agingBoost, "wait_threshold_seconds": s.agingAfter, "lease_version": claimed[i].LeaseVersion}); err != nil {
 				return nil, fmt.Errorf("claim: priority promotion event: %w", err)
 			}
 		}
@@ -526,7 +592,7 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		}
 	}
 	for name, s := range states {
-		if s.rate > 0 {
+		if q.workerIdentity == "" && s.rate > 0 {
 			if _, err := tx.ExecContext(ctx, `UPDATE queues SET rate_tokens=$1, rate_updated_at=$2 WHERE name=$3`, s.tokens, s.now, name); err != nil {
 				return nil, fmt.Errorf("claim: update rate state %s: %w", name, err)
 			}
@@ -561,6 +627,9 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 	}()
 	ctx, cancel := q.operationContext(ctx)
 	defer cancel()
+	if err := q.verifyWorkerIdentity(workerID); err != nil {
+		return err
+	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		return fmt.Errorf("mark success: marshal result: %w", err)
@@ -572,7 +641,13 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 	}
 	defer tx.Rollback()
 
-	res, err := tx.ExecContext(ctx, `
+	var changed int64
+	if q.workerIdentity != "" {
+		if err := tx.QueryRowContext(ctx, `SELECT tasklab_worker_ack($1, $2, $3::jsonb)`, taskID, leaseVersion, string(resultJSON)).Scan(&changed); err != nil {
+			return fmt.Errorf("mark success: fenced transition: %w", err)
+		}
+	} else {
+		res, err := tx.ExecContext(ctx, `
 		UPDATE tasks
 		SET status = 'success',
 		    result = $1,
@@ -584,17 +659,21 @@ func (q *PostgresQueue) MarkSuccess(ctx context.Context, taskID string, workerID
 		  AND status = 'running'
 		  AND leased_by = $3
 		  AND lease_version = $4
-	`, resultJSON, taskID, workerID, leaseVersion)
-	if err != nil {
-		return fmt.Errorf("mark success: update: %w", err)
+		`, resultJSON, taskID, workerID, leaseVersion)
+		if err != nil {
+			return fmt.Errorf("mark success: update: %w", err)
+		}
+		changed, err = res.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("mark success: rows affected: %w", err)
+		}
 	}
 
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	if changed == 0 {
 		span.SetAttributes(attribute.Bool("task.fencing_rejected", true))
 		return fmt.Errorf("mark success: task %s: %w", taskID, domain.ErrTaskNotClaimed)
 	}
-	if err := q.insertEvent(ctx, tx, taskID, domain.EventSucceeded, workerID, "task completed", map[string]any{"summary": result.Summary}); err != nil {
+	if err := q.insertEvent(ctx, tx, taskID, domain.EventSucceeded, workerID, "task completed", map[string]any{"summary": result.Summary, "lease_version": leaseVersion}); err != nil {
 		return fmt.Errorf("mark success: event: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -616,11 +695,58 @@ func (q *PostgresQueue) MarkFailure(ctx context.Context, taskID string, workerID
 	defer func() { observability.RecordSpanFailure(span, resultErr, "task failure transition failed"); span.End() }()
 	ctx, cancel := q.operationContext(ctx)
 	defer cancel()
+	if err := q.verifyWorkerIdentity(workerID); err != nil {
+		return err
+	}
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("mark failure: begin tx: %w", err)
 	}
 	defer tx.Rollback()
+	if q.workerIdentity != "" {
+		var finalStatus string
+		var retryAt sql.NullTime
+		var attempt int
+		var actualWorkerID string
+		err := tx.QueryRowContext(ctx, `
+			SELECT final_status, retry_at, attempt, worker_id
+			FROM tasklab_worker_fail($1, $2, $3, $4, $5)
+		`, taskID, leaseVersion, failure.Message, failure.ErrorType, failure.Retryable).Scan(&finalStatus, &retryAt, &attempt, &actualWorkerID)
+		if err == sql.ErrNoRows {
+			span.SetAttributes(attribute.Bool("task.fencing_rejected", true))
+			return fmt.Errorf("mark failure: task %s: %w", taskID, domain.ErrTaskNotClaimed)
+		}
+		if err != nil {
+			return fmt.Errorf("mark failure: fenced transition: %w", err)
+		}
+		if actualWorkerID != workerID {
+			return fmt.Errorf("mark failure: database Worker identity mismatch")
+		}
+		if finalStatus == string(domain.TaskStatusDLQ) {
+			dlqReason := "non-retryable error: " + failure.Message
+			if failure.Retryable {
+				dlqReason = "max attempts exceeded: " + failure.Message
+			}
+			if err := q.insertEvent(ctx, tx, taskID, domain.EventMovedToDLQ, actualWorkerID, dlqReason, map[string]any{"error": failure.Message, "error_type": failure.ErrorType, "lease_version": leaseVersion}); err != nil {
+				return fmt.Errorf("mark failure: event: %w", err)
+			}
+		} else {
+			if err := q.insertEvent(ctx, tx, taskID, domain.EventRetried, actualWorkerID, failure.Message, map[string]any{"next_retry_at": retryAt.Time.Format(time.RFC3339Nano), "attempt": attempt, "error_type": failure.ErrorType, "lease_version": leaseVersion}); err != nil {
+				return fmt.Errorf("mark failure: event: %w", err)
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("mark failure: commit: %w", err)
+		}
+		if finalStatus == string(domain.TaskStatusPending) {
+			observability.Runtime().TaskRetried()
+			span.SetAttributes(attribute.String("task.final_status", finalStatus), attribute.String("task.failure_class", failure.ErrorType), attribute.Int64("task.retry_delay_ms", retryAt.Time.Sub(time.Now()).Milliseconds()))
+		} else {
+			span.SetAttributes(attribute.String("task.final_status", finalStatus), attribute.String("task.failure_class", failure.ErrorType))
+		}
+		span.AddEvent("db.transaction.commit")
+		return nil
+	}
 
 	var attempt, maxAttempts, retryDelaySeconds, retryMaxDelaySeconds int
 	var backoffMultiplier float64
@@ -891,7 +1017,19 @@ func (q *PostgresQueue) SetQueueConfig(ctx context.Context, config domain.QueueC
 // insertEvent inserts a task lifecycle event within the given transaction, so
 // the event is committed atomically with the state change it describes.
 func (q *PostgresQueue) insertEvent(ctx context.Context, tx *sql.Tx, taskID string, eventType domain.TaskEventType, workerID string, message string, metadata map[string]any) error {
-	metaJSON, _ := json.Marshal(metadata)
+	metaJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("marshal task event metadata: %w", err)
+	}
+	if q.workerIdentity != "" {
+		if eventType != domain.EventPriorityPromoted {
+			// The migration trigger records state-transition events atomically with
+			// task changes. Only priority aging is an auxiliary Worker event.
+			return nil
+		}
+		_, err = tx.ExecContext(ctx, `SELECT tasklab_worker_insert_event($1, $2, $3, $4::jsonb)`, taskID, string(eventType), message, string(metaJSON))
+		return err
+	}
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO task_events (task_id, event_type, worker_id, message, metadata)
 		VALUES ($1, $2, NULLIF($3, ''), $4, $5)
@@ -1052,6 +1190,9 @@ func (q *PostgresQueue) Stats(ctx context.Context) (map[domain.TaskStatus]int64,
 func (q *PostgresQueue) Heartbeat(ctx context.Context, workerID string) error {
 	ctx, cancel := q.operationContext(ctx)
 	defer cancel()
+	if err := q.verifyWorkerIdentity(workerID); err != nil {
+		return err
+	}
 	host, _ := os.Hostname()
 	_, err := q.db.ExecContext(ctx, `
 		INSERT INTO workers (worker_id, hostname, last_seen_at, status)
@@ -1072,7 +1213,16 @@ func (q *PostgresQueue) RenewLease(ctx context.Context, taskID string, workerID 
 	defer func() { observability.RecordSpanFailure(span, resultErr, "lease renewal failed"); span.End() }()
 	ctx, cancel := q.operationContext(ctx)
 	defer cancel()
-	res, err := q.db.ExecContext(ctx, `
+	if err := q.verifyWorkerIdentity(workerID); err != nil {
+		return err
+	}
+	var changed int64
+	if q.workerIdentity != "" {
+		if err := q.db.QueryRowContext(ctx, `SELECT tasklab_worker_renew($1, $2, $3)`, taskID, leaseVersion, leaseTimeout.Microseconds()).Scan(&changed); err != nil {
+			return fmt.Errorf("renew lease: fenced transition: %w", err)
+		}
+	} else {
+		res, err := q.db.ExecContext(ctx, `
 		UPDATE tasks
 		SET lease_expires_at = clock_timestamp() + ($1 * interval '1 microsecond'),
 		    updated_at = clock_timestamp()
@@ -1081,12 +1231,16 @@ func (q *PostgresQueue) RenewLease(ctx context.Context, taskID string, workerID 
 		  AND leased_by = $3
 		  AND lease_version = $4
 		  AND lease_expires_at >= clock_timestamp()
-	`, leaseTimeout.Microseconds(), taskID, workerID, leaseVersion)
-	if err != nil {
-		return fmt.Errorf("renew lease: %w", err)
+		`, leaseTimeout.Microseconds(), taskID, workerID, leaseVersion)
+		if err != nil {
+			return fmt.Errorf("renew lease: %w", err)
+		}
+		changed, err = res.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("renew lease: rows affected: %w", err)
+		}
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	if changed == 0 {
 		span.SetAttributes(attribute.Bool("task.fencing_rejected", true))
 		return fmt.Errorf("renew lease: task %s: %w", taskID, domain.ErrTaskNotClaimed)
 	}
@@ -1117,7 +1271,7 @@ func (q *PostgresQueue) DetectStaleWorkers(ctx context.Context, threshold time.D
 	return ids, nil
 }
 
-const latestSchemaVersion int64 = 12
+const latestSchemaVersion int64 = 13
 
 func (q *PostgresQueue) HealthCheck(ctx context.Context) error {
 	var version sql.NullInt64

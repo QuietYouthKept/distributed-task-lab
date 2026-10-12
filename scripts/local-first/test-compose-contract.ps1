@@ -67,7 +67,7 @@ Assert-Contract 'all-services-resource-capped' ($capped.Count -eq 0)
 $roleBootstrap = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments/local-first/postgres/00-create-roles.sh') -Raw
 $runtimeGrantLines = @(Get-Content -LiteralPath (Join-Path $repoRoot 'deployments/local-first/postgres/runtime-grants.sql') | Where-Object { $_ -match '^\s*GRANT\b' })
 $restrictedGrant = @($runtimeGrantLines | Where-Object { $_ -match '\b(ALL|DELETE|TRUNCATE|CREATE|GRANT\s+OPTION)\b' })
-Assert-Contract 'three-runtime-logins-explicitly-nonsuperuser' ($roleBootstrap -match 'tasklab_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION' -and $roleBootstrap -match 'tasklab_api LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION' -and $roleBootstrap -match 'tasklab_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION')
+Assert-Contract 'runtime-logins-use-per-worker-identity' ($roleBootstrap -match 'tasklab_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION' -and $roleBootstrap -match 'tasklab_api LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION' -and $roleBootstrap -match 'CREATE ROLE tasklab_worker NOLOGIN' -and $roleBootstrap -match 'tasklab_worker_a LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION')
 Assert-Contract 'runtime-grants-have-no-delete-or-ddl' ($runtimeGrantLines.Count -gt 0 -and $restrictedGrant.Count -eq 0)
 
 $checks | ForEach-Object { '{0}: {1}' -f $_.name, $(if ($_.passed) { 'PASS' } else { 'FAIL' }) }
