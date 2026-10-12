@@ -417,6 +417,16 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		return nil, nil
 	}
 
+	// Fenced Worker logins intentionally have no UPDATE privilege on tasks.
+	// A SELECT ... FOR UPDATE still requires UPDATE privilege in PostgreSQL,
+	// so strict workers discover candidates with a plain read and let the
+	// SECURITY DEFINER transition routine lock and revalidate each task. The
+	// queue row lock above serializes claimers for the same queue; the routine
+	// remains the authority if a candidate changed before it is processed.
+	taskLockClause := "FOR UPDATE OF t SKIP LOCKED"
+	if q.workerIdentity != "" {
+		taskLockClause = ""
+	}
 	rows, err := tx.QueryContext(ctx, `SELECT `+taskColumnsAliased("t")+`
 		FROM tasks t
 		JOIN queues q ON q.name = t.queue
@@ -432,7 +442,7 @@ func (q *PostgresQueue) ClaimTasks(ctx context.Context, workerID string, limit i
 		           THEN q.aging_priority_boost ELSE 0 END) DESC,
 		         t.created_at ASC
 		LIMIT $1
-		FOR UPDATE OF t SKIP LOCKED
+		`+taskLockClause+`
 	`, limit, pq.Array(queueNames))
 	if err != nil {
 		return nil, fmt.Errorf("claim: select tasks: %w", err)
