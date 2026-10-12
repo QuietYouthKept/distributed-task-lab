@@ -216,7 +216,7 @@ jobs:
           go version > artifacts/postgres-integration/go-version.txt
           printf '%s\n' 'postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea' > artifacts/postgres-integration/postgres-image.txt
           printf '%s\n' "go test -json -p 2 -parallel 2 -count=1 -timeout=18m ./internal/storage/postgres -skip '^TestDatabaseBackupRestoreDrill$'" > artifacts/postgres-integration/test-command.txt
-          printf '%s\n' 'Migration version 12 is asserted by TestMigrationsFreshAndRerun.' > artifacts/postgres-integration/migration-assertion.txt
+          printf '%s\n' 'Migration version 13 is asserted by TestMigrationsFreshAndRerun.' > artifacts/postgres-integration/migration-assertion.txt
           if PGPASSWORD=postgres psql "$TEST_DATABASE_URL" --no-psqlrc --tuples-only --no-align --command='SHOW server_version' > artifacts/postgres-integration/postgres-version.txt 2> artifacts/postgres-integration/postgres-version.stderr; then
             :
           else
