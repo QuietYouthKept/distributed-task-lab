@@ -130,6 +130,73 @@ jobs:
           path: ${{ runner.temp }}/tasklab-loadgen-${{ github.run_id }}-${{ github.run_attempt }}/
           if-no-files-found: warn
           retention-days: 90
+      - name: Reproduce current Worker direct-SQL fencing bypass
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=artifacts/worker-fencing-bypass
+          mkdir -p "$evidence"
+          result=1
+          finish_evidence() {
+            printf '%s\n' "$GITHUB_SHA" > "$evidence/source-commit.txt"
+            git rev-parse 'HEAD^{tree}' > "$evidence/source-tree.txt"
+            printf '%s\n' "$GITHUB_RUN_ID" > "$evidence/workflow-run-id.txt"
+            printf '%s\n' "$result" > "$evidence/exit-code.txt"
+            (cd "$evidence" && sha256sum command.txt postgres-image.txt postgres-version.txt reproduction.log source-commit.txt source-tree.txt workflow-run-id.txt exit-code.txt > SHA256SUMS 2>/dev/null || true)
+          }
+          trap finish_evidence EXIT
+          worker_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$worker_password"
+          printf '%s\n' \
+            'Apply deployments/local-first/postgres/runtime-grants.sql to the isolated PostgreSQL service.' \
+            'Connect as tasklab_worker_repro, a LOGIN member of tasklab_worker.' \
+            "UPDATE tasks SET status='success', finished_at=clock_timestamp(), leased_by=NULL, lease_expires_at=NULL, lease_version=lease_version+100 WHERE id='<run-scoped-task-id>';" \
+            'Read the row inside the transaction, then ROLLBACK; expected proof is UPDATE 1 and success|101|.' > "$evidence/command.txt"
+          printf '%s\n' 'postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea' > "$evidence/postgres-image.txt"
+          PGPASSWORD=postgres psql "$TEST_DATABASE_URL" --no-psqlrc --tuples-only --no-align --command='SHOW server_version' > "$evidence/postgres-version.txt"
+          fence_id="ci-fencing-bypass-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export TASKLAB_WORKER_REPRO_PASSWORD="$worker_password"
+          PGPASSWORD=postgres psql "$TEST_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --set=fence_id="$fence_id" <<'SQL'
+          \getenv worker_password TASKLAB_WORKER_REPRO_PASSWORD
+          CREATE ROLE tasklab_migrator NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+          CREATE ROLE tasklab_api NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+          CREATE ROLE tasklab_worker NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+          GRANT USAGE ON SCHEMA public TO tasklab_api, tasklab_worker;
+          SELECT format('CREATE ROLE tasklab_worker_repro LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L', :'worker_password') \gexec
+          GRANT tasklab_worker TO tasklab_worker_repro;
+          \i deployments/local-first/postgres/runtime-grants.sql
+          INSERT INTO tasks (id, type, queue, payload, status, attempt, leased_by, lease_expires_at, lease_version, started_at)
+          VALUES (:'fence_id', 'rag_ingestion', 'default', '{}'::jsonb, 'running', 1, 'legitimate-worker', clock_timestamp() + interval '1 hour', 1, clock_timestamp());
+          SQL
+          set +e
+          PGPASSWORD="$worker_password" PGHOST=127.0.0.1 PGPORT=5432 PGDATABASE=postgres PGUSER=tasklab_worker_repro \
+            psql --no-psqlrc --tuples-only --no-align --set=ON_ERROR_STOP=1 --set=fence_id="$fence_id" > "$evidence/reproduction.log" 2>&1 <<'SQL'
+          BEGIN;
+          UPDATE tasks
+             SET status='success', result='{"summary":"unfenced direct SQL"}'::jsonb,
+                 finished_at=clock_timestamp(), updated_at=clock_timestamp(),
+                 leased_by=NULL, lease_expires_at=NULL, lease_version=lease_version+100
+           WHERE id=:'fence_id';
+          SELECT status || '|' || lease_version::text || '|' || COALESCE(leased_by, '')
+            FROM tasks WHERE id=:'fence_id';
+          ROLLBACK;
+          SQL
+          attack_rc=$?
+          set -e
+          test "$attack_rc" -eq 0
+          grep -F 'success|101|' "$evidence/reproduction.log"
+          PGPASSWORD=postgres psql "$TEST_DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --set=fence_id="$fence_id" >/dev/null <<'SQL'
+          DELETE FROM tasks WHERE id=:'fence_id';
+          SQL
+          result=0
+      - name: Preserve Worker fencing-bypass reproduction evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: worker-fencing-bypass-${{ github.sha }}-${{ github.run_attempt }}
+          path: artifacts/worker-fencing-bypass/
+          if-no-files-found: warn
+          retention-days: 90
       - name: Prepare PostgreSQL acceptance evidence
         shell: bash
         run: |
