@@ -1030,7 +1030,7 @@ func (q *PostgresQueue) insertEvent(ctx context.Context, tx *sql.Tx, taskID stri
 		_, err = tx.ExecContext(ctx, `SELECT tasklab_worker_insert_event($1, $2, $3, $4::jsonb)`, taskID, string(eventType), message, string(metaJSON))
 		return err
 	}
-	_, err := tx.ExecContext(ctx, `
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO task_events (task_id, event_type, worker_id, message, metadata)
 		VALUES ($1, $2, NULLIF($3, ''), $4, $5)
 	`, taskID, string(eventType), workerID, message, metaJSON)
