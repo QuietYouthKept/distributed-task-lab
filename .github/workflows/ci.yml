@@ -121,6 +121,70 @@ jobs:
           set -e
           (cd "$evidence" && sha256sum source-commit.txt source-tree.txt workflow-run-id.txt workflow-run-attempt.txt runner-os.txt go-version.txt postgres-image.txt test-command.txt migration-assertion.txt postgres-version.txt postgres-version.stderr go-test-events.jsonl go-test-summary.json go-test-exit-code.txt > SHA256SUMS)
           test "$test_rc" -eq 0 && test "$summary_rc" -eq 0
+      - name: Run bounded PostgreSQL scheduler benchmark
+        shell: bash
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: |
+          set -uo pipefail
+          run_id="github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:12}"
+          output="${RUNNER_TEMP}/tasklab-loadgen-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$output"
+          bundle="$output/$run_id"
+          mkdir -p "$bundle"
+          printf '%s\n' \
+            'go run ./cmd/loadgen' \
+            'LOADGEN_TASKS=500' \
+            'LOADGEN_PRODUCERS=4' \
+            'LOADGEN_WORKERS=4' \
+            'LOADGEN_CONCURRENCY=2' \
+            'LOADGEN_QUEUES=4' \
+            'LOADGEN_PAYLOAD_SIZE=128' \
+            'LOADGEN_PROFILE=backlog-drain' \
+            'LOADGEN_TASK_TYPE=noop' \
+            'LOADGEN_SEED=20261012' > "$bundle/command.txt"
+          echo "LOADGEN_OUTPUT_DIR=$output" >> "$GITHUB_ENV"
+          echo "LOADGEN_RUN_ID=$run_id" >> "$GITHUB_ENV"
+          set +e
+          timeout 180s env \
+            LOADGEN_TASKS=500 \
+            LOADGEN_PRODUCERS=4 \
+            LOADGEN_WORKERS=4 \
+            LOADGEN_CONCURRENCY=2 \
+            LOADGEN_QUEUES=4 \
+            LOADGEN_PAYLOAD_SIZE=128 \
+            LOADGEN_PROFILE=backlog-drain \
+            LOADGEN_TASK_TYPE=noop \
+            LOADGEN_SEED=20261012 \
+            LOADGEN_RUN_ID="$run_id" \
+            LOADGEN_OUTPUT_DIR="$output" \
+            go run ./cmd/loadgen 2>&1 | tee "$output/benchmark.log"
+          benchmark_rc=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$benchmark_rc" > "$bundle/exit-code.txt"
+          if [[ -f "$output/benchmark.log" ]]; then
+            cp "$output/benchmark.log" "$bundle/benchmark.log"
+            rm "$output/benchmark.log"
+          fi
+          (
+            cd "$bundle"
+            files=()
+            for file in benchmark.log command.txt exit-code.txt manifest.json postgres-stats.json raw.csv report.md summary.json; do
+              [[ ! -f "$file" ]] || files+=("$file")
+            done
+            if ((${#files[@]} > 0)); then
+              sha256sum "${files[@]}" > SHA256SUMS
+            fi
+          )
+          test "$benchmark_rc" -eq 0
+      - name: Preserve bounded scheduler benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: scheduler-benchmark-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/tasklab-loadgen-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: warn
+          retention-days: 90
       - name: Preserve PostgreSQL acceptance evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
